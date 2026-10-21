@@ -11081,3 +11081,36 @@ Final integrated-tree checks pending.
 - **Adapter.** Calls into partial units are required `ExecutiveAccess` methods: the `blend.fillet_solver_p1` surface-generator records and `SetFilletSurfaceGenerator`, `GetEdgeuse`, and `blend.fillet_standard_solver_p1`'s constant-radius constructor. `GetSetBackDist` is an inline read of `m_dSetBackDist`. The constant-distance, variable-radius and surface/surface solver constructors stay `UNPORTED(blend.fillet_standard_solver_p2)`.
 - **Duplicate enums on main.** `FilletSolverType` and `FilletSurfaceGeneratorType` exist both in `blend::fillet_solver::p1` and in `blend::fillet_standard_solver::p1` (#168's co-port), as distinct types. p2 takes the latter, as `FilletLaw` does, and maps them onto `fillet_solver::p1::FilletSurfaceGenerator`. A later dedup should re-export one of them.
 - **Not wired.** `blend::fillet_geom::p2`'s `UNPORTED(blend.fillet_executive_p2)` `SmTemporaryRadiusChange::SetUp` receives a base `FilletSolver`. Reaching the variable-radius law from it needs #260's `FilletSolverKind`, so the stub stays until that lands.
+
+## wire: topology-uses (PR #337, 2026-10-20; stale `UNPORTED(topology.vertex|vertexuse|edgeuse_p1|edgeuse_p3|loopuse)` stubs)
+
+### offset.offset_executive_p1: NormalizedEvaluate continuations
+
+`RemoveExcessFaces` now calls `topology::edgeuse::p3::normalized_evaluate` (3D, defaults).
+The two other `SmEdgeuse::NormalizedEvaluate` calls, in `FillGapEdgeuses` (cpp:3147) and
+`MapEdgeuses` (cpp:4085/4100), keep a justified `UNPORTED(topology.edgeuse_p3)` deferral:
+the code after each call (cpp:3149-3214 corner-blend matching; cpp:4087-4177 UV midpoint
+matching, `DropPoint`, `RelatePair`, `sm_NotifyEdgeAndVertices`) is not ported, so wiring
+the evaluation alone would let both bodies report success without doing their work
+(`probe_map_plane` would compare an empty relation against the C++ one). `MapEdgeuses` would
+also need the original B-rep mutably (UV evaluation builds missing UV trim curves). Port the
+continuations with the call.
+
+### Stubs left (structural, not a missing unit)
+
+- `surface::trim_srf_cache` (`SmLoopuse::GetEdgeuses` / `GetVertexuses`,
+  `SmEdgeuse::GetUVTrimCurve`, `SmVertexuse::ComputeUVPoint` / `GetVertex`,
+  `SmVertex::GetTolerance`): the cache is generic over an opaque handle `O` with no B-rep;
+  the loop uses come from `SmFace::GetUpwardLoopuses` (`topology.face_p4`, todo). Wiring
+  needs a B-rep threaded through `TrimSrfCache`.
+- `geom::object::Shape::new`, `geom::solution_array` (`SmVertex::GetPoint`): the vertex
+  keys / solution objects name no B-rep.
+- `query::poly::PolyBrep::destroy` (`SmVertex::GetPolyVertex` / `SetPolyVertex`): the
+  original vertex is an opaque `ObjectKey` and no Rust path sets valid back pointers.
+- `intersect::point_class` `GetBrep` (needs a `BrepId` the handle hooks cannot name), the
+  `SetPoint` / `SetTolerance` / `SetExact` mutations of `merge_into_object` and
+  `MergePointClass`, and `intersect::curve_class::p7` `SmVertex::SetPoint`: the
+  classification handles reach the B-rep read-only (`ClassGeometry::topology_entity`).
+  The real mutating path is `merge_into_brep`.
+- `blend::fillet_solver::p1` `SmVertex::SetPoint` (#303's cluster),
+  `intersect::curve_class::p9` and `topology::proto_topology::p2` (already justified).

@@ -33,7 +33,8 @@
 //! and uses the existing canonical arena-identity cache adapter; custom geometry owner keys
 //! or indirect owner chains are explicitly unsupported rather than silently skipped.
 //! Result-edge enumeration uses `SmBrep::GetEdges` list order (`topology::brep::p1::edges`);
-//! nonempty queries still defer at `NormalizedEvaluate`. `BuildSideWallOfEdgeuse` takes
+//! nonempty queries evaluate each primary edge use (`NormalizedEvaluate`) and still defer at the
+//! editing flag. `BuildSideWallOfEdgeuse` takes
 //! the original B-rep as an argument (upstream reaches it through the edge use pointer).
 //! No new input-driven recursion; existing topology walks are cycle-bounded.
 
@@ -444,8 +445,8 @@ impl OffsetExecutive {
             let primary = required(eu::primary_edgeuse(result, id)?)?;
             // Upstream ignores the evaluation status and keeps the initialized point.
             // An unported evaluator must still propagate instead of supplying a fake point.
-            let point =
-                ignored(normalized_evaluate(result, primary, 0.5, false))?.unwrap_or(Vec3::UNDEF);
+            let point = ignored(normalized_evaluate(kernel, result, primary, 0.5, false))?
+                .unwrap_or(Vec3::UNDEF);
             if original_cache.is_none() {
                 original_cache = Some(make_original_brep_cache(kernel, original)?);
             }
@@ -614,7 +615,7 @@ impl OffsetExecutive {
             all_vertices.extend(face_vertices(brep, face)?);
         }
         for &gap in gaps {
-            let _midpoint = normalized_evaluate(brep, gap, 0.5, false)?;
+            let _midpoint = normalized_evaluate_then_continuation(brep, gap, 0.5, false)?;
             // Continuation cpp:3149–3214: for each endpoint find coincident candidate
             // vertices using the sum of vertex tolerances (strict <); take each
             // closest incident edge. The candidate list persists across gap uses.
@@ -976,7 +977,7 @@ impl OffsetExecutive {
             required(brep.faceuse(upward)?.mate)?
         };
         for offset in eu::faceuse_edgeuses(brep, offset_use, false, None)? {
-            let _offset_point = normalized_evaluate(brep, offset, 0.5, true)?;
+            let _offset_point = normalized_evaluate_then_continuation(brep, offset, 0.5, true)?;
             // Continuation cpp:4087–4177: scale = 1,10,100,1000; first test strict
             // distance < EFF_ZERO_SQRT*(1+max_dimension)*scale against each unused
             // original midpoint. For scale >10 also DropPoint(INTERSECT, no guess,
@@ -1283,9 +1284,35 @@ fn collect_excess_faces(
     Ok(())
 }
 
-fn normalized_evaluate(brep: &Brep, edgeuse: EdgeuseId, _param: f64, _uv: bool) -> Result<Vec3> {
+/// `SmEdgeuse::NormalizedEvaluate(dParam, bUV, rPoint)` with the defaults
+/// (`pOptFirstDeriv = NULL`, `bOKToMakeUVTrimCurve = TRUE`): the point.
+fn normalized_evaluate(
+    kernel: &Kernel,
+    brep: &mut Brep,
+    edgeuse: EdgeuseId,
+    param: f64,
+    uv: bool,
+) -> Result<Vec3> {
+    Ok(crate::topology::edgeuse::p3::normalized_evaluate(
+        kernel, brep, edgeuse, param, uv, false, true,
+    )?
+    .point)
+}
+
+/// `SmEdgeuse::NormalizedEvaluate` in `FillGapEdgeuses` / `MapEdgeuses`, whose
+/// continuations (cpp:3149-3214, cpp:4087-4177) are not ported: the deferral stays at the
+/// evaluation so neither body reports success without its continuation.
+fn normalized_evaluate_then_continuation(
+    brep: &Brep,
+    edgeuse: EdgeuseId,
+    _param: f64,
+    _uv: bool,
+) -> Result<Vec3> {
     brep.edgeuse(edgeuse)?;
-    // UNPORTED(topology.edgeuse_p3): SmEdgeuse::NormalizedEvaluate
+    // UNPORTED(topology.edgeuse_p3): SmEdgeuse::NormalizedEvaluate (justified: findings.md "offset.offset_executive_p1: NormalizedEvaluate continuations")
+    // justified: the evaluation itself is ported (`topology::edgeuse::p3::normalized_evaluate`),
+    // but the code after it in FillGapEdgeuses / MapEdgeuses is not, and MapEdgeuses would also
+    // need the original B-rep mutably (UV trim curves are built on demand)
     Err(SolidError::unported(
         "SmEdgeuse::NormalizedEvaluate",
         "topology.edgeuse_p3",
