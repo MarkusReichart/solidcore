@@ -884,15 +884,15 @@ pub trait ShellRayWorld<O>: crate::intersect::topology_solver::p1::TopologyObjec
     }
 
     /// Classify the incoming line segment at its known intersection
-    /// (`pBrep->LocalCurveSector`). The world over the B-rep cache (`query.brep`)
+    /// (`pBrep->LocalCurveSector`, unit `topology.brep_p2`). A world over the B-rep cache
     /// overrides this with [`crate::topology::brep::p2::local_curve_sector`], which needs
     /// the B-rep and an entity classification this generic default does not have.
     fn shell_ray_sector(&self, _request: ShellRaySector<'_, O>) -> ShellRaySectorAttempt {
-        // UNPORTED(query.brep): ShellRayWorld over the B-rep cache (SmBrep::LocalCurveSector)
+        // UNPORTED(topology.brep_p2): ShellRayWorld over the B-rep cache (SmBrep::LocalCurveSector)
         ShellRaySectorAttempt {
             status: Err(SolidError::unported(
                 "SmShell::RayFire world over the B-rep cache (SmBrep::LocalCurveSector)",
-                "query.brep",
+                "topology.brep_p2",
             )),
             region_update: None,
         }

@@ -331,8 +331,8 @@ pub fn min_edge_bbox_size(k: &Kernel, b: &Brep) -> Result<(f64, Option<EdgeId>)>
 ///
 /// # Errors
 ///
-/// [`SolidError::Unported`] for the B-rep box (`query.brep`); [`SolidError::NotFound`]
-/// for a dangling id.
+/// [`SolidError::Unported`] from the B-rep box's callees (other box failures are
+/// ignored, as upstream); [`SolidError::NotFound`] for a dangling id.
 pub fn set_tolerance(
     k: &Kernel,
     b: &mut Brep,
@@ -346,7 +346,9 @@ pub fn set_tolerance(
 
     // when sZoneTol3d <= 0.0 compute tol from Bounding box size
     if new_tol <= 0.0 {
-        let bbox = brep_bounding_box(k, b)?;
+        // CalculateBoundingBox(brepBBox): status unchecked, so a failed box stays the
+        // default-constructed one.
+        let bbox = crate::error::ignored(brep_bounding_box(k, b))?.unwrap_or_else(Extent3d::new);
         let mut size = bbox.size().length();
         if size >= 1.0e15 || size <= 0.0 {
             size = 1.0;

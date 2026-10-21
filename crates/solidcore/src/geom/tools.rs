@@ -605,20 +605,16 @@ mod tests {
                 ..
             })
         ));
-        // The B-rep cache's box (query.brep) no longer stops the face search.
-        assert!(!matches!(
-            find_face(
-                &Kernel::default(),
-                &brep,
-                BrepId::from_index(7),
-                p(0.0, 0.0, 0.0),
-                &crate::topology::brep_cache::arena_identity,
-                &|_| None,
-            ),
-            Err(SolidError::Unported {
-                unit: "query.brep",
-                ..
-            })
-        ));
+        // The B-rep cache now builds through the B-rep box (query.brep): the search runs
+        // and, the B-rep having no face, finds none.
+        let found = find_face(
+            &Kernel::default(),
+            &brep,
+            BrepId::from_index(7),
+            p(0.0, 0.0, 0.0),
+            &crate::topology::brep_cache::arena_identity,
+            &|_| None,
+        );
+        assert!(matches!(found, Ok(None)), "{found:?}");
     }
 }

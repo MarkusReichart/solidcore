@@ -214,8 +214,9 @@ fn brep_notify(
     data3: Option<ObjectRef>,
 ) -> Result<()> {
     let brep = BrepNotifyArg::Object(brep_p2::brep_ref(b));
-    // the caller-held SM_OC_BREP cache is not threaded through `NotifyEnv` (no Rust
-    // caller can build one yet: `make_brep_cache` needs `query.brep`)
+    // the caller-held SM_OC_BREP cache is not threaded through `NotifyEnv`: a caller
+    // that keeps one (e.g. `query::brep::BrepQueryContext`) invalidates its own slot
+    // after edits, as that type documents
     brep_p2::notify(
         b,
         env,

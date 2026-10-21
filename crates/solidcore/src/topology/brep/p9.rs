@@ -338,13 +338,12 @@ fn brep_ray_fire<O>(
     state: &mut crate::topology::shell::ShellRayState<O>,
 ) -> Result<bool> {
     let _ = (b, start, direction, tolerance, state);
-    // UNPORTED(query.brep): SmBrep::RayFire over the B-rep cache. The port
-    // (`topology::brep::p2::ray_fire`) solves on the SM_OC_BREP cache world and first
-    // needs CalculateBoundingBox; both belong to query.brep, as for
-    // ShellRayWorld::shell_ray_sector.
+    // UNPORTED(topology.brep_p2): SmBrep::RayFire over the B-rep cache. The port
+    // (`topology::brep::p2::ray_fire`) needs the B-rep's cache, identity keys and owner
+    // lookup, which this caller does not hold (as for ShellRayWorld::shell_ray_sector).
     Err(SolidError::unported(
         "SmBrep::RayFire (B-rep cache world)",
-        "query.brep",
+        "topology.brep_p2",
     ))
 }
 

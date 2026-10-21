@@ -3,6 +3,7 @@
 // traversal reader; export never calls a bounding-box operation under test.
 #include "sc_edgeuse_graph.h"
 #include "sc_brep_query_metadata.h"
+#include <SmPointClass.h>
 #include <array>
 namespace {
 // Complete the registry independently of the region/shell traversal. Its indices
@@ -81,10 +82,13 @@ SC_EXPORT int32_t sc_query_brep_bbox(int32_t op,const char* path,const double* i
         SmTArray<SmFace*> faces;e->GetFaces(faces);
         if(faces.GetSize()==0) e->SetCurve(NULL,TRUE,FALSE,FALSE);
     }
-    int64_t count=rd.idx();std::vector<std::array<double,4>> steps;
+    // Steps are (code, a, b, c); a classify step (code 6) adds (tolerance, boundary).
+    int64_t count=rd.idx();std::vector<std::array<double,6>> steps;
     for(int64_t i=0;i<count;i++) {
         double code=rd.num(),a=rd.num(),b=rd.num(),c=rd.num();
-        steps.push_back({code,a,b,c});
+        double d=0.0,e=0.0;
+        if(code==6) {d=rd.num();e=rd.num();}
+        steps.push_back({code,a,b,c,d,e});
     }
     if(rd.at!=n_in) return SC_ERR_ARG;
     std::vector<double> result;
@@ -110,6 +114,32 @@ SC_EXPORT int32_t sc_query_brep_bbox(int32_t op,const char* path,const double* i
         result.push_back((double)faces.GetSize());
         if(!put_bbox_lists(brep,graph,result)) return SC_ERR_ARG;
         for(const auto& step:steps) {
+            if(step[0]==6) {
+                // Real Point3DClassify on the constructed B-rep. The hit object is
+                // reported as its kind (1 region, 2 face, 3 edge, 4 vertex, 9 other,
+                // 0 none) and export registry index, the same arena index the Rust
+                // importer assigns.
+                SmPointClassification pc(SmZoneTol3d(17.0),&ctx);
+                pc.SetGap3d(31.0); pc.SetTParam(47.0,FALSE); pc.SetUVParam(SmPoint2d(53.0,59.0));
+                pc.SetPreSnapParam(61.0); pc.SetSSSPoint(SmPoint3d(67.0,71.0,73.0));
+                status=brep->Point3DClassify(SmPoint3d(step[1],step[2],step[3]),SmZoneTol3d(step[4]),
+                    step[5]!=0.0?TRUE:FALSE,pc);
+                SmObject* object=pc.GetObject();
+                double kind=0.0,index=-1.0;
+                if(object) {
+                    if(SmRegion* r=SM_CAST_PTR(SmRegion,object)) {kind=1.0;index=(double)graph.find(0,r);}
+                    else if(SmFace* f=SM_CAST_PTR(SmFace,object)) {kind=2.0;index=(double)graph.find(3,f);}
+                    else if(SmEdge* e=SM_CAST_PTR(SmEdge,object)) {kind=3.0;index=(double)graph.find(7,e);}
+                    else if(SmVertex* v=SM_CAST_PTR(SmVertex,object)) {kind=4.0;index=(double)graph.find(9,v);}
+                    else kind=9.0;
+                }
+                SmPoint2d uv=pc.GetUVParam();SmPoint3d sss=pc.GetSSSPoint();
+                result.insert(result.end(),{st(status),(double)pc.GetPointClass(),kind,index,
+                    pc.GetDeviation(),pc.GetTParam(),uv.x,uv.y,pc.AreParametersSet()?1.0:0.0,
+                    pc.GetPreSnapParam(),pc.GetSSSPointFlag()?1.0:0.0,sss.x,sss.y,sss.z,
+                    (double)pc.GetTolerance()});
+                continue;
+            }
             SmExtent3d box;box.SetMinMax(SmPoint3d(-17,-19,-23),SmPoint3d(29,31,37));
             if(step[0]==0) status=brep->CalculateBoundingBox(box,(SmBoolean)step[1],(SmBoolean)step[2],(SmBoolean)step[3]);
             else if(step[0]==1) status=brep->CalculateTightBoundingBox(box);

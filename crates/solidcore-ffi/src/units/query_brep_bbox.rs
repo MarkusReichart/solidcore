@@ -2,7 +2,9 @@
 //! Layout: has-graph [standard P1 B-rep block], extra vertices/edges, three
 //! tolerances, drop-wire-curves, reverse-registry, step count, then four values
 //! per step: `(code, approx, tight, expand)` for codes 0..=4, or
-//! `(5, edge-list-index, interval-min, interval-max)` for `SmEdge::SetInterval`.
+//! `(5, edge-list-index, interval-min, interval-max)` for `SmEdge::SetInterval`, or
+//! `(6, x, y, z, tolerance, boundary)` for `SmBrep::Point3DClassify`, whose output is
+//! status, class, hit kind and registry index, then the classification's fields.
 //! Export output is `graph-length, common-graph, face-list, edge-list, vertex-list,
 //! metadata-length, query-metadata`; each list is its count followed by native-order
 //! registry indices. Metadata preserves the concrete geometry, actual owners,
@@ -40,7 +42,12 @@ pub fn validate(path: &str, input: &[f64]) -> Result<(), FfiError> {
     rd.flag()?;
     let n = rd.index(16)?;
     for _ in 0..n {
-        if rd.index(5)? == 5 {
+        let code = rd.index(6)?;
+        if code == 6 {
+            // Point3DClassify: point, tolerance, boundary flag.
+            rd.finites(4)?;
+            rd.flag()?;
+        } else if code == 5 {
             rd.index(1_000_000)?;
             rd.finites(2)?;
         } else {

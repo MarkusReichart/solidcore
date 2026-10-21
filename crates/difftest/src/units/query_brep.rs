@@ -476,6 +476,12 @@ enum BoxStep {
         min: f64,
         max: f64,
     },
+    /// `SmBrep::Point3DClassify(point, SmZoneTol3d(tolerance), boundary, pc)`.
+    Classify {
+        point: [f64; 3],
+        tolerance: f64,
+        boundary: bool,
+    },
 }
 fn bbox_input(i: &BboxInput) -> Result<(String, Vec<f64>), HarnessError> {
     use super::topology_edgeuse_p1::{brep_block_of, path_of};
@@ -490,6 +496,16 @@ fn bbox_input(i: &BboxInput) -> Result<(String, Vec<f64>), HarnessError> {
     flat.push(f64::from(u8::from(i.reverse_registry)));
     flat.push(i.steps.len() as f64);
     for step in &i.steps {
+        if let BoxStep::Classify {
+            point,
+            tolerance,
+            boundary,
+        } = *step
+        {
+            flat.extend([6.0, point[0], point[1], point[2], tolerance]);
+            flat.push(f64::from(u8::from(boundary)));
+            continue;
+        }
         let row = match *step {
             BoxStep::Bounding {
                 approximate,
@@ -510,6 +526,9 @@ fn bbox_input(i: &BboxInput) -> Result<(String, Vec<f64>), HarnessError> {
                 min,
                 max,
             } => [5.0, edge_list_index as f64, min, max],
+            BoxStep::Classify { .. } => {
+                return Err(HarnessError::new("classify step encoded above"));
+            }
         };
         flat.extend(row);
     }
@@ -634,6 +653,8 @@ fn bbox_rust(i: &BboxInput) -> Result<Output, HarnessError> {
     let initial =
         Extent3d::from_points(Vec3::new(-17.0, -19.0, -23.0), Vec3::new(29.0, 31.0, 37.0));
     let mut locked = false;
+    // The B-rep's spatial cache, built by the first classification that needs it.
+    let mut cache: Option<solidcore::topology::brep_cache::BrepCache> = None;
     for step in &i.steps {
         // Guard only geometry actually read by this step. Approximation may
         // skip faces and, above both native thresholds, edges too. A stored lock
@@ -644,12 +665,24 @@ fn bbox_rust(i: &BboxInput) -> Result<Output, HarnessError> {
                 !approximate,
             ),
             BoxStep::Default if !locked => (true, true),
-            BoxStep::Tight | BoxStep::Lock { .. } => (true, true),
+            BoxStep::Tight | BoxStep::Lock { .. } | BoxStep::Classify { .. } => (true, true),
             BoxStep::SetEdgeInterval { .. } => (true, false),
             _ => (false, false),
         };
         if let Some(deferred) = metadata.deferred_output_for(read_curves, read_surfaces) {
             return Ok(deferred);
+        }
+        if let BoxStep::Classify {
+            point,
+            tolerance,
+            boundary,
+        } = *step
+        {
+            match classify_step(&k, &mut graph, &mut cache, point, tolerance, boundary) {
+                Ok(values) => record.extend(values),
+                Err(deferred) => return Ok(deferred),
+            }
+            continue;
         }
         let result = match *step {
             BoxStep::Bounding {
@@ -679,6 +712,7 @@ fn bbox_rust(i: &BboxInput) -> Result<Output, HarnessError> {
                 Ok(initial)
             }
             BoxStep::Default => brep::calculate_loose_bounding_box(&k, &graph, false, true),
+            BoxStep::Classify { .. } => return Err(HarnessError::new("classify handled above")),
             BoxStep::SetEdgeInterval {
                 edge_list_index,
                 min,
@@ -714,6 +748,84 @@ fn bbox_rust(i: &BboxInput) -> Result<Output, HarnessError> {
     }
     Ok(Output::new().values("counts_and_boxes", record))
 }
+/// One `Point3DClassify` step on the imported B-rep, through the live-B-rep bridge
+/// ([`brep::BrepPointObjects`]) keyed as the native metadata was imported. Output as
+/// the shim: status, class, hit kind (1 region, 2 face, 3 edge, 4 vertex, 9 other,
+/// 0 none) and arena index, then the classification's fields. `Err` is a deferral.
+fn classify_step(
+    k: &solidcore::kernel::Kernel,
+    graph: &mut solidcore::topology::Brep,
+    cache: &mut Option<solidcore::topology::brep_cache::BrepCache>,
+    point: [f64; 3],
+    tolerance: f64,
+    boundary: bool,
+) -> Result<Vec<f64>, Output> {
+    use solidcore::geom::object::ObjectRef;
+    use solidcore::geom::vector3d::Vec3;
+    use solidcore::intersect::point_class::PointClassification;
+    use solidcore::EntityRef;
+    let owner_of = |_: ObjectRef| None;
+    let mut scene = brep::BrepPointObjects::new(
+        graph,
+        solidcore::topology::BrepId::from_index(0),
+        cache,
+        &query_graph_identity,
+        &owner_of,
+    );
+    let mut pc = PointClassification::new(17.0);
+    pc.set_gap_3d(31.0);
+    pc.set_t_param(47.0, false);
+    pc.set_uv_param(Vec2::new(53.0, 59.0));
+    pc.set_pre_snap_param(61.0);
+    pc.set_sss_point(Vec3::new(67.0, 71.0, 73.0));
+    let tolerance = solidcore::geom::tol::zone_tol3d(k, tolerance);
+    let [x, y, z] = point;
+    let outcome = brep::point_3d_classify(
+        k,
+        &mut scene,
+        Vec3::new(x, y, z),
+        tolerance,
+        boundary,
+        &mut pc,
+    );
+    let status = match outcome {
+        Ok(()) => 0.0,
+        Err(e) => {
+            if let Some(deferred) = Output::unported(&e) {
+                return Err(deferred);
+            }
+            status(&e)
+        }
+    };
+    let (kind, index) = match pc.object() {
+        None => (0.0, -1.0),
+        Some(EntityRef::Region(r)) => (1.0, f64::from(r.index())),
+        Some(EntityRef::Face(f)) => (2.0, f64::from(f.index())),
+        Some(EntityRef::Edge(e)) => (3.0, f64::from(e.index())),
+        Some(EntityRef::Vertex(v)) => (4.0, f64::from(v.index())),
+        Some(_) => (9.0, -1.0),
+    };
+    let uv = pc.uv_param();
+    let sss = pc.sss_point();
+    Ok(vec![
+        status,
+        f64::from(pc.point_class().code()),
+        kind,
+        index,
+        pc.deviation(),
+        pc.t_param(),
+        uv.x,
+        uv.y,
+        f64::from(u8::from(pc.are_parameters_set())),
+        pc.pre_snap_param(),
+        f64::from(u8::from(pc.sss_point_flag())),
+        sss.x,
+        sss.y,
+        sss.z,
+        pc.src_zone_tol_3d(),
+    ])
+}
+
 fn generate_bbox(rng: &mut Rng) -> BboxInput {
     use super::topology_edgeuse_p1::{gen_curve, BrepIn};
     let scales = [1e-6, 1e-3, 1.0, 1e3, 1e6];

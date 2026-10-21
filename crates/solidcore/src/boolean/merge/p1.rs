@@ -603,7 +603,8 @@ impl TemporaryBrepTransform {
     /// The constructor's translation of both operands (primary, then other) by the
     /// negated box center, when one is needed. As upstream, transform statuses are
     /// not checked; only [`SolidError::Unported`] and the port's representation
-    /// failures propagate.
+    /// failures propagate; when the other operand's transform fails that way, the
+    /// primary is translated back first.
     ///
     /// # Errors
     ///
@@ -617,7 +618,16 @@ impl TemporaryBrepTransform {
         if let Some(forward) = self.forward {
             // Transform(sXfm) uses cpOptScale=NULL and bScaleTol=TRUE.
             crate::error::ignore_status(transform(primary, false, &forward, None, true))?;
-            crate::error::ignore_status(transform(other, true, &forward, None, true))?;
+            if let Err(error) =
+                crate::error::ignore_status(transform(other, true, &forward, None, true))
+            {
+                // Only an unavailable callee gets here (upstream has no such exit):
+                // put the already translated primary back before reporting it.
+                if let Some(inverse) = self.inverse {
+                    crate::error::ignore_status(transform(primary, false, &inverse, None, true))?;
+                }
+                return Err(error);
+            }
         }
         Ok(())
     }

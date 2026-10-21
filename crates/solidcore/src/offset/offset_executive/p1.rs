@@ -2153,18 +2153,10 @@ mod tests {
             executive.set_create_offset_solid(solid);
             executive.relate_edgeuses(EdgeuseId::from_index(1), EdgeuseId::from_index(2));
             // StitchIntoShell (past DoStitching's first Notify) and StitchIntoSolid both
-            // pass the B-rep bounding box (query.brep) now
+            // get the B-rep bounding box (query.brep) now; an empty offset B-rep stitches
+            // and merges without error.
             let merged = executive.piecewise_merge(&mut kernel, &mut original);
-            assert!(
-                !matches!(
-                    merged,
-                    Err(SolidError::Unported {
-                        unit: "query.brep",
-                        ..
-                    })
-                ),
-                "{merged:?}"
-            );
+            assert!(merged.is_ok(), "solid={solid}: {merged:?}");
             assert!(executive.offset_brep().is_none());
             assert_eq!(executive.offset_edgeuse(EdgeuseId::from_index(1)), None);
         }

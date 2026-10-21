@@ -1791,10 +1791,10 @@ fn merge_curves_world(
     _curves_3d: &[Curve],
     _uv_curves: &[Curve],
 ) -> Result<(CacheMergeWorld, Vec<CacheHandle>, Vec<CacheHandle>)> {
-    // UNPORTED(query.brep): MergeCurvesObjects world over the B-rep cache
+    // UNPORTED(topology.brep_p2): MergeCurvesObjects world over the B-rep cache
     Err(SolidError::Unported {
         upstream: "SmBrep::MergeCurvesOnSurface classification world over the B-rep cache",
-        unit: "query.brep",
+        unit: "topology.brep_p2",
     })
 }
 

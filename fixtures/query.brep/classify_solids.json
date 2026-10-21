@@ -1,0 +1,7843 @@
+{
+ "cases": [
+  {
+   "name": "classify_box_inside_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0.1,
+       0.2,
+       0.3
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_inside_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0.1,
+       0.2,
+       0.3
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_center_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       5
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_center_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       5
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_far_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       1000,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_far_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       1000,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_outside_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       12,
+       5,
+       5
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_outside_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       12,
+       5,
+       5
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_vertex_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_vertex_b_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 0.001,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_vertex_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_vertex_r_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 0.001,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_edge_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_edge_b_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       0,
+       0
+      ],
+      "tolerance": 0.001,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_edge_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_edge_r_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       0,
+       0
+      ],
+      "tolerance": 0.001,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_face_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_face_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_face_near_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       1e-07
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_face_near_b_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       1e-07
+      ],
+      "tolerance": 0.001,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_face_near_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       1e-07
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_face_near_r_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       1e-07
+      ],
+      "tolerance": 0.001,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_face_top_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       10
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_face_top_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       10
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_bracket_in_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       -5
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_bracket_in_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       -5
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_bracket_corner_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       -25,
+       -10,
+       -15
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_bracket_corner_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       -25,
+       -10,
+       -15
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_inside_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0.1,
+       0.2,
+       0.3
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_inside_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0.1,
+       0.2,
+       0.3
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_center_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       5
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_center_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       5
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_far_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       1000,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_far_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       1000,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_outside_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       12,
+       5,
+       5
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_outside_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       12,
+       5,
+       5
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_vertex_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_vertex_b_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 0.001,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_vertex_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_vertex_r_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 0.001,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_edge_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_edge_b_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       0,
+       0
+      ],
+      "tolerance": 0.001,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_edge_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_edge_r_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       0,
+       0
+      ],
+      "tolerance": 0.001,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_face_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_face_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_face_near_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       1e-07
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_face_near_b_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       1e-07
+      ],
+      "tolerance": 0.001,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_face_near_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       1e-07
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_face_near_r_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       1e-07
+      ],
+      "tolerance": 0.001,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_face_top_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       10
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_face_top_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       10
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_bracket_in_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       -5
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_bracket_in_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       -5
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_bracket_corner_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       -25,
+       -10,
+       -15
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_pyramid_bracket_corner_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/pyramid.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       -25,
+       -10,
+       -15
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_inside_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0.1,
+       0.2,
+       0.3
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_inside_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0.1,
+       0.2,
+       0.3
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_center_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       5
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_center_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       5
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_far_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       1000,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_far_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       1000,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_outside_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       12,
+       5,
+       5
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_outside_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       12,
+       5,
+       5
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_vertex_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_vertex_b_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 0.001,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_vertex_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_vertex_r_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 0.001,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_edge_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_edge_b_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       0,
+       0
+      ],
+      "tolerance": 0.001,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_edge_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_edge_r_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       0,
+       0
+      ],
+      "tolerance": 0.001,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_face_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_face_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_face_near_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       1e-07
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_face_near_b_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       1e-07
+      ],
+      "tolerance": 0.001,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_face_near_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       1e-07
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_face_near_r_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       1e-07
+      ],
+      "tolerance": 0.001,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_face_top_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       10
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_face_top_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       10
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_bracket_in_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       -5
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_bracket_in_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       -5
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_bracket_corner_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       -25,
+       -10,
+       -15
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_bracket_corner_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       -25,
+       -10,
+       -15
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_inside_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0.1,
+       0.2,
+       0.3
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_inside_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0.1,
+       0.2,
+       0.3
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_center_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       5
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_center_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       5
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_far_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       1000,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_far_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       1000,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_outside_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       12,
+       5,
+       5
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_outside_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       12,
+       5,
+       5
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_vertex_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_vertex_b_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 0.001,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_vertex_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_vertex_r_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 0.001,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_edge_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_edge_b_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       0,
+       0
+      ],
+      "tolerance": 0.001,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_edge_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_edge_r_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       0,
+       0
+      ],
+      "tolerance": 0.001,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_face_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_face_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_face_near_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       1e-07
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_face_near_b_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       1e-07
+      ],
+      "tolerance": 0.001,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_face_near_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       1e-07
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_face_near_r_0.001",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       1e-07
+      ],
+      "tolerance": 0.001,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_face_top_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       10
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_face_top_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       5,
+       5,
+       10
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_bracket_in_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       -5
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_bracket_in_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       -5
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_bracket_corner_b_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       -25,
+       -10,
+       -15
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_plane_bracket_corner_r_1e-06",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/plane.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       -25,
+       -10,
+       -15
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_box_script",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "default"
+     },
+     {
+      "op": "classify",
+      "point": [
+       1000,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     },
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     },
+     {
+      "op": "lock",
+      "tight": false
+     },
+     {
+      "op": "classify",
+      "point": [
+       12,
+       5,
+       5
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     },
+     {
+      "op": "unlock"
+     },
+     {
+      "op": "tight"
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bracket_script",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "file",
+     "file": "Solids/offset_bracket_box.smb",
+     "rebuild": false
+    },
+    "tolerances": [
+     0,
+     0,
+     0
+    ],
+    "steps": [
+     {
+      "op": "default"
+     },
+     {
+      "op": "classify",
+      "point": [
+       1000,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     },
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     },
+     {
+      "op": "lock",
+      "tight": false
+     },
+     {
+      "op": "classify",
+      "point": [
+       12,
+       5,
+       5
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     },
+     {
+      "op": "unlock"
+     },
+     {
+      "op": "tight"
+     }
+    ]
+   }
+  },
+  {
+   "name": "bbox_bicubic_face_0",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:1009-1258; SmFace.cpp:868-912",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "bounding",
+      "approximate": false,
+      "tight": false,
+      "expand": false
+     },
+     {
+      "op": "bounding",
+      "approximate": false,
+      "tight": false,
+      "expand": true
+     },
+     {
+      "op": "bounding",
+      "approximate": false,
+      "tight": true,
+      "expand": false
+     },
+     {
+      "op": "bounding",
+      "approximate": false,
+      "tight": true,
+      "expand": true
+     },
+     {
+      "op": "bounding",
+      "approximate": true,
+      "tight": false,
+      "expand": false
+     },
+     {
+      "op": "bounding",
+      "approximate": true,
+      "tight": false,
+      "expand": true
+     },
+     {
+      "op": "bounding",
+      "approximate": true,
+      "tight": true,
+      "expand": false
+     },
+     {
+      "op": "bounding",
+      "approximate": true,
+      "tight": true,
+      "expand": true
+     },
+     {
+      "op": "tight"
+     },
+     {
+      "op": "lock",
+      "tight": true
+     },
+     {
+      "op": "default"
+     },
+     {
+      "op": "unlock"
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_0_corner_b",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_0_corner_r",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_0_edge_mid_b",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0.5,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_0_edge_mid_r",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0.5,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_0_off_b",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0.5,
+       0.5,
+       10
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_0_off_r",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0.5,
+       0.5,
+       10
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_0_far_b",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       100,
+       100,
+       100
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_0_far_r",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          0.0,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -0.0,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -0.0,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.0,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       100,
+       100,
+       100
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "bbox_bicubic_face_0.25",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:1009-1258; SmFace.cpp:868-912",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          0.16105442180942275,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          0.24636243249711504,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          0.21580234166221848,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          0.24088954635429824,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          0.22732435670642043,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          0.10684497005845744,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.0638852755067077,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          0.12887534295536604,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.03943642353581205,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -0.18920062382698205,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -0.2499808143910252,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -0.17194153979599353,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -0.24842275090836613,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -0.2080668605559752,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.06985387454973147,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "bounding",
+      "approximate": false,
+      "tight": false,
+      "expand": false
+     },
+     {
+      "op": "bounding",
+      "approximate": false,
+      "tight": false,
+      "expand": true
+     },
+     {
+      "op": "bounding",
+      "approximate": false,
+      "tight": true,
+      "expand": false
+     },
+     {
+      "op": "bounding",
+      "approximate": false,
+      "tight": true,
+      "expand": true
+     },
+     {
+      "op": "bounding",
+      "approximate": true,
+      "tight": false,
+      "expand": false
+     },
+     {
+      "op": "bounding",
+      "approximate": true,
+      "tight": false,
+      "expand": true
+     },
+     {
+      "op": "bounding",
+      "approximate": true,
+      "tight": true,
+      "expand": false
+     },
+     {
+      "op": "bounding",
+      "approximate": true,
+      "tight": true,
+      "expand": true
+     },
+     {
+      "op": "tight"
+     },
+     {
+      "op": "lock",
+      "tight": true
+     },
+     {
+      "op": "default"
+     },
+     {
+      "op": "unlock"
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_0.25_corner_b",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          0.16105442180942275,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          0.24636243249711504,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          0.21580234166221848,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          0.24088954635429824,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          0.22732435670642043,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          0.10684497005845744,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.0638852755067077,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          0.12887534295536604,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.03943642353581205,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -0.18920062382698205,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -0.2499808143910252,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -0.17194153979599353,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -0.24842275090836613,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -0.2080668605559752,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.06985387454973147,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_0.25_corner_r",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          0.16105442180942275,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          0.24636243249711504,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          0.21580234166221848,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          0.24088954635429824,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          0.22732435670642043,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          0.10684497005845744,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.0638852755067077,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          0.12887534295536604,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.03943642353581205,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -0.18920062382698205,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -0.2499808143910252,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -0.17194153979599353,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -0.24842275090836613,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -0.2080668605559752,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.06985387454973147,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_0.25_edge_mid_b",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          0.16105442180942275,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          0.24636243249711504,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          0.21580234166221848,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          0.24088954635429824,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          0.22732435670642043,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          0.10684497005845744,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.0638852755067077,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          0.12887534295536604,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.03943642353581205,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -0.18920062382698205,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -0.2499808143910252,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -0.17194153979599353,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -0.24842275090836613,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -0.2080668605559752,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.06985387454973147,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0.5,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_0.25_edge_mid_r",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          0.16105442180942275,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          0.24636243249711504,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          0.21580234166221848,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          0.24088954635429824,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          0.22732435670642043,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          0.10684497005845744,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.0638852755067077,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          0.12887534295536604,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.03943642353581205,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -0.18920062382698205,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -0.2499808143910252,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -0.17194153979599353,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -0.24842275090836613,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -0.2080668605559752,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.06985387454973147,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0.5,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_0.25_off_b",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          0.16105442180942275,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          0.24636243249711504,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          0.21580234166221848,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          0.24088954635429824,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          0.22732435670642043,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          0.10684497005845744,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.0638852755067077,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          0.12887534295536604,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.03943642353581205,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -0.18920062382698205,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -0.2499808143910252,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -0.17194153979599353,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -0.24842275090836613,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -0.2080668605559752,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.06985387454973147,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0.5,
+       0.5,
+       10
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_0.25_off_r",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          0.16105442180942275,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          0.24636243249711504,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          0.21580234166221848,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          0.24088954635429824,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          0.22732435670642043,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          0.10684497005845744,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.0638852755067077,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          0.12887534295536604,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.03943642353581205,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -0.18920062382698205,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -0.2499808143910252,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -0.17194153979599353,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -0.24842275090836613,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -0.2080668605559752,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.06985387454973147,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0.5,
+       0.5,
+       10
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_0.25_far_b",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          0.16105442180942275,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          0.24636243249711504,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          0.21580234166221848,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          0.24088954635429824,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          0.22732435670642043,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          0.10684497005845744,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.0638852755067077,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          0.12887534295536604,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.03943642353581205,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -0.18920062382698205,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -0.2499808143910252,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -0.17194153979599353,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -0.24842275090836613,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -0.2080668605559752,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.06985387454973147,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       100,
+       100,
+       100
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_0.25_far_r",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          0.16105442180942275,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          0.24636243249711504,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          0.21580234166221848,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          0.24088954635429824,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          0.22732435670642043,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          0.10684497005845744,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.0638852755067077,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          0.12887534295536604,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.03943642353581205,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -0.18920062382698205,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -0.2499808143910252,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -0.17194153979599353,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -0.24842275090836613,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -0.2080668605559752,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.06985387454973147,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       100,
+       100,
+       100
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "bbox_bicubic_face_3",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:1009-1258; SmFace.cpp:868-912",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          1.932653061713073,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          2.9563491899653807,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          2.589628099946622,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          2.8906745562515788,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          2.727892280477045,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          1.2821396407014893,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.7666233060804923,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          1.5465041154643924,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.4732370824297446,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -2.2704074859237844,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -2.9997697726923027,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -2.063298477551922,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -2.981073010900394,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -2.4968023266717023,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.8382464945967776,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "bounding",
+      "approximate": false,
+      "tight": false,
+      "expand": false
+     },
+     {
+      "op": "bounding",
+      "approximate": false,
+      "tight": false,
+      "expand": true
+     },
+     {
+      "op": "bounding",
+      "approximate": false,
+      "tight": true,
+      "expand": false
+     },
+     {
+      "op": "bounding",
+      "approximate": false,
+      "tight": true,
+      "expand": true
+     },
+     {
+      "op": "bounding",
+      "approximate": true,
+      "tight": false,
+      "expand": false
+     },
+     {
+      "op": "bounding",
+      "approximate": true,
+      "tight": false,
+      "expand": true
+     },
+     {
+      "op": "bounding",
+      "approximate": true,
+      "tight": true,
+      "expand": false
+     },
+     {
+      "op": "bounding",
+      "approximate": true,
+      "tight": true,
+      "expand": true
+     },
+     {
+      "op": "tight"
+     },
+     {
+      "op": "lock",
+      "tight": true
+     },
+     {
+      "op": "default"
+     },
+     {
+      "op": "unlock"
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_3_corner_b",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          1.932653061713073,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          2.9563491899653807,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          2.589628099946622,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          2.8906745562515788,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          2.727892280477045,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          1.2821396407014893,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.7666233060804923,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          1.5465041154643924,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.4732370824297446,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -2.2704074859237844,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -2.9997697726923027,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -2.063298477551922,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -2.981073010900394,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -2.4968023266717023,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.8382464945967776,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_3_corner_r",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          1.932653061713073,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          2.9563491899653807,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          2.589628099946622,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          2.8906745562515788,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          2.727892280477045,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          1.2821396407014893,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.7666233060804923,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          1.5465041154643924,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.4732370824297446,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -2.2704074859237844,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -2.9997697726923027,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -2.063298477551922,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -2.981073010900394,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -2.4968023266717023,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.8382464945967776,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_3_edge_mid_b",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          1.932653061713073,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          2.9563491899653807,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          2.589628099946622,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          2.8906745562515788,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          2.727892280477045,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          1.2821396407014893,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.7666233060804923,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          1.5465041154643924,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.4732370824297446,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -2.2704074859237844,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -2.9997697726923027,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -2.063298477551922,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -2.981073010900394,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -2.4968023266717023,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.8382464945967776,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0.5,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_3_edge_mid_r",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          1.932653061713073,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          2.9563491899653807,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          2.589628099946622,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          2.8906745562515788,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          2.727892280477045,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          1.2821396407014893,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.7666233060804923,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          1.5465041154643924,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.4732370824297446,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -2.2704074859237844,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -2.9997697726923027,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -2.063298477551922,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -2.981073010900394,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -2.4968023266717023,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.8382464945967776,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0.5,
+       0,
+       0
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_3_off_b",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          1.932653061713073,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          2.9563491899653807,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          2.589628099946622,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          2.8906745562515788,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          2.727892280477045,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          1.2821396407014893,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.7666233060804923,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          1.5465041154643924,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.4732370824297446,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -2.2704074859237844,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -2.9997697726923027,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -2.063298477551922,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -2.981073010900394,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -2.4968023266717023,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.8382464945967776,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0.5,
+       0.5,
+       10
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_3_off_r",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          1.932653061713073,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          2.9563491899653807,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          2.589628099946622,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          2.8906745562515788,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          2.727892280477045,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          1.2821396407014893,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.7666233060804923,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          1.5465041154643924,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.4732370824297446,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -2.2704074859237844,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -2.9997697726923027,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -2.063298477551922,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -2.981073010900394,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -2.4968023266717023,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.8382464945967776,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       0.5,
+       0.5,
+       10
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_3_far_b",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          1.932653061713073,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          2.9563491899653807,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          2.589628099946622,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          2.8906745562515788,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          2.727892280477045,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          1.2821396407014893,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.7666233060804923,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          1.5465041154643924,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.4732370824297446,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -2.2704074859237844,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -2.9997697726923027,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -2.063298477551922,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -2.981073010900394,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -2.4968023266717023,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.8382464945967776,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       100,
+       100,
+       100
+      ],
+      "tolerance": 1e-06,
+      "boundary": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "classify_bicubic_3_far_r",
+   "upstream_ref": "source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258",
+   "inputs": {
+    "bbox_brep": {
+     "kind": "face",
+     "surface": {
+      "bspline": {
+       "net": [
+        [
+         [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+         ],
+         [
+          0.0,
+          0.3333333333333333,
+          1.932653061713073,
+          1.0
+         ],
+         [
+          0.0,
+          0.6666666666666666,
+          2.9563491899653807,
+          1.0
+         ],
+         [
+          0.0,
+          1.0,
+          2.589628099946622,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.3333333333333333,
+          0.0,
+          2.8906745562515788,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.3333333333333333,
+          2.727892280477045,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          0.6666666666666666,
+          1.2821396407014893,
+          1.0
+         ],
+         [
+          0.3333333333333333,
+          1.0,
+          -0.7666233060804923,
+          1.0
+         ]
+        ],
+        [
+         [
+          0.6666666666666666,
+          0.0,
+          1.5465041154643924,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.3333333333333333,
+          -0.4732370824297446,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          0.6666666666666666,
+          -2.2704074859237844,
+          1.0
+         ],
+         [
+          0.6666666666666666,
+          1.0,
+          -2.9997697726923027,
+          1.0
+         ]
+        ],
+        [
+         [
+          1.0,
+          0.0,
+          -2.063298477551922,
+          1.0
+         ],
+         [
+          1.0,
+          0.3333333333333333,
+          -2.981073010900394,
+          1.0
+         ],
+         [
+          1.0,
+          0.6666666666666666,
+          -2.4968023266717023,
+          1.0
+         ],
+         [
+          1.0,
+          1.0,
+          -0.8382464945967776,
+          1.0
+         ]
+        ]
+       ],
+       "p": 3,
+       "q": 3,
+       "u": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ],
+       "v": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "dom": [
+      0,
+      0,
+      1,
+      1
+     ]
+    },
+    "tolerances": [
+     1e-07,
+     1e-05,
+     0.0001
+    ],
+    "steps": [
+     {
+      "op": "classify",
+      "point": [
+       100,
+       100,
+       100
+      ],
+      "tolerance": 1e-06,
+      "boundary": false
+     }
+    ]
+   }
+  }
+ ]
+}

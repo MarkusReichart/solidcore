@@ -303,7 +303,7 @@ fn geometry_rust(g: &Geometry) -> Output {
     use solidcore::nurbs::b_spline_curve::BSplineCurve;
     use solidcore::nurbs::math::CPoint;
     use solidcore::topology::Brep;
-    let kernel = Kernel::default();
+    let mut kernel = Kernel::default();
     let result: solidcore::Result<Vec<f64>> = (|| {
         match g {
             Geometry::Edge {
@@ -348,16 +348,15 @@ fn geometry_rust(g: &Geometry) -> Output {
                     };
                     // As the shim: a wire edge over the curve interval in a fresh B-rep
                     // (`CreateWireEdgeFromCurve`), then the B-rep's precise properties.
-                    let mut wire_kernel = Kernel::default();
                     let mut brep = Brep::new_with_infinite_region()?;
                     solidcore::topology::brep::p5::create_wire_edge_from_curve(
-                        &mut wire_kernel,
+                        &mut kernel,
                         &mut brep,
                         c,
                         ivl,
                     )?;
                     let p = props::brep_properties(
-                        &wire_kernel,
+                        &kernel,
                         &brep,
                         accuracy,
                         Vec3::new(ox, oy, oz),
