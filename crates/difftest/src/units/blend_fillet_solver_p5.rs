@@ -125,7 +125,7 @@ struct Objects<'a> {
 }
 impl ClassGeometry<EntityRef> for Objects<'_> {
     /// `pVertex->GetVertexuseOfFace(pFace)->GetVertexFaceGap()`: its `GetLength()`,
-    /// or `0.0` without a gap (as the topology.face_p4 runner).
+    /// or `0.0` without a gap (as the `topology.face_p4` runner).
     fn vertex_face_gap(
         &self,
         vertex: EntityRef,
