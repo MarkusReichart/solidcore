@@ -798,7 +798,9 @@ impl Recovery<'_> {
                         .first()
                         .copied()
                         .ok_or_else(|| SolidError::null_pointer(OP))?;
-                    if let Some(values) = ignored(original_curve.evaluate(self.k, t, 1, true, true))? {
+                    if let Some(values) =
+                        ignored(original_curve.evaluate(self.k, t, 1, true, true))?
+                    {
                         direction = values.get(1).copied();
                     }
                 }

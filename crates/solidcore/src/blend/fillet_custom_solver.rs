@@ -1885,7 +1885,14 @@ mod tests {
             let mut matrix = Matrix::new(4, 6);
             let ops: &mut dyn FilletSolverOps = &mut fs;
             assert!(!ops
-                .load_jacobian(&Kernel::default(), &mut ne, &mut np, &mut load, &mut f, Some(&mut matrix))
+                .load_jacobian(
+                    &Kernel::default(),
+                    &mut ne,
+                    &mut np,
+                    &mut load,
+                    &mut f,
+                    Some(&mut matrix)
+                )
                 .expect("jacobian"));
             assert_eq!((ne, np), (4, 6));
             assert_eq!(
@@ -1923,7 +1930,14 @@ mod tests {
         let mut f = [17.0; 3];
         let ops: &mut dyn FilletSolverOps = &mut fs;
         assert!(matches!(
-            ops.load_jacobian(&Kernel::default(), &mut ne, &mut np, &mut load, &mut f, None),
+            ops.load_jacobian(
+                &Kernel::default(),
+                &mut ne,
+                &mut np,
+                &mut load,
+                &mut f,
+                None
+            ),
             Err(SolidError::InvalidInput { .. })
         ));
         assert_eq!((ne, np), (0, 4));
