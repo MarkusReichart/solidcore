@@ -467,8 +467,8 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::CalculateBoundingBox",
-        "unit": "query.brep"
+        "symbol": "SmBrep::TestClosureSplitRegion (after CalculateBoundingBox)",
+        "unit": "topology.brep_p6"
       },
       "max_rel_err": 0.0,
       "name": "adv_spine_doubled_p_manifold3_closure",
@@ -695,8 +695,8 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::CalculateBoundingBox",
-        "unit": "query.brep"
+        "symbol": "SmBrep::TestClosureSplitRegion (after CalculateBoundingBox)",
+        "unit": "topology.brep_p6"
       },
       "max_rel_err": 0.0,
       "name": "adv_spine_doubled_a_manifold3_closure",
@@ -3451,8 +3451,8 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::CalculateBoundingBox",
-        "unit": "query.brep"
+        "symbol": "SmBrep::TestClosureSplitRegion (after CalculateBoundingBox)",
+        "unit": "topology.brep_p6"
       },
       "max_rel_err": 0.0,
       "name": "closure_noinf_spine_doubled",
@@ -3463,8 +3463,8 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::CalculateBoundingBox",
-        "unit": "query.brep"
+        "symbol": "SmBrep::TestClosureSplitRegion (after CalculateBoundingBox)",
+        "unit": "topology.brep_p6"
       },
       "max_rel_err": 0.0,
       "name": "closure_inf_spine_doubled",
@@ -3915,8 +3915,8 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::CalculateBoundingBox",
-        "unit": "query.brep"
+        "symbol": "SmBrep::TestClosureSplitRegion (after CalculateBoundingBox)",
+        "unit": "topology.brep_p6"
       },
       "max_rel_err": 0.0,
       "name": "review_spine_doubled_m1_closure_False",
@@ -3927,8 +3927,8 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::CalculateBoundingBox",
-        "unit": "query.brep"
+        "symbol": "SmBrep::TestClosureSplitRegion (after CalculateBoundingBox)",
+        "unit": "topology.brep_p6"
       },
       "max_rel_err": 0.0,
       "name": "review_spine_doubled_m1_closure_True",
@@ -12969,10 +12969,10 @@
   "cases_total": 1404,
   "deferred_by_unit": {
     "geom.tol": 5,
-    "query.brep": 6,
     "surface.cone_p1": 41,
     "surface.surf_of_extrusion_p2": 10,
     "surface.surface_p2": 249,
+    "topology.brep_p6": 6,
     "topology.face_p2": 113,
     "topology.face_p4": 8
   },
