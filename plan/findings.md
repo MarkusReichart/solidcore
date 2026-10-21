@@ -11315,7 +11315,8 @@ its continuation.)
   `intersect::curve_class::p7` `vertex_is_connected_to` (`SmVertex::IsConnectedTo`)
   (justified: structural; both take the opaque handles but no `ClassGeometry`, and the
   point_class target is a generic `T` of another handle space, so they cannot reach the
-  B-rep. Wiring needs a geometry parameter on the query and on its callers.)
+  B-rep. Wiring needs a geometry parameter on the query and on its callers, which open
+  PR #316 adds for these sites; this PR leaves them to it.)
 - Opaque-handle fallbacks: `point_class::edgeuse_edge` (`SmEdgeuse::GetEdge`),
   `resolve_vertex_point` (`SmVertex::GetPoint`), `object_zone_tol_3d`
   (`SmVertex::GetTolerance`, `SmEdgeuse::GetTolerance`) and `curve_class::p3::vertex_point`
