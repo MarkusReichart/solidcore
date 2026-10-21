@@ -992,7 +992,8 @@ mod tests {
         assert_eq!(engine.intersector.intersect_lamina_edges(), 1);
         assert_eq!(engine.intersector.merge.options, options);
         assert_eq!(engine.state.other_components.len(), 1);
-        // (intersection_loop_closed is recomputed by the completed run)
+        // The completed run recomputes the retained flag (it was set false above).
+        assert!(engine.state.intersection_loop_closed);
     }
     #[test]
     fn nonmanifold_restores_flag_on_failure_but_retains_lamina_mode() {
