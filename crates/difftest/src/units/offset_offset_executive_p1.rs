@@ -2654,7 +2654,8 @@ mod tests {
             ),
             (Probe::FaceuseNull, None, 1006),
             (Probe::FaceuseNoSurface, None, 1000),
-            (Probe::PiecewiseEmpty, Some("query.brep"), 1000),
+            // The B-rep box (query.brep) is ported: the empty piecewise merge completes.
+            (Probe::PiecewiseEmpty, None, 1000),
             // MapEdgeuses now evaluates through topology.edgeuse_p3, which must
             // build the hand-made plane face's missing UV trim curve.
             (Probe::MapPlane, Some("intersect.surface_drop_lib_p3"), 1000),
@@ -2667,6 +2668,9 @@ mod tests {
             let output = Runner.run_rust(&case(&input)).unwrap();
             if let Some(unit) = dependency {
                 assert_eq!(output.deferred.unwrap().unit, unit);
+            } else if matches!(branch, Probe::PiecewiseEmpty) {
+                // Matches the native probe output (the fixture case passes).
+                assert_eq!(output.ints["probe"], [status, 0, 0, 0, 1, 0]);
             } else {
                 assert_eq!(output.ints["probe"], [status, 0, 0, 0, 0, 1]);
             }
