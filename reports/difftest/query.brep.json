@@ -1358,6 +1358,1386 @@
       "values_compared": 35
     },
     {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_box_inside_b_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#0 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_box_inside_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#1 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_box_center_b_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#2 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_box_center_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#3 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 0
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_box_far_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#4 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 47
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_box_far_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#5 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 47
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_box_outside_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#6 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 47
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_box_outside_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#7 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 47
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_box_vertex_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#8 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 47
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_box_vertex_b_0.001",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#9 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 47
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_box_vertex_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#10 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_box_vertex_r_0.001",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#11 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 0
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_box_edge_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#12 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 47
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_box_edge_b_0.001",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#13 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 47
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_box_edge_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#14 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_box_edge_r_0.001",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#15 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_box_face_b_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#16 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_box_face_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#17 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_box_face_near_b_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#18 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_box_face_near_b_0.001",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#19 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_box_face_near_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#20 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_box_face_near_r_0.001",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#21 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_box_face_top_b_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#22 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_box_face_top_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#23 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 0
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_box_bracket_in_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#24 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 47
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_box_bracket_in_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#25 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 47
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_box_bracket_corner_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#26 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 47
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_box_bracket_corner_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#27 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/box.smb)",
+      "values_compared": 47
+    },
+    {
+      "deferred": {
+        "symbol": "SmFace::GetTolerance",
+        "unit": "topology.face_p2"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_inside_b_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#28 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_inside_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#29 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmFace::GetTolerance",
+        "unit": "topology.face_p2"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_center_b_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#30 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_center_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#31 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_far_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#32 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 39
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_far_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#33 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 39
+    },
+    {
+      "deferred": {
+        "symbol": "SmFace::GetTolerance",
+        "unit": "topology.face_p2"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_outside_b_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#34 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_outside_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#35 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmFace::GetTolerance",
+        "unit": "topology.face_p2"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_vertex_b_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#36 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmFace::GetTolerance",
+        "unit": "topology.face_p2"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_vertex_b_0.001",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#37 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_vertex_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#38 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_vertex_r_0.001",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#39 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmFace::GetTolerance",
+        "unit": "topology.face_p2"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_edge_b_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#40 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmFace::GetTolerance",
+        "unit": "topology.face_p2"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_edge_b_0.001",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#41 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_edge_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#42 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_edge_r_0.001",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#43 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmFace::GetTolerance",
+        "unit": "topology.face_p2"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_face_b_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#44 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_face_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#45 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmFace::GetTolerance",
+        "unit": "topology.face_p2"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_face_near_b_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#46 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmFace::GetTolerance",
+        "unit": "topology.face_p2"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_face_near_b_0.001",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#47 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_face_near_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#48 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_face_near_r_0.001",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#49 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmFace::GetTolerance",
+        "unit": "topology.face_p2"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_face_top_b_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#50 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_face_top_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#51 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 0
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_bracket_in_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#52 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 39
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_bracket_in_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#53 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 39
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_bracket_corner_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#54 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 39
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_pyramid_bracket_corner_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#55 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/pyramid.smb)",
+      "values_compared": 39
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_inside_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#56 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 47
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_inside_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#57 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 47
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_center_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#58 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 47
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_center_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#59 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 47
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_far_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#60 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 47
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_far_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#61 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 47
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_outside_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#62 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 47
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_outside_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#63 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 47
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_vertex_b_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#64 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_vertex_b_0.001",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#65 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_vertex_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#66 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_vertex_r_0.001",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#67 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_edge_b_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#68 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_edge_b_0.001",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#69 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_edge_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#70 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_edge_r_0.001",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#71 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_face_b_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#72 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_face_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#73 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_face_near_b_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#74 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_face_near_b_0.001",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#75 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_face_near_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#76 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_face_near_r_0.001",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#77 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 0
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_face_top_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#78 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 47
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_face_top_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#79 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 47
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_bracket_in_b_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#80 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_bracket_in_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#81 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 0
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_bracket_corner_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#82 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 47
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_bracket_corner_r_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#83 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/offset_bracket_box.smb)",
+      "values_compared": 0
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_inside_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#84 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_inside_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#85 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_plane_center_b_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#86 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 0
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_center_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#87 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_far_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#88 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_far_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#89 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_plane_outside_b_1e-06",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#90 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 0
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_outside_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#91 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_vertex_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#92 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_vertex_b_0.001",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#93 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_vertex_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#94 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_vertex_r_0.001",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#95 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_edge_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#96 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_edge_b_0.001",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#97 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_edge_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#98 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_edge_r_0.001",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#99 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_face_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#100 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_face_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#101 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_face_near_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#102 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_face_near_b_0.001",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#103 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_face_near_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#104 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_face_near_r_0.001",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#105 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_face_top_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#106 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_face_top_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#107 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_bracket_in_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#108 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_bracket_in_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#109 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_bracket_corner_b_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#110 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_plane_bracket_corner_r_1e-06",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#111 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258; TestFiles/pt_TestFiles/Solids/plane.smb)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_box_script",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#112 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 105
+    },
+    {
+      "deferred": {
+        "symbol": "SmTol::GetZoneTol3d(const SmObject*)",
+        "unit": "geom.tol"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_bracket_script",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#113 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 0
+    },
+    {
+      "deferred": {
+        "symbol": "SmFace::GetTolerance",
+        "unit": "topology.face_p2"
+      },
+      "max_rel_err": 0.0,
+      "name": "bbox_bicubic_face_0",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#114 (upstream source/SMLib/src/SmBrep.cpp:1009-1258; SmFace.cpp:868-912)",
+      "values_compared": 0
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_0_corner_b",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#115 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_0_corner_r",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#116 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_0_edge_mid_b",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#117 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_0_edge_mid_r",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#118 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_0_off_b",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#119 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_0_off_r",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#120 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_0_far_b",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#121 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_0_far_r",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#122 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "deferred": {
+        "symbol": "SmFace::GetTolerance",
+        "unit": "topology.face_p2"
+      },
+      "max_rel_err": 0.0,
+      "name": "bbox_bicubic_face_0.25",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#123 (upstream source/SMLib/src/SmBrep.cpp:1009-1258; SmFace.cpp:868-912)",
+      "values_compared": 0
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_0.25_corner_b",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#124 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_0.25_corner_r",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#125 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "deferred": {
+        "symbol": "SmFace::GetTolerance",
+        "unit": "topology.face_p2"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_0.25_edge_mid_b",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#126 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 0
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_0.25_edge_mid_r",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#127 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_0.25_off_b",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#128 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_0.25_off_r",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#129 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_0.25_far_b",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#130 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_0.25_far_r",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#131 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "deferred": {
+        "symbol": "SmFace::GetTolerance",
+        "unit": "topology.face_p2"
+      },
+      "max_rel_err": 0.0,
+      "name": "bbox_bicubic_face_3",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#132 (upstream source/SMLib/src/SmBrep.cpp:1009-1258; SmFace.cpp:868-912)",
+      "values_compared": 0
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_3_corner_b",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#133 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_3_corner_r",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#134 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "deferred": {
+        "symbol": "SmFace::GetTolerance",
+        "unit": "topology.face_p2"
+      },
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_3_edge_mid_b",
+      "outcome": "deferred",
+      "pass": false,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#135 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 0
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_3_edge_mid_r",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#136 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_3_off_b",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#137 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_3_off_r",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#138 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_3_far_b",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#139 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
+      "max_rel_err": 0.0,
+      "name": "classify_bicubic_3_far_r",
+      "outcome": "pass",
+      "pass": true,
+      "source": "fixture:fixtures/query.brep/classify_solids.json#140 (upstream source/SMLib/src/SmBrep.cpp:24687-24841 (Point3DClassify), 1009-1258)",
+      "values_compared": 30
+    },
+    {
       "max_rel_err": 0.0,
       "name": "empty_brep_classify_0_0_0",
       "outcome": "pass",
@@ -8303,12 +9683,13 @@
     }
   ],
   "cases_both_errored": 0,
-  "cases_deferred": 3,
+  "cases_deferred": 66,
   "cases_failed": 0,
-  "cases_passed": 1033,
-  "cases_total": 1036,
+  "cases_passed": 1111,
+  "cases_total": 1177,
   "deferred_by_unit": {
-    "topology.face_p2": 3
+    "geom.tol": 47,
+    "topology.face_p2": 19
   },
   "max_rel_err": 0.0,
   "pass": true,

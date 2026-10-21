@@ -1255,8 +1255,8 @@
     },
     {
       "deferred": {
-        "symbol": "SmVertex::GetPoint",
-        "unit": "topology.vertex"
+        "symbol": "SmCurveClassification::ReSet",
+        "unit": "intersect.curve_class_p2"
       },
       "max_rel_err": 0.0,
       "name": "op0-tiny-wire",
@@ -1267,7 +1267,7 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::GetVertices",
+        "symbol": "SmBrep::GetCurves",
         "unit": "topology.brep_p1"
       },
       "max_rel_err": 0.0,
@@ -1447,8 +1447,8 @@
     },
     {
       "deferred": {
-        "symbol": "SmVertex::GetPoint",
-        "unit": "topology.vertex"
+        "symbol": "SmCurveClassification::ReSet",
+        "unit": "intersect.curve_class_p2"
       },
       "max_rel_err": 0.0,
       "name": "op1-tiny-wire",
@@ -1459,7 +1459,7 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::GetVertices",
+        "symbol": "SmBrep::GetCurves",
         "unit": "topology.brep_p1"
       },
       "max_rel_err": 0.0,
@@ -1639,8 +1639,8 @@
     },
     {
       "deferred": {
-        "symbol": "SmVertex::GetPoint",
-        "unit": "topology.vertex"
+        "symbol": "SmCurveClassification::ReSet",
+        "unit": "intersect.curve_class_p2"
       },
       "max_rel_err": 0.0,
       "name": "op2-tiny-wire",
@@ -1651,7 +1651,7 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::GetVertices",
+        "symbol": "SmBrep::GetCurves",
         "unit": "topology.brep_p1"
       },
       "max_rel_err": 0.0,
@@ -1831,8 +1831,8 @@
     },
     {
       "deferred": {
-        "symbol": "SmVertex::GetPoint",
-        "unit": "topology.vertex"
+        "symbol": "SmCurveClassification::ReSet",
+        "unit": "intersect.curve_class_p2"
       },
       "max_rel_err": 0.0,
       "name": "op3-tiny-wire",
@@ -1843,7 +1843,7 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::GetVertices",
+        "symbol": "SmBrep::GetCurves",
         "unit": "topology.brep_p1"
       },
       "max_rel_err": 0.0,
@@ -2023,8 +2023,8 @@
     },
     {
       "deferred": {
-        "symbol": "SmVertex::GetPoint",
-        "unit": "topology.vertex"
+        "symbol": "SmCurveClassification::ReSet",
+        "unit": "intersect.curve_class_p2"
       },
       "max_rel_err": 0.0,
       "name": "op4-tiny-wire",
@@ -2035,7 +2035,7 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::GetVertices",
+        "symbol": "SmBrep::GetCurves",
         "unit": "topology.brep_p1"
       },
       "max_rel_err": 0.0,
@@ -2215,8 +2215,8 @@
     },
     {
       "deferred": {
-        "symbol": "SmVertex::GetPoint",
-        "unit": "topology.vertex"
+        "symbol": "SmCurveClassification::ReSet",
+        "unit": "intersect.curve_class_p2"
       },
       "max_rel_err": 0.0,
       "name": "op5-tiny-wire",
@@ -2227,7 +2227,7 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::GetVertices",
+        "symbol": "SmBrep::GetCurves",
         "unit": "topology.brep_p1"
       },
       "max_rel_err": 0.0,
@@ -2407,8 +2407,8 @@
     },
     {
       "deferred": {
-        "symbol": "SmVertex::GetPoint",
-        "unit": "topology.vertex"
+        "symbol": "SmCurveClassification::ReSet",
+        "unit": "intersect.curve_class_p2"
       },
       "max_rel_err": 0.0,
       "name": "op6-tiny-wire",
@@ -2419,7 +2419,7 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::GetVertices",
+        "symbol": "SmBrep::GetCurves",
         "unit": "topology.brep_p1"
       },
       "max_rel_err": 0.0,
@@ -2599,8 +2599,8 @@
     },
     {
       "deferred": {
-        "symbol": "SmVertex::GetPoint",
-        "unit": "topology.vertex"
+        "symbol": "SmCurveClassification::ReSet",
+        "unit": "intersect.curve_class_p2"
       },
       "max_rel_err": 0.0,
       "name": "op7-tiny-wire",
@@ -2611,7 +2611,7 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::GetVertices",
+        "symbol": "SmBrep::GetCurves",
         "unit": "topology.brep_p1"
       },
       "max_rel_err": 0.0,
@@ -2791,8 +2791,8 @@
     },
     {
       "deferred": {
-        "symbol": "SmVertex::GetPoint",
-        "unit": "topology.vertex"
+        "symbol": "SmCurveClassification::ReSet",
+        "unit": "intersect.curve_class_p2"
       },
       "max_rel_err": 0.0,
       "name": "op8-tiny-wire",
@@ -2803,7 +2803,7 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::GetVertices",
+        "symbol": "SmBrep::GetCurves",
         "unit": "topology.brep_p1"
       },
       "max_rel_err": 0.0,
@@ -2983,8 +2983,8 @@
     },
     {
       "deferred": {
-        "symbol": "SmVertex::GetPoint",
-        "unit": "topology.vertex"
+        "symbol": "SmCurveClassification::ReSet",
+        "unit": "intersect.curve_class_p2"
       },
       "max_rel_err": 0.0,
       "name": "op9-tiny-wire",
@@ -2995,7 +2995,7 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::GetVertices",
+        "symbol": "SmBrep::GetCurves",
         "unit": "topology.brep_p1"
       },
       "max_rel_err": 0.0,
@@ -3155,7 +3155,7 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::GetVertices",
+        "symbol": "SmBrep::GetCurves",
         "unit": "topology.brep_p1"
       },
       "max_rel_err": 0.0,
@@ -3241,8 +3241,8 @@
     },
     {
       "deferred": {
-        "symbol": "SmVertex::GetPoint",
-        "unit": "topology.vertex"
+        "symbol": "SmCurveClassification::ReSet",
+        "unit": "intersect.curve_class_p2"
       },
       "max_rel_err": 0.0,
       "name": "gen0000",
@@ -3253,7 +3253,7 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::GetVertices",
+        "symbol": "SmBrep::GetCurves",
         "unit": "topology.brep_p1"
       },
       "max_rel_err": 0.0,
@@ -3265,7 +3265,7 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::GetVertices",
+        "symbol": "SmBrep::GetCurves",
         "unit": "topology.brep_p1"
       },
       "max_rel_err": 0.0,
@@ -3277,7 +3277,7 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::GetVertices",
+        "symbol": "SmBrep::GetCurves",
         "unit": "topology.brep_p1"
       },
       "max_rel_err": 0.0,
@@ -3289,7 +3289,7 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::GetVertices",
+        "symbol": "SmBrep::GetCurves",
         "unit": "topology.brep_p1"
       },
       "max_rel_err": 0.0,
@@ -3347,7 +3347,7 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::GetVertices",
+        "symbol": "SmBrep::GetCurves",
         "unit": "topology.brep_p1"
       },
       "max_rel_err": 0.0,
@@ -3375,7 +3375,7 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::GetVertices",
+        "symbol": "SmBrep::GetCurves",
         "unit": "topology.brep_p1"
       },
       "max_rel_err": 0.0,
@@ -3405,7 +3405,7 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::GetVertices",
+        "symbol": "SmBrep::GetCurves",
         "unit": "topology.brep_p1"
       },
       "max_rel_err": 0.0,
@@ -3417,7 +3417,7 @@
     },
     {
       "deferred": {
-        "symbol": "SmBrep::GetVertices",
+        "symbol": "SmBrep::GetCurves",
         "unit": "topology.brep_p1"
       },
       "max_rel_err": 0.0,
@@ -3435,11 +3435,10 @@
   "cases_rejected": 3,
   "cases_total": 311,
   "deferred_by_unit": {
-    "intersect.curve_class_p2": 70,
+    "intersect.curve_class_p2": 81,
     "query.brep": 29,
     "topology.brep_p1": 19,
-    "topology.face_p3": 99,
-    "topology.vertex": 11
+    "topology.face_p3": 99
   },
   "max_rel_err": 0.0,
   "pass": true,

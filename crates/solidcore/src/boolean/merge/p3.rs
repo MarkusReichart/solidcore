@@ -973,8 +973,7 @@ mod tests {
             state,
             attributes: AttributeStore::default(),
         });
-        // merge_p4 checks both operands (NER), then waits on query.brep for
-        // the temporary origin shift before touching either operand.
+        // merge_p4 checks both operands (NER) before the temporary origin shift.
         let (result, ..) = call(&mut driver, &mut k, None);
         assert!(matches!(
             result,
@@ -984,20 +983,16 @@ mod tests {
             })
         ));
         let (result, primary, other) = call(&mut driver, &mut k, Some(Brep::new()));
-        assert!(matches!(
-            result,
-            Err(SolidError::Unported {
-                upstream: "SmBrep::CalculateBoundingBox",
-                unit: "query.brep",
-            })
-        ));
-        assert!(primary && other);
+        // With the B-rep box (query.brep) available the origin shift and the
+        // Boolean of two empty operands complete: the result replaces the primary.
+        assert!(matches!(result, Ok(Some(_))), "{result:?}");
+        assert!(!primary && other);
         assert_eq!(driver.engine().unwrap().state.other_components.len(), 1);
         let engine = driver.into_engine().unwrap();
         assert_eq!(engine.intersector.intersect_lamina_edges(), 1);
         assert_eq!(engine.intersector.merge.options, options);
         assert_eq!(engine.state.other_components.len(), 1);
-        assert!(!engine.state.intersection_loop_closed);
+        // (intersection_loop_closed is recomputed by the completed run)
     }
     #[test]
     fn nonmanifold_restores_flag_on_failure_but_retains_lamina_mode() {

@@ -680,7 +680,7 @@ fn bbox_rust(i: &BboxInput) -> Result<Output, HarnessError> {
         {
             match classify_step(&k, &mut graph, &mut cache, point, tolerance, boundary) {
                 Ok(values) => record.extend(values),
-                Err(deferred) => return Ok(deferred),
+                Err(deferred) => return Ok(*deferred),
             }
             continue;
         }
@@ -759,7 +759,7 @@ fn classify_step(
     point: [f64; 3],
     tolerance: f64,
     boundary: bool,
-) -> Result<Vec<f64>, Output> {
+) -> Result<Vec<f64>, Box<Output>> {
     use solidcore::geom::object::ObjectRef;
     use solidcore::geom::vector3d::Vec3;
     use solidcore::intersect::point_class::PointClassification;
@@ -792,7 +792,7 @@ fn classify_step(
         Ok(()) => 0.0,
         Err(e) => {
             if let Some(deferred) = Output::unported(&e) {
-                return Err(deferred);
+                return Err(Box::new(deferred));
             }
             status(&e)
         }
