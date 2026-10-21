@@ -21,10 +21,11 @@
 //! Deviations:
 //! - **Object handles.** As in part 1, every `SmObject` pointer is a caller-chosen handle
 //!   `O` ([`ClassObject`]) and the geometry behind it comes from a [`ClassGeometry`]; the
-//!   kernel is passed explicitly. `SmVertex::GetPoint` reads the B-rep vertex that
-//!   [`ClassGeometry::topology_entity`] resolves the handle to (an unresolved handle is an
-//!   invalid-input error, as in part 4). The edge members the code calls
-//!   (`SmEdge::GetVertex`, `GetInterval`, `GetCurve`) are still [`SolidError::Unported`].
+//!   kernel is passed explicitly. `SmEdge::GetCurve` and `SmVertex::GetPoint` reach the
+//!   entity's B-rep through [`ClassGeometry::topology_entity`] (a handle the adapter cannot
+//!   resolve stays [`SolidError::Unported`]); the other topology members the code calls
+//!   (`SmEdge::GetVertex`, `GetInterval`, the zone tolerances of both) are still
+//!   [`SolidError::Unported`] here.
 //! - **Out-params.** `FindInterval` returns a [`FoundInterval`]; `InsertPointClass` returns
 //!   `rbInsertionMade`; `sm_ChangeEdgePointClassToNearVertex` returns
 //!   `rbChangedToVertexFlag`; `MergePointClass`'s optional output arrays are
@@ -78,6 +79,7 @@ use crate::intersect::point_class::{
 use crate::kernel::Kernel;
 use crate::math::{Point3, Vec3, BIG_DOUBLE};
 use crate::surface::surface::Surface;
+use crate::topology::edge as topo_edge;
 
 const OP_FIND: &str = "intersect::curve_class::p3::CurveClassification::find_interval";
 const OP_FIND_PC: &str = "intersect::curve_class::p3::CurveClassification::find_point_class";
@@ -88,6 +90,8 @@ const OP_MERGE: &str = "intersect::curve_class::p3::CurveClassification::merge_p
 const OP_CLEANUP: &str = "intersect::curve_class::p3::CurveClassification::cleanup_and_validate";
 const OP_NEAR_VERTEX: &str = "intersect::curve_class::p3::change_edge_point_class_to_near_vertex";
 const OP_SQUEEZE: &str = "intersect::curve_class::p3::fix_problems_by_squeezing";
+const OP_EDGE: &str = "intersect::curve_class::p3::edge_curve";
+const OP_VERTEX: &str = "intersect::curve_class::p3::vertex_point";
 
 /// `SM_ERR_OUTSIDE_OF_DOMAIN` (`SmMessages.h`).
 const SM_ERR_OUTSIDE_OF_DOMAIN: i32 = 1020;
@@ -145,26 +149,31 @@ fn edge_interval<O: ClassObject>(edge: O) -> Result<Extent1d> {
     Err(SolidError::unported("SmEdge::GetInterval", "topology.edge"))
 }
 
-/// `SmEdge::GetCurve`.
+/// `SmEdge::GetCurve`, on the edge [`ClassGeometry::topology_entity`] resolves `edge` to;
+/// a handle resolved to another entity is [`SolidError::InvalidInput`], one the adapter
+/// cannot resolve (no B-rep) stays [`SolidError::Unported`].
 fn edge_curve<O: ClassObject, G: ClassGeometry<O>>(
     geometry: &G,
     edge: O,
 ) -> Result<Option<&Curve>> {
-    let _ = (geometry, edge);
-    // UNPORTED(topology.edge): SmEdge::GetCurve
-    Err(SolidError::unported("SmEdge::GetCurve", "topology.edge"))
+    match geometry.topology_entity(edge) {
+        Some((b, EntityRef::Edge(e))) => topo_edge::curve(b, e),
+        Some(_) => Err(SolidError::invalid_input(OP_EDGE, "handle is not an edge")),
+        // an opaque handle (the adapter has no B-rep): still a deferral
+        // UNPORTED(topology.edge): SmEdge::GetCurve (unresolved handle)
+        None => Err(SolidError::unported("SmEdge::GetCurve", "topology.edge")),
+    }
 }
 
 /// `SmVertex::GetPoint` of vertex handle `vertex`, through the B-rep vertex that
-/// [`ClassGeometry::topology_entity`] resolves it to. A handle the adapter cannot resolve
-/// to a vertex is an invalid-input error (a gap in the caller's adapter), as in part 4.
+/// [`ClassGeometry::topology_entity`] resolves it to.
 fn vertex_point<O: ClassObject, G: ClassGeometry<O>>(geometry: &G, vertex: O) -> Result<Point3> {
     match geometry.topology_entity(vertex) {
         Some((b, EntityRef::Vertex(v))) => crate::topology::vertex::point(b, v),
-        _ => Err(SolidError::invalid_input(
-            "intersect::curve_class::p3::vertex_point",
-            "unresolved vertex handle",
-        )),
+        Some(_) => Err(SolidError::invalid_input(OP_VERTEX, "handle is not a vertex")),
+        // an opaque handle (the adapter has no B-rep): still a deferral
+        // UNPORTED(topology.vertex): SmVertex::GetPoint (unresolved handle)
+        None => Err(SolidError::unported("SmVertex::GetPoint", "topology.vertex")),
     }
 }
 
