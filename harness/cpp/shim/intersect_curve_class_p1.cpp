@@ -17,7 +17,14 @@
 // behaviour upstream (indices past the intervals, NULL curves or surfaces that are dereferenced,
 // objects of the wrong kind, topology walks over the bare stand-in edges). Objects live for the
 // whole process (never deleted: topology destructors notify owners).
+//
+// A second entry point, sc_intersect_curve_class_p1_consistent(path, block, n_block, args, n_args,
+// out, cap, out_len), runs sm_MakeConsistentClassifications on a classification whose intervals
+// classify to the edges and vertices of a real SmBrep built with the shared topology fixture
+// (sc_topology_fixture::apply: unit topology.edgeuse_p1's B-rep block and traversal order, which
+// the Rust side imports from that unit's export). Layout in the ffi module.
 #include "sc_shim.h"
+#include "support/topology_fixture.h"
 
 #include "StdAfx.h"
 #include <SmBSplineCurve.h>
@@ -1770,8 +1777,9 @@ struct Rd
 double st(SmStatus s) { return s == SM_SUCCESS ? 0.0 : (double)s; }
 double flg(SmBoolean b) { return b ? 1.0 : 0.0; }
 
-// Topology stand-ins without uses: the system zone tolerance; an edge on the natural
-// interval of its curve, a face on the natural UV domain of its surface.
+// Topology stand-ins without uses: a vertex has the system zone tolerance, an edge or face
+// SmZoneTol3d(tol) (tol -1: the system zone tolerance); an edge on the natural interval of its
+// curve, a face on the natural UV domain of its surface.
 struct ScVertex : public SmVertex
 {
     ScVertex() : SmVertex() { m_sZoneTol3d = SmTol::GetZoneTol3d(); }
@@ -1779,23 +1787,23 @@ struct ScVertex : public SmVertex
 
 struct ScEdge : public SmEdge
 {
-    explicit ScEdge(SmCurve* c) : SmEdge()
+    ScEdge(SmCurve* c, double tol) : SmEdge()
     {
         m_pCurve = c;
         if (c != NULL)
             m_vInterval = c->GetNaturalInterval();
-        m_sZoneTol3d = SmTol::GetZoneTol3d();
+        m_sZoneTol3d = tol == -1.0 ? SmTol::GetZoneTol3d() : SmZoneTol3d(tol);
     }
 };
 
 struct ScFace : public SmFace
 {
-    explicit ScFace(SmSurface* s) : SmFace()
+    ScFace(SmSurface* s, double tol) : SmFace()
     {
         m_pSurface = s;
         if (s != NULL)
             m_vUVDomain = s->GetNaturalUVDomain();
-        m_sZoneTol3d = SmTol::GetZoneTol3d();
+        m_sZoneTol3d = tol == -1.0 ? SmTol::GetZoneTol3d() : SmZoneTol3d(tol);
     }
 };
 
@@ -2134,9 +2142,10 @@ int32_t run(Rd& rd, std::vector<double>& o)
             int64_t c = rd.idx();
             bool ok = true;
             SmCurve* co = (SmCurve*)pool.get(c, {K_CURVE}, ok);
+            double tol = rd.num();
             if (!ok)
                 return SC_ERR_ARG;
-            p = new (anchor()) ScEdge(co);
+            p = new (anchor()) ScEdge(co, tol);
             break;
         }
         case K_FACE:
@@ -2144,9 +2153,10 @@ int32_t run(Rd& rd, std::vector<double>& o)
             int64_t s = rd.idx();
             bool ok = true;
             SmSurface* so = (SmSurface*)pool.get(s, {K_PLANE, K_BSURF}, ok);
+            double tol = rd.num();
             if (!ok)
                 return SC_ERR_ARG;
-            p = new (anchor()) ScFace(so);
+            p = new (anchor()) ScFace(so, tol);
             break;
         }
         case K_LOOP: p = new (&ctx) ScStandIn(SmLoop_TYPE); break;
@@ -2962,6 +2972,154 @@ SC_EXPORT int32_t sc_intersect_curve_class_p1_run(const double* in, int64_t n_in
     {
         *out_len = 0;
         return s;
+    }
+    return sc_copy_out(o.data(), (int64_t)o.size(), out, cap, out_len);
+    SC_CATCH
+}
+
+namespace
+{
+// One end of a consistent-classification interval: `mode sel` (0 untouched, 1 vertex
+// `sel % n_vertices`, 2 edge `sel % n_edges`, 3 extra vertex `sel % n_extra`); false for a
+// mode the B-rep cannot supply.
+bool set_end(Rd& rd, const sc_topology_fixture::View& g, const std::vector<SmVertex*>& extra,
+             SmPointClassification& pc)
+{
+    int64_t mode = rd.idx();
+    int64_t sel = rd.idx();
+    if (sel < 0)
+        return false;
+    if (mode == 0)
+        return true;
+    if (mode == 1 && !g.vertices.empty())
+    {
+        pc.SetClassObject(SM_PC_VERTEX, g.vertices[(size_t)(sel % (int64_t)g.vertices.size())]);
+        return true;
+    }
+    if (mode == 2 && !g.edges.empty())
+    {
+        pc.SetClassObject(SM_PC_EDGE, g.edges[(size_t)(sel % (int64_t)g.edges.size())]);
+        return true;
+    }
+    if (mode == 3 && !extra.empty())
+    {
+        pc.SetClassObject(SM_PC_VERTEX, extra[(size_t)(sel % (int64_t)extra.size())]);
+        return true;
+    }
+    return false;
+}
+
+// A classification object as `kind index` (kind 0 none, 1 vertex, 2 edge, 3 other, 4 extra
+// vertex).
+void put_end(std::vector<double>& o, const sc_topology_fixture::View& g, const std::vector<SmVertex*>& extra,
+             const SmPointClassification& pc)
+{
+    o.push_back((double)pc.GetPointClass());
+    const SmObject* p = pc.GetObject();
+    for (size_t i = 0; i < extra.size(); i++)
+        if ((const void*)extra[i] == (const void*)p)
+        {
+            o.push_back(4.0);
+            o.push_back((double)i);
+            return;
+        }
+    for (size_t i = 0; i < g.vertices.size(); i++)
+        if ((const void*)g.vertices[i] == (const void*)p)
+        {
+            o.push_back(1.0);
+            o.push_back((double)i);
+            return;
+        }
+    for (size_t i = 0; i < g.edges.size(); i++)
+        if ((const void*)g.edges[i] == (const void*)p)
+        {
+            o.push_back(2.0);
+            o.push_back((double)i);
+            return;
+        }
+    o.push_back(p == NULL ? 0.0 : 3.0);
+    o.push_back(-1.0);
+}
+
+// args: `curve_block src_tol n_extra P[3]*n_extra n (a b mid_sel start_mode start_sel end_mode
+// end_sel)*n`; the interior of every interval classifies to edge `mid_sel`. The extra vertices
+// are acorn vertices (SmBrep::MakeShellVertex in the infinite region: no edges), added after
+// the traversal.
+int32_t run_consistent(Rd& rd, const sc_topology_fixture::View& g, std::vector<double>& o)
+{
+    const SmContext& ctx = the_context();
+    bool bs = false;
+    ULONG dim = 0;
+    SmCurve* c = read_curve(rd, ctx, bs, dim);
+    if (c == NULL)
+        return SC_ERR_ARG;
+    SmCurveClassification cc;
+    // owned: deleted with the classification, before the B-rep
+    cc.SetCurve(c, TRUE);
+    // upstream evaluates the classification curve as a 3D curve
+    if (rd.bad || dim != 3 || g.edges.empty())
+        return SC_ERR_ARG;
+    SmTol::SetZoneTol3d(&cc, SmZoneTol3d(rd.num()));
+    int64_t n_extra = rd.idx();
+    if (rd.bad || n_extra < 0 || n_extra > 4)
+        return SC_ERR_ARG;
+    std::vector<SmVertex*> extra;
+    for (int64_t j = 0; j < n_extra; j++)
+    {
+        SmPoint3d pt = rd.vec();
+        SmShell* shell = NULL;
+        SmVertex* vertex = NULL;
+        if (g.brep.MakeShellVertex(g.brep.GetInfiniteRegion(), pt, shell, vertex) != SM_SUCCESS || vertex == NULL)
+            return SC_ERR_ARG;
+        extra.push_back(vertex);
+    }
+    int64_t n = rd.idx();
+    if (rd.bad || n < 1 || n > 8)
+        return SC_ERR_ARG;
+    cc.SetSize((ULONG)n);
+    for (int64_t j = 0; j < n; j++)
+    {
+        SmCurveInterval& ivl = cc.GetAt((ULONG)j);
+        double a = rd.num();
+        double b = rd.num();
+        ivl.SetInterval(SmExtent1d(a, b));
+        int64_t mid = rd.idx();
+        if (mid < 0)
+            return SC_ERR_ARG;
+        ivl.m_vMid.SetClassObject(SM_PC_EDGE, g.edges[(size_t)(mid % (int64_t)g.edges.size())]);
+        if (!set_end(rd, g, extra, ivl.m_vStart) || !set_end(rd, g, extra, ivl.m_vEnd))
+            return SC_ERR_ARG;
+    }
+    if (rd.bad || rd.at != rd.n)
+        return SC_ERR_ARG;
+    o.push_back(st(sc_cc_p1::sm_MakeConsistentClassifications(cc)));
+    for (int64_t j = 0; j < n; j++)
+    {
+        const SmCurveInterval& ivl = cc.GetAt((ULONG)j);
+        put_end(o, g, extra, ivl.m_vStart);
+        put_end(o, g, extra, ivl.m_vMid);
+        put_end(o, g, extra, ivl.m_vEnd);
+    }
+    return SC_OK;
+}
+} // namespace
+
+SC_EXPORT int32_t sc_intersect_curve_class_p1_consistent(const char* path, const double* block, int64_t n_block,
+                                                         const double* args, int64_t n_args, double* out,
+                                                         int64_t cap, int64_t* out_len)
+{
+    if (path == NULL || block == NULL || n_block < 1 || args == NULL || n_args < 1 || out_len == NULL)
+        return SC_ERR_ARG;
+    SC_TRY
+    std::vector<double> o;
+    int32_t rc = sc_topology_fixture::apply(path, block, n_block, [&](const sc_topology_fixture::View& g) -> int32_t {
+        Rd rd{args, n_args, 0};
+        return run_consistent(rd, g, o);
+    });
+    if (rc != SC_OK)
+    {
+        *out_len = 0;
+        return rc;
     }
     return sc_copy_out(o.data(), (int64_t)o.size(), out, cap, out_len);
     SC_CATCH

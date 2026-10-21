@@ -13,8 +13,10 @@
 //! its `SmStatus` (`InvalidInput` 1007, `-1` for one upstream cannot return); an `Unported`
 //! error anywhere defers the case.
 //!
-//! The vertex, edge and face stand-ins have no uses and the system zone tolerance (the
-//! pool's [`ClassGeometry::topology_zone_tol_3d`]); the Rust side keeps the edges and faces
+//! The vertex, edge and face stand-ins have no uses; the vertex has the system zone
+//! tolerance, an edge or face the script's `tols` entry for it or the system one (the
+//! pool's [`ClassGeometry::topology_zone_tol_3d`]; [`TOL_CASES`] fixed-seed scripts set
+//! them from `1e-9` to `1e-2`, around the edge insert gate and the face retries); the Rust side keeps the edges and faces
 //! in a [`Brep`] (an edge on its pool curve's natural interval, sharing the pool curve as
 //! upstream does, a face on its pool surface's natural UV domain), on which
 //! `sm_SetXSectEdgeThroughPoint`, `sm_GetCCIGeometry`, `sm_ComputeFacePointClass` and the
@@ -23,6 +25,13 @@
 //! [`CCI_FACE_CASES`] scripts run `sm_GetCCIGeometry` on a boundary edge of a real face
 //! (`SmBrep::CreateFaceFromSurface`), mirrored in the [`Brep`] by one face of that
 //! surface whose loop edge use (no UV trim curve, as the new C++ face) uses the edge.
+//!
+//! `sm_MakeConsistentClassifications` needs connected edges and vertices, so
+//! [`CONSISTENT_CASES`] cases (a `brep` input) run it on a real B-rep of unit
+//! `topology.edgeuse_p1`'s fixture (files, wires, faces, the wire network): the C++ side
+//! builds it, the Rust side imports that unit's export (traversal order, so entity
+//! indices match) and classifies through [`ClassGeometry::topology_entity`]; output is
+//! the status and each interval end's class and entity.
 //!
 //! Deferred cases: ops that reach other topology (`ComputePointParameters` on vertices,
 //! edges and faces), surface point solves (`ComputePointParameters` on surfaces, `sm_GetCCISurfaceGaps` with
@@ -40,6 +49,7 @@ use solidcore::curve::line::{BoundedLineOptions, Line};
 use solidcore::error::EntityRef;
 use solidcore::geom::extent1d::Extent1d;
 use solidcore::geom::extent2d::Extent2d;
+use solidcore::geom::global_solver::SolverOperation;
 use solidcore::geom::solution_array::{ObjectKind, Solution, SolutionArray, SolutionObject, SolutionType};
 use solidcore::geom::tol::{zone_tol3d, ScaledZero, ZONE_TOL_3D};
 use solidcore::geom::vector3d::Vec3;
@@ -61,8 +71,15 @@ use solidcore::surface::plane::Plane;
 use solidcore::surface::surface::Surface;
 use solidcore::surface::volume::Volume;
 use solidcore::nurbs::b_spline_surface_n_lib::p2::OrientType;
+use solidcore::curve::curve::p2::{BSPLINE_CURVE_TYPE, CRV_ON_SURF_TYPE, LINE_TYPE};
 use solidcore::topology::{
-    Brep, Edge, EdgeId, Edgeuse, EdgeuseId, EdgeuseOwner, Face, FaceId, Faceuse, Loopuse,
+    edge, vertex, Brep, Edge, EdgeId, Edgeuse, EdgeuseId, EdgeuseOwner, Face, FaceId, Faceuse,
+    Loopuse, VertexId,
+};
+use solidcore_ffi::units::topology_edgeuse_p1 as graph;
+
+use super::topology_edgeuse_p1::{
+    fixture_input, gen_brep as gen_edgeuse_brep, import_with_types,
 };
 use solidcore::SolidError;
 use solidcore_ffi::units::intersect_curve_class_p1::{self as ffi, kind, op};
@@ -310,6 +327,17 @@ enum OpIn {
 struct Script {
     objects: Vec<ObjIn>,
     ops: Vec<OpIn>,
+    /// `(object, tol)`: the zone tolerance (`SmZoneTol3d(tol)`) of an edge or face object;
+    /// the others have the system zone tolerance.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    tols: Vec<(usize, f64)>,
+}
+
+impl Script {
+    /// The tolerance of object `i` on the wire: its own, `-1` for the system one.
+    fn tol_of(&self, i: usize) -> f64 {
+        self.tols.iter().rev().find(|(j, _)| *j == i).map_or(-1.0, |(_, t)| *t)
+    }
 }
 
 // ---- objects ----------------------------------------------------------------------------
@@ -477,7 +505,7 @@ fn touches_block(v: &mut Vec<f64>, ts: &[TouchIn]) {
 
 fn cpp_input(s: &Script) -> Vec<f64> {
     let mut v = vec![s.objects.len() as f64];
-    for o in &s.objects {
+    for (i, o) in s.objects.iter().enumerate() {
         match o {
             ObjIn::Curve(c) => {
                 v.push(kind::CURVE as f64);
@@ -497,8 +525,8 @@ fn cpp_input(s: &Script) -> Vec<f64> {
                 v.extend_from_slice(p);
             }
             ObjIn::Vertex => v.push(kind::VERTEX as f64),
-            ObjIn::Edge(c) => v.extend([kind::EDGE as f64, opt_id(*c)]),
-            ObjIn::Face(sf) => v.extend([kind::FACE as f64, opt_id(*sf)]),
+            ObjIn::Edge(c) => v.extend([kind::EDGE as f64, opt_id(*c), s.tol_of(i)]),
+            ObjIn::Face(sf) => v.extend([kind::FACE as f64, opt_id(*sf), s.tol_of(i)]),
             ObjIn::Loop => v.push(kind::LOOP as f64),
             ObjIn::Other => v.push(kind::OTHER as f64),
         }
@@ -779,7 +807,16 @@ impl ClassGeometry<H> for Pool {
     }
     fn topology_zone_tol_3d(&self, o: H) -> Option<f64> {
         match o.1 {
-            ClassObjectKind::Vertex | ClassObjectKind::Edge | ClassObjectKind::Face => self.topo_tol,
+            ClassObjectKind::Vertex => self.topo_tol,
+            // an edge's or face's own record tolerance (the stand-in's `m_sZoneTol3d`)
+            ClassObjectKind::Edge | ClassObjectKind::Face => {
+                self.topo_tol?;
+                match self.topo.get(o.0).copied().flatten() {
+                    Some(EntityRef::Edge(e)) => self.brep.edge(e).ok().map(|r| r.tolerance),
+                    Some(EntityRef::Face(f)) => self.brep.face(f).ok().map(|r| r.tolerance),
+                    _ => self.topo_tol,
+                }
+            }
             _ => None,
         }
     }
@@ -1140,6 +1177,18 @@ fn rust_run(s: &Script) -> Result<Vec<f64>, Fail> {
     let k = Kernel::default();
     let mut pool = build_pool(&s.objects)?;
     pool.topo_tol = Some(ZONE_TOL_3D);
+    for i in 0..s.objects.len() {
+        let tol = s.tol_of(i);
+        if tol == -1.0 {
+            continue;
+        }
+        let topo_err = |e: SolidError| harness(format!("stand-in tolerance: {e}"));
+        match pool.topo.get(i).copied().flatten() {
+            Some(EntityRef::Edge(e)) => pool.brep.edge_mut(e).map_err(topo_err)?.tolerance = zone_tol3d(&k, tol),
+            Some(EntityRef::Face(f)) => pool.brep.face_mut(f).map_err(topo_err)?.tolerance = zone_tol3d(&k, tol),
+            _ => {}
+        }
+    }
     let mut ccs: [CurveClassification<H>; 2] =
         [CurveClassification::new(&k), CurveClassification::new(&k)];
     let mut o: Vec<f64> = Vec::new();
@@ -1320,7 +1369,7 @@ fn rust_run(s: &Script) -> Result<Vec<f64>, Fail> {
                         o.extend([0.0, b(cc.is_referenced(pool.handle(*obj)?))]);
                     }
                     OpIn::MakeConsistent { .. } => {
-                        let r = cc_mod::make_consistent_classifications(cc);
+                        let r = cc_mod::make_consistent_classifications(&k, cc, &pool);
                         o.push(st(r)?.err().unwrap_or(0.0));
                     }
                     OpIn::Type { types, .. } => {
@@ -2527,7 +2576,7 @@ fn gen_script(rng: &mut Rng) -> Script {
             });
         }
     }
-    Script { objects, ops }
+    Script { objects, ops, tols: Vec::new() }
 }
 
 /// Whether the shim accepts the script (it rejects what is undefined upstream).
@@ -2659,7 +2708,7 @@ fn gen_topology_script(rng: &mut Rng) -> Script {
     if scale != 1.0 {
         scale_script(&mut objects, &mut ops, scale);
     }
-    Script { objects, ops }
+    Script { objects, ops, tols: Vec::new() }
 }
 
 /// Scales the geometry, points and tolerances of a topology script by `f` (UV
@@ -2792,7 +2841,7 @@ fn gen_apply_edge_script(rng: &mut Rng) -> Script {
     if scale != 1.0 {
         scale_script(&mut objects, &mut ops, scale);
     }
-    Script { objects, ops }
+    Script { objects, ops, tols: Vec::new() }
 }
 
 /// The fixed-seed edge `sm_ApplyPointSolution` scripts the shim accepts.
@@ -2850,7 +2899,7 @@ fn gen_cci_face_script(rng: &mut Rng) -> Script {
         ops.push(OpIn::SetUvCurve1 { t: 0, obj: Some(ci) });
     }
     ops.push(OpIn::CciFace { t: 0, s: Some(fs), side: rng.below(4) as usize });
-    Script { objects, ops }
+    Script { objects, ops, tols: Vec::new() }
 }
 
 /// The fixed-seed real-face CCI scripts the shim accepts.
@@ -2865,6 +2914,455 @@ fn cci_face_cases() -> Vec<(String, Value)> {
             continue;
         }
         out.push((format!("cci_face_{}", out.len()), json!(s)));
+    }
+    out
+}
+
+/// Fixed-seed scripts whose stand-in edges and faces have their own zone tolerance
+/// (`1e-9 .. 1e-2`), so the reads of `SmTol::GetZoneTol3d(pEdge)` in
+/// `sm_SetXSectEdgeThroughPoint` (the `/2000` insert gate) and `sm_ApplyPointSolution`,
+/// and of `SmTol::GetZoneTol3d(pFace)` in `sm_ComputeFacePointClass` (the 10x / 100x
+/// retries), are compared at more than the system value.
+pub(crate) const TOL_CASES: usize = 360;
+
+/// A log-uniform tolerance in `[1e-9, 1e-2]`, sometimes a round value.
+fn gen_topo_tol(rng: &mut Rng) -> f64 {
+    if rng.chance(0.25) {
+        *rng.choose(&[1e-9, 1e-8, 1e-6, 5e-6, 2e-5, 1e-4, 1e-3, 1e-2]).unwrap_or(&1e-6)
+    } else {
+        10f64.powf(rng.uniform(-9.0, -2.0))
+    }
+}
+
+/// `sm_ComputeFacePointClass` on a plane face with its own tolerance `tf`, the point
+/// at an exact distance from the plane chosen so that the first solve (within the
+/// source tolerance `ts`), the 10x retry, only the 100x retry, or none projects it.
+fn gen_face_tol_script(rng: &mut Rng) -> Script {
+    let o = rp(rng, 5.0);
+    let n = dir(rng);
+    let objects = vec![ObjIn::Plane { o, n }, ObjIn::Face(Some(0))];
+    let tf = gen_topo_tol(rng);
+    let ts = tf * 10f64.powf(rng.uniform(-2.0, 0.0));
+    let x = ts + tf;
+    let d = match rng.below(5) {
+        0 => 0.5 * ts,
+        1 => 5.0 * x,
+        2 | 3 => rng.uniform(15.0, 90.0) * x,
+        _ => 200.0 * x,
+    };
+    let pl = Surface::from(Plane::from_normal(v3(o), v3(n)));
+    let q = [rng.uniform(-3.0, 3.0), rng.uniform(-3.0, 3.0)];
+    let on = pl.evaluate_point(uvp(q)).unwrap_or(Vec3::new(0.0, 0.0, 0.0));
+    let nn = norm(n);
+    let side = if rng.chance(0.5) { 1.0 } else { -1.0 };
+    let p = [on.x + side * d * nn[0], on.y + side * d * nn[1], on.z + side * d * nn[2]];
+    let ops = vec![OpIn::FacePointClass { t: 0, f: Some(1), p, tol: ts }];
+    Script { objects, ops, tols: vec![(1, tf)] }
+}
+
+/// A topology script whose `sm_SetXSectEdgeThroughPoint` edge gets a tolerance on either
+/// side of 2000 times the distance from the through point to the edge curve (the
+/// `> s3DCurveZoneTol3d/2000` insert gate); `None` without such an op or distance.
+fn gen_edge_gate_script(rng: &mut Rng) -> Option<Script> {
+    let mut s = gen_topology_script(rng);
+    let (e, p, ivl) = s.ops.iter().find_map(|o| match o {
+        OpIn::EdgeThrough { e: Some(e), p, ivl, .. } => Some((*e, *p, *ivl)),
+        _ => None,
+    })?;
+    let ci = match s.objects.get(e) {
+        Some(ObjIn::Edge(Some(c))) => *c,
+        _ => return None,
+    };
+    let pool = build_pool(&s.objects).ok()?;
+    let curve = pool.curve_at(Some(ci)).ok()??;
+    let interval = ivl.map_or_else(|| curve.natural_interval(), |[a, z]| Extent1d::from_min_max(a, z));
+    let k = Kernel::default();
+    let dist = curve
+        .drop_point(&k, &interval, v3(p), None, BIG, None, SolverOperation::Minimize)
+        .ok()
+        .filter(|d| d.success)?
+        .distance;
+    let factor = if rng.chance(0.5) { 0.5 } else { 2.0 };
+    let tol = 2000.0 * dist * factor;
+    if !(1e-9..=1e-2).contains(&tol) {
+        return None;
+    }
+    s.tols.push((e, tol));
+    for (i, o) in s.objects.iter().enumerate() {
+        if i != e && matches!(o, ObjIn::Face(_)) {
+            s.tols.push((i, gen_topo_tol(rng)));
+        }
+    }
+    Some(s)
+}
+
+/// A topology or edge-apply script with a random tolerance on every edge and face.
+fn gen_random_tol_script(rng: &mut Rng) -> Script {
+    let mut s = if rng.chance(0.6) { gen_topology_script(rng) } else { gen_apply_edge_script(rng) };
+    for (i, o) in s.objects.iter().enumerate() {
+        if matches!(o, ObjIn::Edge(_) | ObjIn::Face(_)) {
+            s.tols.push((i, gen_topo_tol(rng)));
+        }
+    }
+    s
+}
+
+/// The fixed-seed tolerance scripts the shim accepts.
+fn tol_cases() -> Vec<(String, Value)> {
+    let mut rng = Rng::new(0x7015_ca1e);
+    let mut out = Vec::new();
+    let mut tries = 0;
+    while out.len() < TOL_CASES && tries < 20 * TOL_CASES {
+        tries += 1;
+        let (tag, s) = match out.len() % 3 {
+            0 => ("tol_face", gen_face_tol_script(&mut rng)),
+            1 => match gen_edge_gate_script(&mut rng) {
+                Some(s) => ("tol_edge_gate", s),
+                None => continue,
+            },
+            _ => ("tol_random", gen_random_tol_script(&mut rng)),
+        };
+        if ffi::validate(&cpp_input(&s)).is_err() || !shim_accepts(&s) {
+            continue;
+        }
+        out.push((format!("{tag}_{}", out.len()), json!(s)));
+    }
+    out
+}
+
+// ---- sm_MakeConsistentClassifications on a real B-rep ------------------------------------
+
+/// One interval of a [`ConsistentIn`] case: `[a, b]`, the interior on edge `mid`, the
+/// start and end as `[mode, sel]` (`0` untouched, `1` vertex, `2` edge, `3` extra vertex;
+/// selectors modulo the entity count).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ConsistentIvl {
+    a: f64,
+    b: f64,
+    mid: usize,
+    start: [usize; 2],
+    end: [usize; 2],
+}
+
+/// A `sm_MakeConsistentClassifications` case on a real B-rep (unit `topology.edgeuse_p1`'s
+/// B-rep block): the classification curve (3D), source tolerance and intervals.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ConsistentIn {
+    brep: Value,
+    curve: CurveIn,
+    src_tol: f64,
+    /// Acorn vertices (no edges) added to the B-rep after its traversal.
+    #[serde(default)]
+    extra: Vec<[f64; 3]>,
+    ivls: Vec<ConsistentIvl>,
+}
+
+fn consistent_args(c: &ConsistentIn) -> Vec<f64> {
+    let mut v = Vec::new();
+    curve_block(&mut v, &c.curve);
+    v.extend([c.src_tol, c.extra.len() as f64]);
+    for p in &c.extra {
+        v.extend(p);
+    }
+    v.push(c.ivls.len() as f64);
+    for i in &c.ivls {
+        v.extend([i.a, i.b, i.mid as f64]);
+        v.extend(i.start.iter().chain(&i.end).map(|&x| x as f64));
+    }
+    v
+}
+
+fn consistent_cpp(c: &ConsistentIn) -> Result<Output, HarnessError> {
+    let (path, block) = fixture_input(c.brep.clone())?;
+    let out = ffi::consistent(&path, &block, &consistent_args(c))
+        .map_err(|e| harness(format!("c++: {e}")))?;
+    Ok(Output::new().values("out", out))
+}
+
+/// A classification handle of a [`ConsistentIn`] case: its curve or a B-rep entity.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum TopoH {
+    Curve,
+    E(EntityRef),
+}
+
+impl ClassObject for TopoH {
+    fn class_kind(&self) -> ClassObjectKind {
+        match self {
+            TopoH::Curve => ClassObjectKind::Curve,
+            TopoH::E(EntityRef::Vertex(_)) => ClassObjectKind::Vertex,
+            TopoH::E(EntityRef::Edge(_)) => ClassObjectKind::Edge,
+            TopoH::E(EntityRef::Face(_)) => ClassObjectKind::Face,
+            TopoH::E(_) => ClassObjectKind::Other,
+        }
+    }
+}
+
+/// The imported B-rep and the classification curve behind [`TopoH`] handles.
+struct TopoGeometry {
+    brep: Brep,
+    curve: Curve,
+}
+
+impl ClassGeometry<TopoH> for TopoGeometry {
+    fn curve(&self, o: TopoH) -> Option<&Curve> {
+        (o == TopoH::Curve).then_some(&self.curve)
+    }
+    fn surface(&self, _o: TopoH) -> Option<&Surface> {
+        None
+    }
+    fn volume(&self, _o: TopoH) -> Option<&Volume> {
+        None
+    }
+    fn point(&self, _o: TopoH) -> Option<Vec3> {
+        None
+    }
+    fn topology_entity(&self, o: TopoH) -> Option<(&Brep, EntityRef)> {
+        match o {
+            TopoH::E(e) => Some((&self.brep, e)),
+            TopoH::Curve => None,
+        }
+    }
+    fn topology_handle(&self, e: EntityRef) -> Option<TopoH> {
+        Some(TopoH::E(e))
+    }
+}
+
+/// The curve types the edge-use export carries exactly.
+const EXACT_EDGE_CURVES: [i64; 3] = [BSPLINE_CURVE_TYPE, LINE_TYPE, CRV_ON_SURF_TYPE];
+
+/// The B-rep of a case imported from the C++ export; `None` when an edge curve is held
+/// only as its B-spline part (the shared export's limitation).
+fn consistent_brep(brep: &Value) -> Result<Option<Brep>, HarnessError> {
+    let (path, block) = fixture_input(brep.clone())?;
+    let export = graph::eval(graph::Op::Export, &path, &block)
+        .map_err(|e| harness(format!("c++ export: {e}")))?;
+    let (b, types) = import_with_types(&export)?;
+    if types
+        .edge_curve_types
+        .iter()
+        .any(|t| *t >= 0 && !EXACT_EDGE_CURVES.contains(t))
+    {
+        return Ok(None);
+    }
+    Ok(Some(b))
+}
+
+/// The entity of an interval end `[mode, sel]`; `nv` imported vertices precede `n_extra`
+/// extra ones.
+fn entity_of(mode: usize, sel: usize, b: &Brep, nv: usize, n_extra: usize) -> Option<(PointClassType, EntityRef)> {
+    let ne = b.edges().len();
+    match mode {
+        3 if n_extra > 0 => Some((
+            PointClassType::Vertex,
+            EntityRef::Vertex(VertexId::from_index((nv + sel % n_extra) as u32)),
+        )),
+        1 if nv > 0 => Some((
+            PointClassType::Vertex,
+            EntityRef::Vertex(VertexId::from_index((sel % nv) as u32)),
+        )),
+        2 if ne > 0 => Some((
+            PointClassType::Edge,
+            EntityRef::Edge(EdgeId::from_index((sel % ne) as u32)),
+        )),
+        _ => None,
+    }
+}
+
+fn put_topo_end(o: &mut Vec<f64>, pc: &PointClassification<TopoH>, nv: usize) {
+    o.push(f64::from(pc.point_class().code()));
+    match pc.object() {
+        Some(TopoH::E(EntityRef::Vertex(v))) if v.index() as usize >= nv => {
+            o.extend([4.0, (v.index() as usize - nv) as f64]);
+        }
+        Some(TopoH::E(EntityRef::Vertex(v))) => o.extend([1.0, f64::from(v.index())]),
+        Some(TopoH::E(EntityRef::Edge(e))) => o.extend([2.0, f64::from(e.index())]),
+        None => o.extend([0.0, -1.0]),
+        Some(_) => o.extend([3.0, -1.0]),
+    }
+}
+
+fn consistent_rust(c: &ConsistentIn) -> Result<Output, HarnessError> {
+    let k = Kernel::default();
+    let Some(mut setup) = consistent_setup(&k, c)? else {
+        return Ok(Output::deferred(
+            "harness:analytic-geometry-export",
+            "analytic edge curve in the B-rep export",
+        ));
+    };
+    Ok(match consistent_out(&k, &mut setup) {
+        Ok(o) => Output::new().values("out", o),
+        Err(d) => *d,
+    })
+}
+
+/// A [`ConsistentIn`] case set up on the Rust side: the geometry, the classification
+/// before the repair and the imported vertex count.
+struct ConsistentSetup {
+    geo: TopoGeometry,
+    cc: CurveClassification<TopoH>,
+    nv: usize,
+}
+
+/// Imports the case's B-rep, adds its extra vertices (after the imported ones, as the
+/// C++ side adds them after the traversal) and builds the classification; `None` when the
+/// export holds an edge curve inexactly.
+fn consistent_setup(k: &Kernel, c: &ConsistentIn) -> Result<Option<ConsistentSetup>, HarnessError> {
+    let Some(mut brep) = consistent_brep(&c.brep)? else {
+        return Ok(None);
+    };
+    let nv = brep.vertices().len();
+    for p in &c.extra {
+        brep.add_vertex(v3(*p)).map_err(|e| harness(e.to_string()))?;
+    }
+    let geo = TopoGeometry { brep, curve: build_curve(&c.curve)? };
+    let ne = geo.brep.edges().len();
+    if ne == 0 || geo.curve.dim() != 3 {
+        return Err(harness("no edges or a classification curve that is not 3D"));
+    }
+    let mut cc: CurveClassification<TopoH> = CurveClassification::new(k);
+    cc.set_curve(Some(TopoH::Curve), true);
+    cc.set_src_zone_tol_3d(zone_tol3d(k, c.src_tol));
+    cc.set_size(k, c.ivls.len()).map_err(|e| harness(e.to_string()))?;
+    for (j, i) in c.ivls.iter().enumerate() {
+        let ivl = cc.at_mut(j).map_err(|e| harness(e.to_string()))?;
+        ivl.set_interval(&Extent1d::from_min_max(i.a, i.b));
+        let mid = EntityRef::Edge(EdgeId::from_index((i.mid % ne) as u32));
+        ivl.mid.set_class_object(PointClassType::Edge, Some(TopoH::E(mid)));
+        for (end, pc) in [(i.start, &mut ivl.start), (i.end, &mut ivl.end)] {
+            if end[0] == 0 {
+                continue;
+            }
+            let (class, e) = entity_of(end[0], end[1], &geo.brep, nv, c.extra.len())
+                .ok_or_else(|| harness("no entity of that kind"))?;
+            pc.set_class_object(class, Some(TopoH::E(e)));
+        }
+    }
+    Ok(Some(ConsistentSetup { geo, cc, nv }))
+}
+
+/// Runs `sm_MakeConsistentClassifications`: the output values, or the deferral.
+fn consistent_out(k: &Kernel, s: &mut ConsistentSetup) -> Result<Vec<f64>, Box<Output>> {
+    let r = cc_mod::make_consistent_classifications(k, &mut s.cc, &s.geo);
+    if let Err(e) = &r {
+        if let Some(d) = Output::unported(e) {
+            return Err(Box::new(d));
+        }
+    }
+    let mut o = vec![r.as_ref().err().map_or(0.0, status)];
+    for ivl in s.cc.intervals() {
+        put_topo_end(&mut o, &ivl.start, s.nv);
+        put_topo_end(&mut o, &ivl.mid, s.nv);
+        put_topo_end(&mut o, &ivl.end, s.nv);
+    }
+    Ok(o)
+}
+
+/// Fixed-seed `sm_MakeConsistentClassifications` cases on real B-reps (files, wires,
+/// faces and the wire network of unit `topology.edgeuse_p1`): intervals whose interior
+/// classifies to an edge and whose ends classify to a vertex of that edge, to another
+/// vertex (the repair: an edge of that vertex near the interval midpoint, else the
+/// nearer edge end) or otherwise, with a classification curve along an edge of the
+/// classified vertex or of the interior edge (on it, or offset from it).
+pub(crate) const CONSISTENT_CASES: usize = 240;
+
+fn gen_consistent(rng: &mut Rng) -> Option<ConsistentIn> {
+    let brep = serde_json::to_value(gen_edgeuse_brep(rng)).ok()?;
+    let b = consistent_brep(&brep).ok()??;
+    let (nv, ne) = (b.vertices().len(), b.edges().len());
+    if nv == 0 || ne == 0 {
+        return None;
+    }
+    let mut ivls = Vec::new();
+    let mut along = None;
+    for _ in 0..=rng.below(2) {
+        let mid = rng.below(ne as u64) as usize;
+        let e = EdgeId::from_index(mid as u32);
+        let v1 = edge::vertex(&b, e).ok().flatten();
+        let v2 = edge::other_vertex(&b, e, v1).ok().flatten();
+        let mut end = |rng: &mut Rng| -> [usize; 2] {
+            match rng.below(10) {
+                0..=4 => {
+                    // a vertex off the edge, when there is one
+                    let off: Vec<usize> = (0..nv)
+                        .filter(|&i| {
+                            let v = Some(VertexId::from_index(i as u32));
+                            v != v1 && v != v2
+                        })
+                        .collect();
+                    let sel = rng.choose(&off).copied().unwrap_or(0);
+                    if along.is_none() || rng.chance(0.3) {
+                        let ve = vertex::edges(&b, VertexId::from_index(sel as u32), None).unwrap_or_default();
+                        along = if rng.chance(0.7) { rng.choose(&ve).copied() } else { Some(e) };
+                    }
+                    [1, sel]
+                }
+                5 | 6 => {
+                    let v = if rng.chance(0.5) { v1 } else { v2 };
+                    [1, v.map_or(0, |v| v.index() as usize)]
+                }
+                7 => [2, rng.below(ne as u64) as usize],
+                8 => [3, rng.below(4) as usize],
+                _ => [0, 0],
+            }
+        };
+        let start = end(rng);
+        let fin = end(rng);
+        let r1 = rng.uniform(0.0, 0.5);
+        let r2 = rng.uniform(0.5, 1.0);
+        ivls.push(ConsistentIvl { a: r1, b: r2, mid, start, end: fin });
+        if along.is_none() {
+            along = Some(e);
+        }
+    }
+    // the classification curve: a chord of `along` (sometimes offset), parameter [0, 1]
+    let ae = along?;
+    let crv = edge::curve(&b, ae).ok()??;
+    let ivl = edge::interval(&b, ae).ok()?;
+    let t1 = ivl.evaluate(rng.uniform(0.0, 0.3));
+    let t2 = ivl.evaluate(rng.uniform(0.7, 1.0));
+    let p1 = crv.evaluate_point(t1).ok()?;
+    let p2 = crv.evaluate_point(t2).ok()?;
+    let off_len = *rng.choose(&[0.0, 0.0, 1e-9, 1e-6, 1e-4, 1e-2, 0.5]).unwrap_or(&0.0);
+    let off = rp(rng, off_len);
+    let cpts = vec![
+        [p1.x + off[0], p1.y + off[1], p1.z + off[2], NOW],
+        [p2.x + off[0], p2.y + off[1], p2.z + off[2], NOW],
+    ];
+    if p1.distance(p2) < 1e-9 {
+        return None;
+    }
+    let curve = CurveIn::Bspline(BSplineIn { dim: 3, oob: false, cpts, p: 1, u: vec![0.0, 0.0, 1.0, 1.0] });
+    let src_tol = *rng.choose(&[USE_DEFAULT, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2]).unwrap_or(&USE_DEFAULT);
+    // acorn vertices (no edges, so only the nearer-edge-end repair applies) near the
+    // interior edge's ends or anywhere
+    let mut extra = Vec::new();
+    if ivls.iter().any(|i| i.start[0] == 3 || i.end[0] == 3) {
+        for _ in 0..=rng.below(3) {
+            let ends: Vec<_> = (0..nv).filter_map(|i| vertex::point(&b, VertexId::from_index(i as u32)).ok()).collect();
+            let base = rng.choose(&ends).copied().unwrap_or(Vec3::new(0.0, 0.0, 0.0));
+            let scale = *rng.choose(&[1e-6, 1e-2, 1.0]).unwrap_or(&1e-2);
+            let d = rp(rng, scale);
+            extra.push([base.x + d[0], base.y + d[1], base.z + d[2]]);
+        }
+    }
+    Some(ConsistentIn { brep, curve, src_tol, extra, ivls })
+}
+
+/// The fixed-seed consistent-classification cases the shim accepts.
+fn consistent_cases() -> Vec<(String, Value)> {
+    let mut rng = Rng::new(0xc0de_c1a5);
+    let mut out = Vec::new();
+    let mut tries = 0;
+    while out.len() < CONSISTENT_CASES && tries < 8 * CONSISTENT_CASES {
+        tries += 1;
+        let Some(c) = gen_consistent(&mut rng) else {
+            continue;
+        };
+        if consistent_cpp(&c).is_err() {
+            continue;
+        }
+        out.push((format!("consistent_{}", out.len()), json!(c)));
     }
     out
 }
@@ -2963,7 +3461,7 @@ fn edge_cases() -> Vec<(String, Value)> {
             OpIn::SetSize { t: 0, n: 2 },
             OpIn::SetPcParams { t: 0, mids: false },
         ];
-        out.push((format!("edge_containers_{name}"), json!(Script { objects: objs, ops })));
+        out.push((format!("edge_containers_{name}"), json!(Script { objects: objs, ops, tols: Vec::new() })));
     }
     // winding counts: in/out excess, out/in excess, balanced, empty
     let loop_objs = vec![ObjIn::Loop, ObjIn::Loop, ObjIn::Other];
@@ -2979,7 +3477,7 @@ fn edge_cases() -> Vec<(String, Value)> {
             OpIn::TouchConnected { t: 0, c: Some(0), touches: list.clone() },
             OpIn::TouchConnected { t: 1, c: None, touches: list.clone() },
         ];
-        out.push((format!("edge_touches_{name}"), json!(Script { objects: loop_objs.clone(), ops })));
+        out.push((format!("edge_touches_{name}"), json!(Script { objects: loop_objs.clone(), ops, tols: Vec::new() })));
     }
     // degenerate tangents and NULL curves for the angle
     let objs = vec![
@@ -3004,7 +3502,7 @@ fn edge_cases() -> Vec<(String, Value)> {
         OpIn::TolPair { t: 0, c: Some(0), s: None, p1: 0.0, tol1: USE_DEFAULT, p2: 1.0, tol2: -1e-3 },
         OpIn::Gaps { t: 0, cp: [0.0; 3], ep: [3.0, 4.0, 0.0], sol: [0.0, 0.0], pairs: vec![], count: 0 },
     ];
-    out.push(("edge_angles".into(), json!(Script { objects: objs, ops })));
+    out.push(("edge_angles".into(), json!(Script { objects: objs, ops, tols: Vec::new() })));
     // the topology helpers on the stand-ins
     let objs = vec![
         line([0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0]),
@@ -3036,7 +3534,7 @@ fn edge_cases() -> Vec<(String, Value)> {
             OpIn::SetIntersectData { t: 0, s1: Some(1), s2: Some(2), uv2: None, current: true, ti: None },
             op,
         ];
-        out.push((format!("edge_topology_{name}"), json!(Script { objects: objs.clone(), ops })));
+        out.push((format!("edge_topology_{name}"), json!(Script { objects: objs.clone(), ops, tols: Vec::new() })));
     }
     out
 }
@@ -3063,7 +3561,7 @@ impl UnitDiff for Runner {
             ..ctx.clone()
         };
         let mut cases = default_cases(self, &ctx)?;
-        for (name, inputs) in edge_cases().into_iter().chain(topology_cases()).chain(apply_edge_cases()).chain(cci_face_cases()) {
+        for (name, inputs) in edge_cases().into_iter().chain(topology_cases()).chain(apply_edge_cases()).chain(cci_face_cases()).chain(tol_cases()).chain(consistent_cases()) {
             cases.push(Case {
                 unit: self.id().into(),
                 name,
@@ -3075,10 +3573,16 @@ impl UnitDiff for Runner {
     }
 
     fn run_cpp(&self, case: &Case) -> Result<Output, HarnessError> {
+        if case.inputs.get("brep").is_some() {
+            return consistent_cpp(&case.parse()?);
+        }
         cpp(&case.parse()?)
     }
 
     fn run_rust(&self, case: &Case) -> Result<Output, HarnessError> {
+        if case.inputs.get("brep").is_some() {
+            return consistent_rust(&case.parse()?);
+        }
         rust(&case.parse()?)
     }
 }
@@ -3158,6 +3662,65 @@ mod tests {
         assert!(modified > 10 && unmodified > 10 && failed > 5, "{modified} {unmodified} {failed}");
         assert!(face_in > 10 && face_other > 10, "{face_in} {face_other}");
         assert!(cci > 50, "{cci}");
+    }
+    /// The consistent-classification cases reach both repairs (edge substitution and
+    /// vertex substitution) and the consistent no-op, all with status 0.
+    #[test]
+    fn consistent_cases_reach_the_repairs() {
+        let k = Kernel::default();
+        let cases = consistent_cases();
+        assert_eq!(cases.len(), CONSISTENT_CASES);
+        let (mut edge_fix, mut vertex_fix, mut kept, mut errs) = (0, 0, 0, 0);
+        for (_, v) in &cases {
+            let c: ConsistentIn = serde_json::from_value(v.clone()).unwrap();
+            let mut setup = consistent_setup(&k, &c).unwrap().unwrap();
+            let before: Vec<_> = setup.cc.intervals().to_vec();
+            let o = consistent_out(&k, &mut setup).unwrap();
+            if o[0] != 0.0 {
+                errs += 1;
+                continue;
+            }
+            for (a, b) in before.iter().zip(setup.cc.intervals()) {
+                if a.mid.object() != b.mid.object() {
+                    edge_fix += 1;
+                } else if a.start.object() != b.start.object() || a.end.object() != b.end.object() {
+                    vertex_fix += 1;
+                } else {
+                    kept += 1;
+                }
+            }
+        }
+        println!("consistent: {edge_fix} edge substitutions, {vertex_fix} vertex substitutions, {kept} kept, {errs} errors");
+        assert!(edge_fix > 10 && vertex_fix > 10 && kept > 10, "{edge_fix} {vertex_fix} {kept}");
+    }
+
+    /// The tolerance cases flip the edge insert gate both ways and reach every face
+    /// retry outcome.
+    #[test]
+    fn tol_cases_reach_the_gates() {
+        let k = Kernel::default();
+        let cases = tol_cases();
+        assert_eq!(cases.len(), TOL_CASES);
+        let (mut modified, mut unmodified, mut face_in, mut face_out) = (0, 0, 0, 0);
+        for (name, v) in &cases {
+            let s: Script = serde_json::from_value(v.clone()).unwrap();
+            if name.starts_with("tol_edge_gate") {
+                let out = rust_run(&s);
+                let Ok(o) = out else { continue };
+                // EdgeThrough writes `code status param dev modified`
+                let at = o.iter().position(|x| *x == op::EDGE_THROUGH as f64).unwrap();
+                if o[at + 1] == 0.0 {
+                    if o[at + 4] == 1.0 { modified += 1 } else { unmodified += 1 }
+                }
+            } else if name.starts_with("tol_face") {
+                let Ok(o) = rust_run(&s) else { continue };
+                if o[1] == 0.0 { face_in += 1 } else { face_out += 1 }
+            }
+        }
+        let _ = k;
+        println!("tol: edge gate {modified} modified, {unmodified} unmodified; face {face_in} projected, {face_out} not");
+        assert!(modified > 10 && unmodified > 10, "{modified} {unmodified}");
+        assert!(face_in > 20 && face_out > 10, "{face_in} {face_out}");
     }
 }
 
