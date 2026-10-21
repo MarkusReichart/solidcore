@@ -2277,12 +2277,12 @@ mod tests {
         );
         add_use(&mut result, 0.0, 1.0, 1.0);
         add_use(&mut result, 0.0, 1.0, 2.0);
-        // Multiple arena entries do not establish linked-list order parity: this
-        // prefix must still defer before collecting or removing any result faces.
+        // The primary edge use is evaluated (NormalizedEvaluate), then the original
+        // B-rep cache defers before collecting or removing any result faces.
         assert_dependency(
             executive.remove_excess_faces(&kernel, &original, &mut result),
-            "SmEdgeuse::NormalizedEvaluate",
-            "topology.edgeuse_p3",
+            "SmBrep::CalculateBoundingBox",
+            "query.brep",
         );
         assert_eq!(result.edges().len(), 2);
         assert_eq!(result.edgeuses().len(), 2);

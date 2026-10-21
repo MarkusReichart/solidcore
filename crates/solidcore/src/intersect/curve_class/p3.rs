@@ -170,10 +170,16 @@ fn edge_curve<O: ClassObject, G: ClassGeometry<O>>(
 fn vertex_point<O: ClassObject, G: ClassGeometry<O>>(geometry: &G, vertex: O) -> Result<Point3> {
     match geometry.topology_entity(vertex) {
         Some((b, EntityRef::Vertex(v))) => crate::topology::vertex::point(b, v),
-        Some(_) => Err(SolidError::invalid_input(OP_VERTEX, "handle is not a vertex")),
+        Some(_) => Err(SolidError::invalid_input(
+            OP_VERTEX,
+            "handle is not a vertex",
+        )),
         // an opaque handle (the adapter has no B-rep): still a deferral
         // UNPORTED(topology.vertex): SmVertex::GetPoint (unresolved handle)
-        None => Err(SolidError::unported("SmVertex::GetPoint", "topology.vertex")),
+        None => Err(SolidError::unported(
+            "SmVertex::GetPoint",
+            "topology.vertex",
+        )),
     }
 }
 
