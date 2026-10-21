@@ -17,6 +17,7 @@
 //! | [`SecantConstantRadiusFs::load_initial_values`]   | `SmSecantConstantRadiusFS::LoadInitialValues`     |
 //! | [`SecantConstantRadiusFs::load_jacobian`]         | `SmSecantConstantRadiusFS::LoadJacobian`          |
 //! | [`ConstantRadiusAssistedFs`] (CO-PORTED)          | `SmConstantRadiusFS` / `SmConstantRadiusAssistedFS` over the `SmFilletSolver` base ([`FilletSolver`]) |
+//! | `impl FilletSolverOps for ConstantRadiusAssistedFs` | inherited p1 overrides and `SmConstantRadiusFS::LoadJacobian`; `IsKindOf` / `LoadInitialValues` return [`SolidError::Unported`] (unit `blend.fillet_standard_solver_p2`) |
 //! | `impl FilletSolverOps` for both solvers            | their `LoadJacobian` / `LoadInitialValues` overrides; the inherited `SmConstantRadiusFS` / `SmConstantRadiusAssistedFS` overrides (`GetJacobianSize`, `SetupOffsetValues`, `OffsetRadiiCanChange`, `GetType`); `IsKindOf` returns [`SolidError::Unported`] (unit `blend.fillet_standard_solver_p2`) |
 //! | [`OffsetSurface`], [`SurfaceId`]                  | an `SmOffsetSurface*` rail surface (unit `surface.offset_surface`) and the identity of its base pointer |
 //! | [`JacobianLoad`], [`InitialValues`]               | the in/out arguments of `LoadJacobian`, `LoadInitialValues` |
@@ -300,9 +301,6 @@ pub struct ConstantRadiusAssistedFs {
     pub solver: FilletSolver,
     /// `m_dFilletRadii`: the offset radius of each surface.
     pub fillet_radii: [f64; 2],
-    /// `m_dSavedOffsets`: the offsets `SetSurfacesToZeroOffset` saved (uninitialised
-    /// upstream until then; `0` here). CO-PORTED in `blend.fillet_intersector`.
-    pub saved_offsets: [f64; 2],
 }
 
 impl ConstantRadiusAssistedFs {
@@ -331,7 +329,6 @@ impl ConstantRadiusAssistedFs {
         Self {
             solver,
             fillet_radii,
-            saved_offsets: [0.0; 2],
         }
     }
 
@@ -1693,6 +1690,107 @@ macro_rules! fillet_solver_ops {
 fillet_solver_ops!(EiffelTowerFs);
 fillet_solver_ops!(SecantConstantRadiusFs);
 
+/// The virtuals of `SmConstantRadiusAssistedFS` itself (the class
+/// `blend.fillet_intersector` runs `SmFilletSolver::ComputeSurfaceValues` on).
+/// Ported overrides delegate to `blend.fillet_standard_solver_p1`; `IsKindOf`
+/// and `LoadInitialValues` retain their unavailable p2 calls.
+impl FilletSolverOps for ConstantRadiusAssistedFs {
+    fn solver(&self) -> &FilletSolver {
+        &self.solver
+    }
+
+    fn solver_mut(&mut self) -> &mut FilletSolver {
+        &mut self.solver
+    }
+
+    /// `SmConstantRadiusFS::GetJacobianSize`.
+    fn jacobian_size(&self) -> Result<usize> {
+        Ok(ConstantRadiusAssistedFs::jacobian_size(self))
+    }
+
+    /// `SmConstantRadiusFS::SetupOffsetValues`.
+    fn setup_offset_values(
+        &mut self,
+        tsect: &TsectPnt,
+        offset_dist: Option<&mut f64>,
+    ) -> Result<()> {
+        let d = ConstantRadiusAssistedFs::setup_offset_values(self, tsect)?;
+        if let Some(offset) = offset_dist {
+            *offset = d;
+        }
+        Ok(())
+    }
+
+    /// `SmConstantRadiusFS::OffsetRadiiCanChange`.
+    fn offset_radii_can_change(&self) -> Result<bool> {
+        Ok(ConstantRadiusAssistedFs::offset_radii_can_change(self))
+    }
+
+    /// `SmConstantRadiusAssistedFS::GetType` (`SM_COMMON`).
+    fn type_code(&self) -> Result<i64> {
+        Ok(crate::blend::fillet_standard_solver::p1::CONSTANT_RADIUS_ASSISTED_FS_TYPE)
+    }
+
+    /// `SmConstantRadiusAssistedFS::IsKindOf` (unit `blend.fillet_standard_solver_p2`,
+    /// not ported).
+    fn is_kind_of(&self, _t: i64) -> Result<bool> {
+        // UNPORTED(blend.fillet_standard_solver_p2): SmConstantRadiusAssistedFS::IsKindOf
+        Err(SolidError::unported(
+            "SmConstantRadiusAssistedFS::IsKindOf",
+            "blend.fillet_standard_solver_p2",
+        ))
+    }
+
+    /// `SmConstantRadiusFS::LoadJacobian`.
+    fn load_jacobian(
+        &mut self,
+        k: &Kernel,
+        num_equations: &mut usize,
+        num_parameters: &mut usize,
+        load: &mut JacobianLoad<'_>,
+        f: &mut [f64],
+        jacobian: Option<&mut Matrix>,
+    ) -> Result<bool> {
+        let mut offsets = [load.surf1_offset, load.surf2_offset];
+        let result = ConstantRadiusAssistedFs::load_jacobian(
+            self,
+            k,
+            num_equations,
+            num_parameters,
+            load.rail_index,
+            [load.surface1, load.surface2],
+            &mut offsets,
+            load.x,
+            f,
+            jacobian,
+        );
+        // The native reference arguments retain mutations even on a later error.
+        [load.surf1_offset, load.surf2_offset] = offsets;
+        result
+    }
+
+    /// `SmConstantRadiusFS::LoadInitialValues` (unit `blend.fillet_standard_solver_p2`,
+    /// not ported).
+    fn load_initial_values(
+        &mut self,
+        _k: &Kernel,
+        _brep: Option<&Brep>,
+        _do_surf2_calcs: bool,
+        _rail_index: usize,
+        _surface1: &mut OffsetSurface,
+        _surface1_index: usize,
+        _intervals: &mut ExtentNd,
+        _periodicities: &mut Vec<bool>,
+        _guess_t: &mut Vec<f64>,
+    ) -> Result<Option<InitialValues>> {
+        // UNPORTED(blend.fillet_standard_solver_p2): SmConstantRadiusFS::LoadInitialValues
+        Err(SolidError::unported(
+            "SmConstantRadiusFS::LoadInitialValues",
+            "blend.fillet_standard_solver_p2",
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1722,6 +1820,115 @@ mod tests {
         *t.srf_pos_mut(SrfIndex::First) = p1;
         *t.srf_pos_mut(SrfIndex::Second) = p2;
         t
+    }
+
+    fn assisted_parallel_planes() -> ConstantRadiusAssistedFs {
+        let k = Kernel::default();
+        let x = Vec3::new(1.0, 0.0, 0.0);
+        let y = Vec3::new(0.0, 1.0, 0.0);
+        ConstantRadiusAssistedFs::from_parts(
+            1e-6,
+            0.5,
+            0.03,
+            [1.0, 2.0],
+            [
+                Some(rail(&k, 7.0, plane(Vec3::new(0.0, 0.0, 0.0), x, y), 11)),
+                Some(rail(&k, 9.0, plane(Vec3::new(0.0, 0.0, 1.0), x, y), 29)),
+            ],
+            [1.0, -1.0],
+            [None, None],
+        )
+    }
+
+    #[test]
+    fn assisted_virtuals_use_ported_constant_radius_methods() {
+        let mut fs = assisted_parallel_planes();
+        let mut distance = -17.0;
+        let ops: &mut dyn FilletSolverOps = &mut fs;
+        assert_eq!(ops.jacobian_size().expect("size"), 4);
+        assert!(!ops.offset_radii_can_change().expect("fixed radii"));
+        assert_eq!(
+            ops.type_code().expect("type"),
+            crate::blend::fillet_standard_solver::p1::CONSTANT_RADIUS_ASSISTED_FS_TYPE
+        );
+        ops.setup_offset_values(&TsectPnt::new(), Some(&mut distance))
+            .expect("offsets");
+        assert_eq!(distance, 1.0);
+        ops.setup_offset_values(&TsectPnt::new(), None)
+            .expect("optional distance");
+        assert!(matches!(
+            ops.is_kind_of(0),
+            Err(SolidError::Unported {
+                unit: "blend.fillet_standard_solver_p2",
+                ..
+            })
+        ));
+        assert_eq!(fs.surface(0).expect("first rail").offset_distance(), 1.0);
+        assert_eq!(fs.surface(1).expect("second rail").offset_distance(), -2.0);
+    }
+
+    #[test]
+    fn assisted_virtual_jacobian_writes_rail_offsets_values_and_matrix() {
+        for rail_index in [0, 1] {
+            let mut fs = assisted_parallel_planes();
+            let x = [99.0, 99.0, 0.25, 0.75, 0.5, 0.125];
+            let mut load = JacobianLoad {
+                rail_index,
+                surface1: None,
+                surf1_offset: 71,
+                surface2: None,
+                surf2_offset: 83,
+                x: &x,
+            };
+            let (mut ne, mut np) = (1, 2);
+            let mut f = [17.0; 5];
+            let mut matrix = Matrix::new(4, 6);
+            let ops: &mut dyn FilletSolverOps = &mut fs;
+            assert!(!ops
+                .load_jacobian(&Kernel::default(), &mut ne, &mut np, &mut load, &mut f, Some(&mut matrix))
+                .expect("jacobian"));
+            assert_eq!((ne, np), (4, 6));
+            assert_eq!(
+                [load.surf1_offset, load.surf2_offset],
+                if rail_index == 0 { [2, 4] } else { [4, 2] }
+            );
+            assert_eq!(f, [17.0, -0.25, 0.625, 2.0, 17.0]);
+            for (row, expected) in [
+                [1.0, 0.0, -1.0, 0.0],
+                [0.0, 1.0, 0.0, -1.0],
+                [0.0, 0.0, 0.0, 0.0],
+            ]
+            .iter()
+            .enumerate()
+            {
+                for (column, value) in expected.iter().enumerate() {
+                    assert_eq!(matrix.at(row + 1, column + 2).expect("entry"), *value);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assisted_virtual_jacobian_preserves_offsets_after_later_error() {
+        let mut fs = assisted_parallel_planes();
+        let mut load = JacobianLoad {
+            rail_index: 1,
+            surface1: None,
+            surf1_offset: 71,
+            surface2: None,
+            surf2_offset: 83,
+            x: &[0.25, 0.75],
+        };
+        let (mut ne, mut np) = (0, 0);
+        let mut f = [17.0; 3];
+        let ops: &mut dyn FilletSolverOps = &mut fs;
+        assert!(matches!(
+            ops.load_jacobian(&Kernel::default(), &mut ne, &mut np, &mut load, &mut f, None),
+            Err(SolidError::InvalidInput { .. })
+        ));
+        assert_eq!((ne, np), (0, 4));
+        assert_eq!([load.surf1_offset, load.surf2_offset], [2, 0]);
+        assert_eq!(f, [17.0; 3]);
     }
 
     #[test]

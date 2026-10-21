@@ -1245,3 +1245,15 @@ All six gates have zero failures and maximum relative error zero. Workspace
 tests (1535 kernel tests), fmt/include formatting, plain/native Clippy, wasm32
 and four native FFI regressions pass. The full gate and successful actual-head
 CI evidence are recorded in the PR discussion. No tolerance was relaxed.
+
+### PR #208 current-main review refresh (2026-10-20)
+
+Merged canonical main `e5f3e441`, retaining both findings append sets and the
+complete p1 integration/co-port attribution. All seven affected native gates
+pass with maximum relative error zero; p5 remains 170 cases / 164 pass /
+4 deferred / 2 rejected, and p1 remains 346 / 339 pass / 7 deferred. Current
+main's offset dependency now compares 552/861 cases, with 309 deferred and no
+failures. All 1550 kernel tests, four p5 native FFI regressions, plain/native
+Clippy, fmt and wasm32 pass. The complete local gate and exact-head CI results
+are recorded with the final tested commit in the PR discussion. Coverage of a
+completed rollover repair remains limited by the unavailable solver callees.
