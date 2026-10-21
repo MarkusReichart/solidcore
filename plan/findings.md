@@ -11304,5 +11304,23 @@ its continuation.)
   `MergePointClass`, and `intersect::curve_class::p7` `SmVertex::SetPoint`: the
   classification handles reach the B-rep read-only (`ClassGeometry::topology_entity`).
   The real mutating path is `merge_into_brep`.
+- `intersect::point_class::PointClassification::merge_into_object`, the read-only
+  `SmVertex::GetPoint` (cpp `_init_v_point`), `SmTol::GetScaledZero(const SmVertex&)` and
+  `SmVertex::GetTolerance` (justified: the helpers take only the handle, with no
+  `ClassGeometry`, and every path through them reaches the `SetPoint` / `SetExact` /
+  `SetTolerance` mutations above; wiring the reads alone would only move the deferral a
+  few lines down. They are wired together with the mutations in `merge_into_brep`).
+- `intersect::point_class::PointClassification::is_connected_to` (`IsConnectedTo` of a
+  vertex, edge, face, loop, vertexuse, edgeuse or loopuse; point_class.rs:761-803) and
+  `intersect::curve_class::p7` `vertex_is_connected_to` (`SmVertex::IsConnectedTo`)
+  (justified: structural; both take the opaque handles but no `ClassGeometry`, and the
+  point_class target is a generic `T` of another handle space, so they cannot reach the
+  B-rep. Wiring needs a geometry parameter on the query and on its callers.)
+- Opaque-handle fallbacks: `point_class::edgeuse_edge` (`SmEdgeuse::GetEdge`),
+  `resolve_vertex_point` (`SmVertex::GetPoint`), `object_zone_tol_3d`
+  (`SmVertex::GetTolerance`, `SmEdgeuse::GetTolerance`) and `curve_class::p3::vertex_point`
+  (now `resolve_vertex_point`) keep a deferral only when the adapter resolves the handle
+  through neither `classification_vertex_point` nor `topology_entity` (justified: the
+  adapter has no B-rep to read).
 - `blend::fillet_solver::p1` `SmVertex::SetPoint` (#303's cluster),
   `intersect::curve_class::p9` and `topology::proto_topology::p2` (already justified).

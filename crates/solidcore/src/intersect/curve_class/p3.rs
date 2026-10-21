@@ -165,22 +165,12 @@ fn edge_curve<O: ClassObject, G: ClassGeometry<O>>(
     }
 }
 
-/// `SmVertex::GetPoint` of vertex handle `vertex`, through the B-rep vertex that
-/// [`ClassGeometry::topology_entity`] resolves it to.
+/// `SmVertex::GetPoint` of vertex handle `vertex`, through
+/// [`ClassGeometry::classification_vertex_point`] or else the B-rep vertex that
+/// [`ClassGeometry::topology_entity`] resolves it to (the same lookup as point
+/// classification's `InsertPointClass` path).
 fn vertex_point<O: ClassObject, G: ClassGeometry<O>>(geometry: &G, vertex: O) -> Result<Point3> {
-    match geometry.topology_entity(vertex) {
-        Some((b, EntityRef::Vertex(v))) => crate::topology::vertex::point(b, v),
-        Some(_) => Err(SolidError::invalid_input(
-            OP_VERTEX,
-            "handle is not a vertex",
-        )),
-        // an opaque handle (the adapter has no B-rep): still a deferral
-        // UNPORTED(topology.vertex): SmVertex::GetPoint (unresolved handle)
-        None => Err(SolidError::unported(
-            "SmVertex::GetPoint",
-            "topology.vertex",
-        )),
-    }
+    crate::intersect::point_class::resolve_vertex_point(geometry, vertex, OP_VERTEX)
 }
 
 /// `SmCurveClassification::GetPointClassByIndex(index)`: the location of boundary
