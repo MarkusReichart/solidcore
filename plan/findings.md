@@ -11339,5 +11339,5 @@ Left (the target is ported, but the call cannot be made from the stub's context)
 - `topology.face_p3` stubs marked `justified:` (findings `topology.face_p3`, "Stubs left
   for this unit"; `boolean.topology_intersector_p1` `FaceIntersect`): unchanged reasons.
 - Skipped because open PRs already remove them: `heal/stitch/p2.rs` and
-  `topology/brep/p9.rs` `SmFace::Notify` (#285, #303); `intersect/point_class.rs`
+  `topology/brep/p9.rs` `SmFace::Notify` (#285, merged meanwhile; #303); `intersect/point_class.rs`
   `GetSurface` (two sites) and `object_zone_tol_3d`'s `Face` branch (#316).
