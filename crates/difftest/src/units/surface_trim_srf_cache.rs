@@ -13,8 +13,9 @@
 //! reports its first entry as the `status` (`0` = `SM_SUCCESS`, else the `SmStatus`; `1007` for
 //! a Rust `InvalidInput`, `-1` for a Rust error upstream cannot produce) and the rest as `out`.
 //!
-//! Deferred cases: every face case (the Rust side cannot put the surface on a face:
-//! `SmBrep::CreateFaceFromSurface`, `topology.brep_p8`), and edge use implants that reach
+//! Face cases build the face on both sides (`SmBrep::CreateFaceFromSurface` over the
+//! natural domain, [`create_face_from_surface`] in Rust) and cache its own surface.
+//! Deferred cases: edge use implants that reach
 //! `SmSurface::GetSingularities` (cache domain at a natural boundary), `FindUVNodes` (no node
 //! given) or `SubdivideNode` (large nodes with subdivision on). Every run has at least
 //! [`MIN_GENERATED`] generated cases; generated inputs the ffi wrapper rejects are redrawn.
@@ -38,8 +39,17 @@ use solidcore::surface::surface::Surface;
 use solidcore::surface::surface_cache::p1::FaceContainment;
 use solidcore::surface::surface_cache::{BezierAux2d, BezierPatch, SurfaceCacheOptions};
 use solidcore::surface::trim_srf_cache::TrimSrfCache;
-use solidcore::SolidError;
+use solidcore::geom::attribute::AttributeStore;
+use solidcore::query::face::p2::BrepCacheFace;
+use solidcore::surface::surface::SurfaceKind;
+use solidcore::surface::trim_srf_cache::POINT_CLASS_UNKNOWN;
+use solidcore::topology::brep::p8::{create_face_from_surface, FaceBuildEnv};
+use solidcore::topology::edge::NotifyEnv;
+use solidcore::topology::topology_traverser::Marks;
+use solidcore::topology::FaceId;
+use solidcore::{EntityRef, SolidError};
 use solidcore_ffi::units::surface_trim_srf_cache::{self as ffi, Op};
+use std::collections::BTreeMap;
 
 use crate::case::CaseContext;
 use crate::runner::default_cases;
@@ -647,16 +657,123 @@ fn rust_op(i: &Inputs) -> Result<Run, HarnessError> {
                 Ok(o)
             }
         }
-        OpIn::Face { .. } => {
-            // the C++ side puts the surface on a face of a new brep: the Rust side has no
-            // face to give the cache, so the case defers on that construction
-            // UNPORTED(topology.brep_p8): SmBrep::CreateFaceFromSurface
-            Err(SolidError::unported(
-                "SmBrep::CreateFaceFromSurface",
-                "topology.brep_p8",
-            ))
+        OpIn::Face { build, points } => face_op(bss, *build, points, o)?,
+    };
+    Ok(run)
+}
+
+/// The `GetType()` of a classification object.
+fn obj_kind(e: Option<EntityRef>) -> f64 {
+    match e {
+        None => -1.0,
+        Some(EntityRef::Face(_)) => solidcore::topology::face::p2::TYPE as f64,
+        Some(EntityRef::Loop(_)) => 16003.0,
+        Some(EntityRef::Loopuse(_)) => 16004.0,
+        Some(EntityRef::Edgeuse(_)) => 16005.0,
+        Some(EntityRef::Vertexuse(_)) => 16006.0,
+        Some(EntityRef::Brep(_)) => 16011.0,
+        Some(EntityRef::Region(_)) => 16012.0,
+        Some(EntityRef::Shell(_)) => 16013.0,
+        Some(EntityRef::Edge(_)) => 16016.0,
+        Some(EntityRef::Vertex(_)) => 16021.0,
+        Some(EntityRef::Faceuse(_)) => 16022.0,
+    }
+}
+
+/// The shim's `op_face`: `CreateFaceFromSurface` over the surface's natural domain in a
+/// fresh B-rep, then a trimmed cache of the face's surface (`BuildTree` when `build`)
+/// and `PointTest` / `PointClassify` at each point.
+fn face_op(bss: BSplineSurface, build: bool, points: &[PtIn], mut o: Vec<f64>) -> Result<Run, HarnessError> {
+    let mut km = Kernel::default();
+    let mut b = super::blend_fillet_geom_p1::new_brep(&mut km)?;
+    let surface = Surface::from(bss);
+    let domain = surface.natural_uv_domain();
+    let mut records = BTreeMap::new();
+    let mut attributes = AttributeStore::default();
+    let key_of = super::topology_brep_p8::key_of;
+    let mut env = NotifyEnv {
+        records: &mut records,
+        attributes: &mut attributes,
+        context: None,
+        key_of: &key_of,
+    };
+    let mut marks = Marks::default();
+    let this_face = |f: FaceId| key_of(EntityRef::Face(f));
+    let mut fenv = FaceBuildEnv {
+        env: &mut env,
+        marks: &mut marks,
+        this_face: &this_face,
+    };
+    let face = match create_face_from_surface(&mut km, &mut b, Some(surface), &domain, &mut fenv) {
+        Ok(f) => f,
+        Err(e) if e.is_unported() => return Ok(Err(e)),
+        Err(e) => {
+            return Ok(Ok(vec![status(&e)]));
         }
     };
+    let run = (|| -> Run {
+        let record = b.face(face)?;
+        let tolerance = record.tolerance;
+        let source = record
+            .surface
+            .as_ref()
+            .ok_or_else(|| SolidError::null_pointer("difftest::trim_srf_cache::face"))?;
+        // the face's own surface (`*face->GetSurface()`), copied exactly with its owner
+        let SurfaceKind::BSpline(s) = source.kind() else {
+            return Err(SolidError::invalid_input(
+                "difftest::trim_srf_cache::face",
+                "face surface is not a B-spline",
+            ));
+        };
+        let mut surface = Surface::from(s.clone_exact());
+        surface.set_owner(source.owner());
+        surface.set_owner_zone_tol_3d(source.owner_zone_tol_3d());
+        let mut c: TrimSrfCache<EntityRef> = TrimSrfCache::new(
+            surface,
+            // TrimPeek(*face->GetSurface(), 0.0, 0.0, 0.0, 0.0, 0.0, 0.001)
+            SurfaceCacheOptions {
+                chord_height_tolerance: 0.0,
+                ang_tol_rad: 0.0,
+                aspect_ratio_3d: 0.0,
+                max_side_length_3d: 0.0,
+                min_side_length_3d: 0.0,
+                min_side_length_ratio_uv: 0.001,
+            },
+        );
+        c.bind_face(key_of(EntityRef::Face(face)), EntityRef::Face(face), tolerance)?;
+        if build {
+            let built = c.build_tree_with_face(&km, &mut BrepCacheFace { b: &mut b, f: face });
+            match built {
+                Ok(()) => o.push(0.0),
+                Err(e) if e.is_unported() => return Err(e),
+                Err(e) => o.push(status(&e)),
+            }
+            let base = c.base();
+            o.push(flag(base.process_boundary_curves));
+            o.push(flag(base.point_test_enabled));
+            o.push(flag(base.have_t_surface_cache));
+            o.push(containment_code(base.face_containment_done));
+            push_dom(&mut o, &base.uv_domain());
+            o.push(base.tree().map_or(0, |t| t.nodes().len()) as f64);
+        }
+        // the face as upstream's lazy classification sees it: missing UV trim curves
+        // are made on demand (`GetOrCreateUVTrimCurve`)
+        let mut cf = BrepCacheFace { b: &mut b, f: face };
+        for p in points {
+            let uv = Point2::new(p.uv[0], p.uv[1]);
+            match c.point_test_in(&km, &mut cf, uv, p.test_tol.then_some(p.tol)) {
+                Ok((ok, obj)) => o.extend([0.0, flag(ok), obj_kind(obj)]),
+                Err(e) if e.is_unported() => return Err(e),
+                Err(e) => o.extend([status(&e), 0.0, -1.0]),
+            }
+            match c.point_classify_in(&km, &mut cf, uv, p.tol) {
+                Ok((cls, obj)) => o.extend([0.0, f64::from(cls), obj_kind(obj)]),
+                Err(e) if e.is_unported() => return Err(e),
+                Err(e) => o.extend([status(&e), f64::from(POINT_CLASS_UNKNOWN), -1.0]),
+            }
+        }
+        Ok(o)
+    })();
     Ok(run)
 }
 
@@ -1103,9 +1220,7 @@ mod tests {
     use super::*;
     use std::collections::BTreeMap;
 
-    /// The generators reach every op with successful outcomes on the Rust side (the
-    /// face cases are always deferred until `SmBrep::CreateFaceFromSurface` is
-    /// ported).
+    /// The generators reach every op with successful outcomes on the Rust side.
     #[test]
     fn generated_cases_cover_ops() {
         let mut tally: BTreeMap<(String, String), usize> = BTreeMap::new();
@@ -1161,7 +1276,7 @@ mod tests {
         for (k, v) in &tally {
             println!("{k:?}: {v}");
         }
-        for op in ["New", "PointTest", "ImplantEu"] {
+        for op in ["New", "PointTest", "ImplantEu", "Face"] {
             assert!(
                 tally.keys().any(|(n, k)| n == op && k == "status:0"),
                 "{op} never succeeds"
