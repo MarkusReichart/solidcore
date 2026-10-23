@@ -334,7 +334,7 @@ impl FaceState {
     /// The surface point at `uv` (from the B-spline directly when checked).
     fn point(&self, k: &Kernel, s: &Surface, uv: Point2) -> Result<Point3> {
         if let (Some(nb), Some(_)) = (&self.nurbs, self.fast) {
-            if let Some((p, _, _)) = nb.eval(uv.x, uv.y).filter(|e| crate::geom::finite3(e.0)) {
+            if let Some(p) = nb.point(uv.x, uv.y).filter(|p| crate::geom::finite3(*p)) {
                 return Ok(p);
             }
         }
@@ -1135,10 +1135,29 @@ impl FaceState {
         let inside = inside_faces(&self.cdt);
         let clearance = 0.3 * scaled_step;
         let spacing = 0.5 * scaled_step;
+        // the four corners of a grid cell are cocircular, which sends every Delaunay
+        // test of a regular grid down spade's exact-arithmetic path; a fixed pattern of
+        // shifts of 1e-5 of the line spacing breaks the ties (and costs nothing in
+        // accuracy: the points are evaluated where they end up)
+        let b = self.bbox;
+        let du = 1e-5 * (b.u_max() - b.u_min()) / (us.len() + 1) as f64;
+        let dv = 1e-5 * (b.v_max() - b.v_min()) / (vs.len() + 1) as f64;
+        let shift = |i: usize, j: usize, a: usize, c: usize| {
+            ((i.wrapping_mul(a).wrapping_add(j.wrapping_mul(c))) % 7) as f64 / 7.0 - 0.5
+        };
+        let at = |i: usize, j: usize| {
+            let (u, v) = (us.get(i).copied()?, vs.get(j).copied()?);
+            Some(Point2::new(
+                u + du * shift(i, j, 3, 5),
+                v + dv * shift(i, j, 5, 3),
+            ))
+        };
         let mut wanted = Vec::new();
-        for (j, v) in vs.iter().enumerate() {
-            for (i, u) in us.iter().enumerate() {
-                let uv = Point2::new(*u, *v);
+        for j in 0..vs.len() {
+            for i in 0..us.len() {
+                let Some(uv) = at(i, j) else {
+                    continue;
+                };
                 let pos = self.scaled(uv);
                 let PositionInTriangulation::OnFace(fh) = self.cdt.locate(pos) else {
                     continue;
@@ -1160,10 +1179,10 @@ impl FaceState {
             if self.cdt.num_inner_faces() >= max_triangles {
                 break;
             }
-            let (Some(u), Some(v)) = (us.get(i), vs.get(j)) else {
+            let Some(uv) = at(i, j) else {
                 continue;
             };
-            self.insert_interior(k, s, Point2::new(*u, *v), None, 0)?;
+            self.insert_interior(k, s, uv, None, 0)?;
         }
         Ok(())
     }
