@@ -13,7 +13,9 @@
 //! (`SmBrepData::ReadFromFile` / [`BrepData::read_from_file`]), patch it, build the
 //! B-rep and dump the result in the layout documented in the FFI module: integers to
 //! `ints`, doubles to `dbls` (subnormals as 0) and bit for bit to `dbl_bits`, `kinds`
-//! the interleaving. A Rust `InvalidInput` is the guard's `-2`.
+//! the interleaving. A Rust `InvalidInput` is the guard's `-2`. The dump walks from the
+//! regions (`GetRegions` order), then from the B-rep's face, edge and vertex lists (face
+//! uses on no shell, edges and vertices without uses), and ends with those lists.
 //!
 //! Generated cases pick a file, flags and patches (zone tolerance, manifold flag,
 //! healer version, borrowed geometry, flag stamps, the implied regions of an IGES
@@ -501,8 +503,8 @@ fn rust(i: &Inputs) -> Result<Dump, HarnessError> {
     }
     out.push(Item::Int(i64::from(data.manifold)));
     out.push(Item::Int(i64::from(data.is_geom_borrowed)));
-    let g = Graph::walk(&b).map_err(|e| harness(e.to_string()))?;
-    export(&k, &b, &g, &records, &mut out).map_err(|e| harness(e.to_string()))?;
+    let (g, n_edges) = Graph::walk_listed(&b).map_err(|e| harness(e.to_string()))?;
+    export_listed(&k, &b, &g, &records, &mut out).map_err(|e| harness(e.to_string()))?;
 
     match i.op {
         OpIn::Make => {}
@@ -516,7 +518,8 @@ fn rust(i: &Inputs) -> Result<Dump, HarnessError> {
                 context: None,
                 key_of: &key_of,
             };
-            for &e in &g.edges.items {
+            // the edges the regions reach
+            for &e in g.edges.items.iter().take(n_edges) {
                 match test_closure_split_region(&mut k, &mut b, &mut env, do_infinite, e) {
                     Ok(r) => {
                         out.push(Item::Int(0));
@@ -531,8 +534,8 @@ fn rust(i: &Inputs) -> Result<Dump, HarnessError> {
                     }
                 }
             }
-            let g2 = Graph::walk(&b).map_err(|e| harness(e.to_string()))?;
-            export(&k, &b, &g2, &records, &mut out).map_err(|e| harness(e.to_string()))?;
+            let (g2, _) = Graph::walk_listed(&b).map_err(|e| harness(e.to_string()))?;
+            export_listed(&k, &b, &g2, &records, &mut out).map_err(|e| harness(e.to_string()))?;
         }
         OpIn::RemoveAll { editing } => {
             b.set_editing_enabled(editing);
@@ -549,8 +552,8 @@ fn rust(i: &Inputs) -> Result<Dump, HarnessError> {
                 Err(e @ SolidError::Unported { .. }) => return Ok(Err(e)),
                 Err(e) => out.push(Item::Int(status(&e))),
             }
-            let g2 = Graph::walk(&b).map_err(|e| harness(e.to_string()))?;
-            export(&k, &b, &g2, &records, &mut out).map_err(|e| harness(e.to_string()))?;
+            let (g2, _) = Graph::walk_listed(&b).map_err(|e| harness(e.to_string()))?;
+            export_listed(&k, &b, &g2, &records, &mut out).map_err(|e| harness(e.to_string()))?;
         }
         OpIn::Project {
             trim,
@@ -609,8 +612,8 @@ fn rust(i: &Inputs) -> Result<Dump, HarnessError> {
                 Err(e @ SolidError::Unported { .. }) => return Ok(Err(e)),
                 Err(e) => out.push(Item::Int(status(&e))),
             }
-            let g2 = Graph::walk(&b).map_err(|e| harness(e.to_string()))?;
-            export(&k, &b, &g2, &records, &mut out).map_err(|e| harness(e.to_string()))?;
+            let (g2, _) = Graph::walk_listed(&b).map_err(|e| harness(e.to_string()))?;
+            export_listed(&k, &b, &g2, &records, &mut out).map_err(|e| harness(e.to_string()))?;
         }
     }
     Ok(Ok(out))
@@ -678,10 +681,24 @@ pub(crate) fn orient_code(o: solidcore::nurbs::b_spline_surface_n_lib::p2::Orien
     }
 }
 
+/// The walk's progress per kind (the shim's `Cursors`).
+#[derive(Default)]
+struct Cursors {
+    r: usize,
+    s: usize,
+    fu: usize,
+    f: usize,
+    lu: usize,
+    eu: usize,
+    vu: usize,
+    l: usize,
+    e: usize,
+    v: usize,
+}
+
 impl Graph {
-    #[allow(clippy::too_many_lines)]
-    pub(crate) fn walk(b: &Brep) -> Result<Self, SolidError> {
-        let mut g = Self {
+    fn empty() -> Self {
+        Self {
             regions: Reg::new(),
             shells: Reg::new(),
             faceuses: Reg::new(),
@@ -692,26 +709,75 @@ impl Graph {
             edges: Reg::new(),
             vertexuses: Reg::new(),
             vertices: Reg::new(),
-        };
+        }
+    }
+
+    /// The objects reachable from the B-rep's regions (in arena order).
+    pub(crate) fn walk(b: &Brep) -> Result<Self, SolidError> {
+        let mut g = Self::empty();
         for (id, r) in b.regions().iter() {
             if r.in_brep {
                 g.regions.add(Some(id), RegionId::index);
             }
         }
-        let (mut r, mut s, mut fu, mut lu, mut eu, mut vu, mut l, mut e, mut v) =
-            (0, 0, 0, 0, 0, 0, 0, 0, 0);
+        g.close(b, &mut Cursors::default(), false)?;
+        Ok(g)
+    }
+
+    /// The shim's `walk` of this unit: the objects reachable from the regions in
+    /// `GetRegions` order, then from the B-rep's face, edge and vertex lists (list
+    /// order; face uses on no shell, edges and vertices without uses), with the
+    /// number of edges the regions reach.
+    fn walk_listed(b: &Brep) -> Result<(Self, usize), SolidError> {
+        let mut g = Self::empty();
+        for id in solidcore::topology::brep::p1::regions(b, None)? {
+            g.regions.add(Some(id), RegionId::index);
+        }
+        let mut at = Cursors::default();
+        g.close(b, &mut at, false)?;
+        let n_edges = g.edges.items.len();
+        for &id in b.face_list() {
+            g.faces.add(Some(id), FaceId::index);
+        }
+        for &id in b.edge_list() {
+            g.edges.add(Some(id), EdgeId::index);
+        }
+        for &id in b.vertex_list() {
+            g.vertices.add(Some(id), VertexId::index);
+        }
+        g.close(b, &mut at, true)?;
+        Ok((g, n_edges))
+    }
+
+    /// Registers everything reachable from what the registry holds, continuing from
+    /// the cursors `at`; `faces`: also follows a face to its face use.
+    #[allow(clippy::too_many_lines)]
+    fn close(&mut self, b: &Brep, at: &mut Cursors, faces: bool) -> Result<(), SolidError> {
+        let g = self;
+        let Cursors {
+            r,
+            s,
+            fu,
+            f,
+            lu,
+            eu,
+            vu,
+            l,
+            e,
+            v,
+        } = at;
         let mut more = true;
         let bound = b.edgeuses().len() + 1;
         while more {
             more = false;
-            while let Some(&id) = g.regions.items.get(r) {
+            while let Some(&id) = g.regions.items.get(*r) {
                 for &x in &b.region(id)?.shells {
                     g.shells.add(Some(x), ShellId::index);
                 }
-                r += 1;
+                *r += 1;
                 more = true;
             }
-            while let Some(&id) = g.shells.items.get(s) {
+            while let Some(&id) = g.shells.items.get(*s) {
                 match &b.shell(id)?.members {
                     ShellMembers::Faceuses(list) => {
                         for &x in list {
@@ -722,20 +788,20 @@ impl Graph {
                     ShellMembers::Vertexuse(x) => g.vertexuses.add(Some(*x), VertexuseId::index),
                     ShellMembers::Empty => {}
                 }
-                s += 1;
+                *s += 1;
                 more = true;
             }
-            while let Some(&id) = g.faceuses.items.get(fu) {
+            while let Some(&id) = g.faceuses.items.get(*fu) {
                 let rec = b.faceuse(id)?;
                 g.faces.add(rec.face, FaceId::index);
                 g.faceuses.add(rec.mate, FaceuseId::index);
                 for &x in &rec.loopuses {
                     g.loopuses.add(Some(x), LoopuseId::index);
                 }
-                fu += 1;
+                *fu += 1;
                 more = true;
             }
-            while let Some(&id) = g.loopuses.items.get(lu) {
+            while let Some(&id) = g.loopuses.items.get(*lu) {
                 let rec = b.loopuse(id)?;
                 g.loops.add(rec.loop_, LoopId::index);
                 g.loopuses.add(rec.mate, LoopuseId::index);
@@ -759,10 +825,10 @@ impl Graph {
                     LoopuseStart::Vertexuse(x) => g.vertexuses.add(x, VertexuseId::index),
                     LoopuseStart::Unknown => {}
                 }
-                lu += 1;
+                *lu += 1;
                 more = true;
             }
-            while let Some(&id) = g.edgeuses.items.get(eu) {
+            while let Some(&id) = g.edgeuses.items.get(*eu) {
                 let rec = b.edgeuse(id)?;
                 g.edges.add(rec.edge, EdgeId::index);
                 match rec.owner {
@@ -775,17 +841,17 @@ impl Graph {
                 g.vertexuses.add(rec.vertexuse, VertexuseId::index);
                 g.edgeuses.add(eu1::edgeuse_next(b, id)?, EdgeuseId::index);
                 g.edgeuses.add(eu1::edgeuse_last(b, id)?, EdgeuseId::index);
-                eu += 1;
+                *eu += 1;
                 more = true;
             }
-            while let Some(&id) = g.edges.items.get(e) {
+            while let Some(&id) = g.edges.items.get(*e) {
                 for &x in &b.edge(id)?.edgeuses {
                     g.edgeuses.add(Some(x), EdgeuseId::index);
                 }
-                e += 1;
+                *e += 1;
                 more = true;
             }
-            while let Some(&id) = g.vertexuses.items.get(vu) {
+            while let Some(&id) = g.vertexuses.items.get(*vu) {
                 let rec = b.vertexuse(id)?;
                 g.vertices.add(rec.vertex, VertexId::index);
                 match rec.owner {
@@ -794,23 +860,30 @@ impl Graph {
                     VertexuseOwner::Shell(x) => g.shells.add(x, ShellId::index),
                     VertexuseOwner::Unknown => {}
                 }
-                vu += 1;
+                *vu += 1;
                 more = true;
             }
-            while let Some(&id) = g.vertices.items.get(v) {
+            while let Some(&id) = g.vertices.items.get(*v) {
                 for &x in &b.vertex(id)?.vertexuses {
                     g.vertexuses.add(Some(x), VertexuseId::index);
                 }
-                v += 1;
+                *v += 1;
                 more = true;
             }
-            while let Some(&id) = g.loops.items.get(l) {
+            while let Some(&id) = g.loops.items.get(*l) {
                 g.loopuses.add(b.loop_(id)?.loopuse, LoopuseId::index);
-                l += 1;
+                *l += 1;
                 more = true;
+            }
+            if faces {
+                while let Some(&id) = g.faces.items.get(*f) {
+                    g.faceuses.add(b.face(id)?.faceuse, FaceuseId::index);
+                    *f += 1;
+                    more = true;
+                }
             }
         }
-        Ok(g)
+        Ok(())
     }
 }
 
@@ -1065,6 +1138,38 @@ fn export(
         w.list(&l);
         w.topo(EntityRef::Vertex(id));
     }
+    Ok(())
+}
+
+/// [`export`], then the B-rep's face, edge and vertex lists (list order) as indices of
+/// the walk (the shim's `export_graph`).
+fn export_listed(
+    k: &Kernel,
+    b: &Brep,
+    g: &Graph,
+    records: &BTreeMap<ObjectKey, Topology>,
+    o: &mut Vec<Item>,
+) -> Result<(), SolidError> {
+    export(k, b, g, records, o)?;
+    let mut w = Out { o, records };
+    let faces: Vec<i64> = b
+        .face_list()
+        .iter()
+        .map(|&x| g.faces.find(Some(x), FaceId::index))
+        .collect();
+    w.list(&faces);
+    let edges: Vec<i64> = b
+        .edge_list()
+        .iter()
+        .map(|&x| g.edges.find(Some(x), EdgeId::index))
+        .collect();
+    w.list(&edges);
+    let vertices: Vec<i64> = b
+        .vertex_list()
+        .iter()
+        .map(|&x| g.vertices.find(Some(x), VertexId::index))
+        .collect();
+    w.list(&vertices);
     Ok(())
 }
 

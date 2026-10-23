@@ -16,7 +16,8 @@
 // would loop on) is not passed to upstream; the shim outputs -2 instead.
 //
 // The B-rep graph is exported in traversal order from the regions (each pointer mapped
-// to its first-seen index per kind; -1 is null), reading raw members.
+// to its first-seen index per kind; -1 is null), reading raw members, then from the
+// B-rep's face, edge and vertex lists (what no region reaches), and those lists.
 #include "sc_shim.h"
 
 #include "StdAfx.h"
@@ -712,13 +713,24 @@ std::vector<SmTopology*> list_of(SmTopology* head)
     return v;
 }
 
-void walk(SmBrep* brep, Graph& g)
+// Registers everything reachable from what `g` holds, continuing from the `at` cursors.
+// `faces`: also follow a face to its face use (the B-rep list walk's faces).
+struct Cursors
 {
-    SmTArray<SmRegion*> regs;
-    brep->GetRegions(regs);
-    for (ULONG i = 0; i < regs.GetSize(); i++)
-        g.add(0, g.regions, regs[i]);
-    size_t r = 0, s = 0, fu = 0, lu = 0, eu = 0, vu = 0, l = 0, e = 0, v = 0;
+    size_t r = 0, s = 0, fu = 0, f = 0, lu = 0, eu = 0, vu = 0, l = 0, e = 0, v = 0;
+};
+
+void close(Graph& g, Cursors& at, bool faces)
+{
+    size_t& r = at.r;
+    size_t& s = at.s;
+    size_t& fu = at.fu;
+    size_t& lu = at.lu;
+    size_t& eu = at.eu;
+    size_t& vu = at.vu;
+    size_t& l = at.l;
+    size_t& e = at.e;
+    size_t& v = at.v;
     bool more = true;
     while (more)
     {
@@ -788,7 +800,45 @@ void walk(SmBrep* brep, Graph& g)
                 g.add(8, g.vertexuses, (SmVertexuse*)t);
         for (; l < g.loops.size(); l++, more = true)
             g.add(4, g.loopuses, g.loops[l]->GetLoopuse());
+        if (faces)
+            for (; at.f < g.faces.size(); at.f++, more = true)
+                g.add(2, g.faceuses, g.faces[at.f]->*FPeek::fu());
     }
+}
+
+// The objects reachable from the regions (in `GetRegions` order); returns the number of
+// edges found so (the ops iterate those).
+size_t walk(SmBrep* brep, Graph& g, Cursors& at)
+{
+    SmTArray<SmRegion*> regs;
+    brep->GetRegions(regs);
+    for (ULONG i = 0; i < regs.GetSize(); i++)
+        g.add(0, g.regions, regs[i]);
+    close(g, at, false);
+    return g.edges.size();
+}
+
+// `walk`, then the faces, edges and vertices of the B-rep's own lists (`GetFaces`,
+// `GetEdges`, `GetVertices`, list order) that no region reaches (face uses on no shell,
+// edges and vertices without uses) and what they reach.
+size_t walk(SmBrep* brep, Graph& g)
+{
+    Cursors at;
+    size_t n = walk(brep, g, at);
+    SmTArray<SmFace*> faces;
+    brep->GetFaces(faces);
+    for (ULONG i = 0; i < faces.GetSize(); i++)
+        g.add(3, g.faces, faces[i]);
+    SmTArray<SmEdge*> edges;
+    brep->GetEdges(edges);
+    for (ULONG i = 0; i < edges.GetSize(); i++)
+        g.add(7, g.edges, edges[i]);
+    SmTArray<SmVertex*> verts;
+    brep->GetVertices(verts);
+    for (ULONG i = 0; i < verts.GetSize(); i++)
+        g.add(9, g.vertices, verts[i]);
+    close(g, at, true);
+    return n;
 }
 
 // ---- export -------------------------------------------------------------------------------
@@ -993,6 +1043,23 @@ void export_graph(SmBrep* brep, Graph& g, Out& o)
         put_list(o, v);
         put_topo(o, p);
     }
+    // the B-rep's own face, edge and vertex lists, in list order
+    SmTArray<SmFace*> faces;
+    brep->GetFaces(faces);
+    std::vector<int64_t> fl, el, vl;
+    for (ULONG i = 0; i < faces.GetSize(); i++)
+        fl.push_back(g.find(3, faces[i]));
+    put_list(o, fl);
+    SmTArray<SmEdge*> edges;
+    brep->GetEdges(edges);
+    for (ULONG i = 0; i < edges.GetSize(); i++)
+        el.push_back(g.find(7, edges[i]));
+    put_list(o, el);
+    SmTArray<SmVertex*> verts;
+    brep->GetVertices(verts);
+    for (ULONG i = 0; i < verts.GetSize(); i++)
+        vl.push_back(g.find(9, verts[i]));
+    put_list(o, vl);
 }
 
 struct Owned
@@ -1065,13 +1132,15 @@ int32_t run(const char* path, Rd& rd, Out& o)
     o.i((int64_t)own.data->m_bManifold);
     o.i((int64_t)own.data->m_bIsGeomBorrowed);
     Graph g;
-    walk(own.brep, g);
+    size_t n_edges = walk(own.brep, g);
     export_graph(own.brep, g, o);
 
     if (op == OP_CLOSURE)
     {
-        for (SmEdge* e : g.edges)
+        // the edges the regions reach
+        for (size_t ei = 0; ei < n_edges; ei++)
         {
+            SmEdge* e = g.edges[ei];
             SmTArray<SmShell*> shells;
             SmTArray<SmRegion*> regions;
             SmStatus cs = own.brep->TestClosureSplitRegion(flag ? TRUE : FALSE, e, shells, regions);

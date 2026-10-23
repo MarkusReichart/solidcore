@@ -64,6 +64,7 @@ use solidcore::nurbs::b_spline_surface::BSplineSurface;
 use solidcore::nurbs::math::CPoint;
 use solidcore::nurbs::nurbs_crv::allocate_nurb_curve;
 use solidcore::nurbs::srf_basic::Surface as NurbSurface;
+use solidcore::query::brep::{BrepIdentity, BrepQuery};
 use solidcore::query::poly::{PolyBrep, PolyNotifyEnv, PolyObjectKind};
 use solidcore::surface::plane::Plane;
 use solidcore::surface::surface::Surface;
@@ -86,7 +87,7 @@ use solidcore::topology::topology::{Topology, TopologyRecords};
 use solidcore::topology::edge as topo_edge;
 use solidcore::topology::face::p2 as topo_face;
 use solidcore::topology::vertex as topo_vertex;
-use solidcore::topology::{Brep, Edge, Face, Vertex, VertexId};
+use solidcore::topology::{Brep, BrepId, Edge, Face, Vertex, VertexId};
 use solidcore::{EntityRef, SolidError};
 use solidcore_ffi::units::topology_proto_topology_p1::{
     self as ffi, kind, list_op as lop, pool as pk, proto_op as p, proto_op_p2 as q, slot, tobj,
@@ -1208,6 +1209,11 @@ fn run_list(slots: &[i64], ops: &[[i64; 5]]) -> Result<Vec<f64>, Fail> {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct H(pub(super) usize, pub(super) ClassObjectKind);
 
+/// The handles of the manager's two B-reps (outside the pool).
+const OPERAND_BREP_H: usize = 100_000;
+/// The first handle of a region of the manager's B-reps (outside the pool).
+const OPERAND_REGION_H: usize = 200_000;
+
 impl ClassObject for H {
     fn class_kind(&self) -> ClassObjectKind {
         self.1
@@ -1568,18 +1574,39 @@ impl ProtoBrep<H> for Pool {
 
     fn brep_point_3d_classify(
         &mut self,
-        _k: &Kernel,
-        _brep: H,
-        _point: Point3,
-        _tolerance: f64,
-        _boundary_intersections: bool,
+        k: &Kernel,
+        brep: H,
+        point: Point3,
+        tolerance: f64,
+        boundary_intersections: bool,
     ) -> solidcore::Result<PointClassification<H>> {
-        // The pool's handles name no B-rep (the native side classifies against real
-        // ones), so the classification is a harness limitation.
-        Err(SolidError::unported(
-            "SmBrep::Point3DClassify (the proto topology pool holds no B-rep)",
-            "harness:proto-topology-pool",
-        ))
+        // The manager's B-reps are the shim's two `new SmBrep()`: empty but for their
+        // infinite region, and no op puts topology in them (the Rust manager holds them
+        // immutably). Classify against such a B-rep; its region gets a handle outside
+        // the pool (the shim's pool id `-2`).
+        let operand = brep
+            .0
+            .checked_sub(OPERAND_BREP_H)
+            .filter(|&i| i < 2)
+            .ok_or_else(|| {
+                SolidError::invalid_input(
+                    "difftest::proto_pool::brep_point_3d_classify",
+                    "not a manager B-rep",
+                )
+            })?;
+        let mut b = Brep::new_with_infinite_region()?;
+        let pc = BrepQuery::new(BrepIdentity::arena(BrepId::from_index(operand as u32)))
+            .point_3d_classify(k, &mut b, point, tolerance, boundary_intersections)?;
+        pc.map_objects(&mut |e| match e {
+            EntityRef::Region(r) => Ok(H(
+                OPERAND_REGION_H + 2 * r.index() as usize + operand,
+                ClassObjectKind::Region,
+            )),
+            _ => Err(SolidError::invalid_input(
+                "difftest::proto_pool::brep_point_3d_classify",
+                "an empty B-rep classified to a non-region",
+            )),
+        })
     }
 }
 
@@ -1622,13 +1649,12 @@ impl Pool {
     pub(super) fn id(&self, h: Option<H>) -> f64 {
         match h {
             None => -1.0,
-            Some(h) => {
-                if self.alive.get(h.0).copied().unwrap_or(false) {
-                    h.0 as f64
-                } else {
-                    -3.0
-                }
-            }
+            Some(h) => match self.alive.get(h.0) {
+                Some(true) => h.0 as f64,
+                Some(false) => -3.0,
+                // not a pool object (a manager B-rep or one of its regions)
+                None => -2.0,
+            },
         }
     }
     pub(super) fn live_h(&self, h: H) -> bool {
@@ -2253,8 +2279,8 @@ fn run_proto(
         pool.kinds.push(kd);
         pool.alive.push(true);
     }
-    let brep1 = H(100_000, ClassObjectKind::Other);
-    let brep2 = H(100_001, ClassObjectKind::Other);
+    let brep1 = H(OPERAND_BREP_H, ClassObjectKind::Other);
+    let brep2 = H(OPERAND_BREP_H + 1, ClassObjectKind::Other);
     let ti = H(100_002, ClassObjectKind::Other);
     let ti_tol = approx_tol;
     // two empty B-reps, as the shim's
