@@ -234,7 +234,6 @@ checksum = "5b3dc8af474f516a851ff4bd12db780f948b9250ad37211e4eec0bccea54e01b"
 name = "solidcore"
 version = "0.0.1"
 dependencies = [
- "spade",
  "thiserror",
 ]
 
@@ -244,6 +243,14 @@ version = "0.1.0"
 dependencies = [
  "cc",
  "serde_json",
+]
+
+[[package]]
+name = "solidcore-mesh"
+version = "0.0.1"
+dependencies = [
+ "solidcore",
+ "spade",
 ]
 
 [[package]]
