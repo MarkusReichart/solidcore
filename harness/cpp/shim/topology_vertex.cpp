@@ -22,6 +22,7 @@
 // pointer-to-member access), never the functions under test. Ops whose upstream path
 // would dereference null (or read an uninitialised value) output -2 instead of calling it.
 #include "sc_shim.h"
+#include "sc_analytic_export.h"
 #include "support/topology_fixture.h"
 
 
@@ -661,6 +662,9 @@ void export_graph(SmBrep* brep, Graph& g, std::vector<double>& o)
     }
     for (SmFace* p : g.faces)
     {
+        // an exactly exportable analytic surface first (sc_analytic_export.h), then the
+        // regular block (its B-spline part, which the importer reads as the fallback)
+        sc_analytic_export::put_exact_head(o, p->GetSurface(), the_context());
         put_surface(o, p->GetSurface());
         // the face's UV domain and tolerance (the vertex/face gaps solve against them)
         SmExtent2d d = p->GetUVDomain();
