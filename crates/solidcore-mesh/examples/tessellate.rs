@@ -229,12 +229,14 @@ fn reference(k: &Kernel, b: &Brep) -> (Option<f64>, Option<f64>) {
         key_of: &key,
     };
     let solid = solidcore::topology::brep::p2::is_manifold_solid(b).unwrap_or(false);
+    // the integrators take the B-rep mutably (they may build its caches)
+    let mut b = b.clone();
     let v = if solid {
-        brep_volume(k, b, 1e-7, &attrs).ok()
+        brep_volume(k, &mut b, 1e-7, &attrs).ok()
     } else {
         None
     };
-    (v, brep_area(k, b, 1e-7).ok())
+    (v, brep_area(k, &mut b, 1e-7).ok())
 }
 
 /// Triangles with (almost) no area, and triangles a corner normal points against.
