@@ -664,11 +664,17 @@ nice -n 10 cargo run -p difftest -- --solidcraft-cases '3526-*'        # ids (<f
 
 * **Steps** (`"op"`): `box`, `sphere`, `cylinder` (`axis`, default +Z), `union`,
   `difference` (optional `pattern`: the tool cut once per grid position, one cut after
-  the other), `intersection`, `loft` (`SmApiCreateSkinPrimitive` through `sections`,
-  each one closed `profile` with its `plane` and `origin`; `degree` 1, ruled, by
-  default; capped at both ends), `fillet` (edges by a point on each), `offset_faces` (faces
-  by a point on each), `sheet_corner` (the deferred sheet-flange recipe below). Each
+  the other), `intersection`, `extrude`, `revolve`, `pipe` (a circle swept along a path),
+  `sweep` (a closed `profile` in `plane` at `origin` swept along one `path` arc or line in
+  the XY plane, `SmApiCreateCurveSweep`), `loft` (`SmApiCreateSkinPrimitive` through
+  `sections`, each one closed `profile` with its `plane` and `origin`; `degree` 1, ruled,
+  by default; capped at both ends), `fillet` (edges by a point on each), `offset_faces`
+  (faces by a point on each), `sheet_corner` (the deferred sheet-flange recipe below). Each
   writes the body `id`; the last writes `result`.
+* **Fixes** (`fixes`, optional): `Kernel::fixes` (`UpstreamFixes`) fields the case turns
+  on, by name, for a case that needs an opt-in fix of an upstream defect (for example
+  `434-*`: `sweep_frame_on_planar_path_normal`, `cover_refuses_folded_continuation`);
+  without it the case runs pinned SMLib behaviour.
 * **Expectations** (`expect`): `lumps` (bounded regions; `0` = nothing left), `volume`
   (`value`, absolute `tol`, the `formula` it came from), `cylinder_faces_max`,
   `sheet_corner` (signed end distances and flat-pattern invariants).
