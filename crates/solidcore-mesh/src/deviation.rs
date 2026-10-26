@@ -3,15 +3,17 @@
 //! the distance bounds the true one from above), and each edge segment against its
 //! curve. (The sampling follows the nurbs-grid-mesh design note's `deviation`.)
 
+use std::collections::BTreeMap;
+
 use solidcore::geom::extent2d::Extent2d;
 use solidcore::kernel::Kernel;
 use solidcore::math::{Point2, Point3};
 use solidcore::surface::surface::Surface;
 use solidcore::topology::Brep;
-use solidcore::Result;
+use solidcore::{FaceId, Result};
 
 use crate::face::FaceMesh;
-use crate::geom::{curve_eval, foot, invalid, segment_distance, surface_normal};
+use crate::geom::{closes, curve_eval, foot, invalid, segment_distance, surface_normal};
 use crate::mesh::{EdgePolyline, Mesh};
 
 /// Barycentric weights of the seven samples: centroid, edge midpoints, and three points
@@ -48,14 +50,54 @@ pub struct DeviationReport {
     pub flipped_triangles: Vec<usize>,
 }
 
-/// The largest sample distance of one triangle (UVs `uv`, corners `p`) from surface `s`.
+/// `uv` with its second and third corners moved by whole periods (`period`, of a
+/// surface closed in u or v) to within half a period of the first, when that makes the
+/// triangle smaller in UV: a triangle of a face with no seam edge may straddle the
+/// period, and blending its UVs as given would start the samples on the far side.
+pub(crate) fn unwrap_triangle(uv: [Point2; 3], period: (Option<f64>, Option<f64>)) -> [Point2; 3] {
+    let [a, b, c] = uv;
+    let near = |x: f64, to: f64, p: Option<f64>| match p {
+        Some(p) if p > 0.0 && p.is_finite() => x - ((x - to) / p).round() * p,
+        _ => x,
+    };
+    let span = |xs: [f64; 3]| {
+        let lo = xs[0].min(xs[1]).min(xs[2]);
+        let hi = xs[0].max(xs[1]).max(xs[2]);
+        hi - lo
+    };
+    let mut out = uv;
+    for (axis, p) in [(0, period.0), (1, period.1)] {
+        let get = |q: Point2| if axis == 0 { q.x } else { q.y };
+        let given = [get(a), get(b), get(c)];
+        let moved = [
+            given[0],
+            near(given[1], given[0], p),
+            near(given[2], given[0], p),
+        ];
+        if span(moved) < span(given) {
+            for (q, x) in out.iter_mut().zip(moved) {
+                if axis == 0 {
+                    q.x = x;
+                } else {
+                    q.y = x;
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The largest sample distance of one triangle (UVs `uv`, corners `p`) from surface `s`
+/// (closed with `period` in u or v, see [`unwrap_triangle`]).
 pub(crate) fn triangle_deviation(
     k: &Kernel,
     s: &Surface,
     domain: &Extent2d,
+    period: (Option<f64>, Option<f64>),
     uv: [Point2; 3],
     p: [Point3; 3],
 ) -> f64 {
+    let uv = unwrap_triangle(uv, period);
     let mut worst = 0.0_f64;
     for w in SAMPLES {
         let q = p[0] * w[0] + p[1] * w[1] + p[2] * w[2];
@@ -76,6 +118,7 @@ pub(crate) fn face_mesh_deviation(
     k: &Kernel,
     s: &Surface,
     domain: &Extent2d,
+    period: (Option<f64>, Option<f64>),
     m: &FaceMesh,
     chord: f64,
 ) -> (f64, usize) {
@@ -86,7 +129,7 @@ pub(crate) fn face_mesh_deviation(
         let (Some(a), Some(b), Some(c)) = (get(t[0]), get(t[1]), get(t[2])) else {
             continue;
         };
-        let d = triangle_deviation(k, s, domain, [a.0, b.0, c.0], [a.1, b.1, c.1]);
+        let d = triangle_deviation(k, s, domain, period, [a.0, b.0, c.0], [a.1, b.1, c.1]);
         let gap = t
             .iter()
             .filter_map(|i| m.gaps.get(*i as usize))
@@ -145,6 +188,20 @@ pub fn deviation(k: &Kernel, b: &Brep, mesh: &Mesh, tolerance: f64) -> Result<De
     }
     let mut r = DeviationReport::default();
     let mut sum = 0.0;
+    // the surfaces' periods (a closed surface's face may have no seam edge), by face
+    let mut lo = Point3::new(f64::INFINITY, f64::INFINITY, f64::INFINITY);
+    let mut hi = Point3::new(f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+    for q in &mesh.positions {
+        lo = Point3::new(lo.x.min(q.x), lo.y.min(q.y), lo.z.min(q.z));
+        hi = Point3::new(hi.x.max(q.x), hi.y.max(q.y), hi.z.max(q.z));
+    }
+    let size = if mesh.positions.is_empty() {
+        0.0
+    } else {
+        lo.distance(hi)
+    };
+    let tol = 1e-9 * size.max(1e-300);
+    let mut periods: BTreeMap<FaceId, (Option<f64>, Option<f64>)> = BTreeMap::new();
     for (i, ((t, uv), f)) in mesh
         .triangles
         .iter()
@@ -161,7 +218,19 @@ pub fn deviation(k: &Kernel, b: &Brep, mesh: &Mesh, tolerance: f64) -> Result<De
             continue;
         };
         let domain = s.natural_uv_domain();
-        let d = triangle_deviation(k, s, &domain, *uv, p);
+        let period = *periods.entry(*f).or_insert_with(|| {
+            let along = |u: bool| {
+                let width = if u {
+                    domain.u_max() - domain.u_min()
+                } else {
+                    domain.v_max() - domain.v_min()
+                };
+                closes(k, s, &domain, u, tol).then_some(width)
+            };
+            (along(true), along(false))
+        });
+        let uv = &unwrap_triangle(*uv, period);
+        let d = triangle_deviation(k, s, &domain, period, *uv, p);
         sum += d;
         let facet = (p[1] - p[0]).cross(p[2] - p[0]);
         let centroid = (p[0] + p[1] + p[2]) / 3.0;
@@ -192,4 +261,32 @@ pub fn deviation(k: &Kernel, b: &Brep, mesh: &Mesh, tolerance: f64) -> Result<De
     }
     r.max = r.face_max.max(r.edge_max);
     Ok(r)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_triangle_straddling_the_period_is_unwrapped() {
+        let tau = core::f64::consts::TAU;
+        let p = (Some(tau), None);
+        let t = [
+            Point2::new(0.05, 0.2),
+            Point2::new(tau - 0.05, 0.2),
+            Point2::new(0.0, 0.4),
+        ];
+        let u = unwrap_triangle(t, p);
+        assert!((u[1].x - (-0.05)).abs() < 1e-12, "{u:?}");
+        assert_eq!(u[2].x, 0.0);
+        // a triangle that is already the smallest stays as it is
+        let wide = [
+            Point2::new(0.0, 0.0),
+            Point2::new(tau / 3.0, 0.0),
+            Point2::new(2.0 * tau / 3.0, 0.0),
+        ];
+        assert_eq!(unwrap_triangle(wide, p), wide);
+        // no period: unchanged
+        assert_eq!(unwrap_triangle(t, (None, None)), t);
+    }
 }

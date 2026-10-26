@@ -180,6 +180,27 @@ pub fn tessellate_face(
     t.mesh(k, b, edges, opts)
 }
 
+/// A text report of how face `f`'s loops map into UV against `edges` (made with
+/// `opts`): the triangulation's scale and periods, then per edge use how it was mapped,
+/// its end points and how it meets the previous one. For diagnosing a face that fails.
+///
+/// # Errors
+///
+/// [`SolidError::InvalidInput`] for a face without surface or face use; those of the
+/// loop walk.
+pub fn face_loop_report(
+    k: &Kernel,
+    b: &Brep,
+    f: FaceId,
+    edges: &EdgeSet,
+    opts: &TessellateOptions,
+) -> Result<String> {
+    check_options(opts)?;
+    let mut state = FaceState::new(k, b, f, edges.model_size)?;
+    let p = opts.face_params(f, edges.model_size);
+    state.loop_report(k, b, edges, &p)
+}
+
 /// Most rounds of splitting boundary segments faces ask for
 /// ([`FaceTessellation::boundary_requests`]) and refining the faces along them.
 pub const MAX_BOUNDARY_ROUNDS: usize = 4;

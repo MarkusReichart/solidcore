@@ -149,8 +149,10 @@ impl Nurbs {
 
     /// Point, `Su` and `Sv` at `(u, v)`; `None` where it does not evaluate.
     pub(crate) fn eval(&self, u: f64, v: f64) -> Option<(Point3, Vec3, Vec3)> {
-        let bu = basis(&self.uk, self.p, self.nu, u)?;
-        let bv = basis(&self.vk, self.q, self.nv, v)?;
+        let mut bu = Basis::new();
+        let mut bv = Basis::new();
+        basis(&self.uk, self.p, self.nu, u, true, &mut bu)?;
+        basis(&self.vk, self.q, self.nv, v, true, &mut bv)?;
         let mut a = [0.0; 4];
         let mut au = [0.0; 4];
         let mut av = [0.0; 4];
@@ -172,6 +174,28 @@ impl Nurbs {
     }
 }
 
+impl Nurbs {
+    /// The point at `(u, v)` alone (no derivatives); `None` where it does not
+    /// evaluate.
+    pub(crate) fn point(&self, u: f64, v: f64) -> Option<Point3> {
+        let mut bu = Basis::new();
+        let mut bv = Basis::new();
+        basis(&self.uk, self.p, self.nu, u, false, &mut bu)?;
+        basis(&self.vk, self.q, self.nv, v, false, &mut bv)?;
+        let mut a = [0.0; 4];
+        for (i, nu) in bu.n().iter().enumerate() {
+            for (j, nv) in bv.n().iter().enumerate() {
+                let pw = self.pole(bu.first + i, bv.first + j)?;
+                axpy(&mut a, nu * nv, &pw);
+            }
+        }
+        if a[3] == 0.0 {
+            return None;
+        }
+        Some(Vec3::new(a[0] / a[3], a[1] / a[3], a[2] / a[3]))
+    }
+}
+
 /// `acc += s * x`.
 fn axpy(acc: &mut [f64; 4], s: f64, x: &[f64; 4]) {
     for (a, x) in acc.iter_mut().zip(x) {
@@ -181,7 +205,7 @@ fn axpy(acc: &mut [f64; 4], s: f64, x: &[f64; 4]) {
 
 /// Most nonzero basis functions at a parameter (degree + 1); higher degrees take the
 /// general path.
-const MAX_BASIS: usize = 32;
+const MAX_BASIS: usize = 16;
 
 /// Nonzero basis functions and their first derivatives at one parameter, on the stack.
 #[derive(Debug, Clone)]
@@ -194,6 +218,15 @@ struct Basis {
 }
 
 impl Basis {
+    const fn new() -> Self {
+        Self {
+            first: 0,
+            len: 0,
+            values: [0.0; MAX_BASIS],
+            derivs: [0.0; MAX_BASIS],
+        }
+    }
+
     fn n(&self) -> &[f64] {
         self.values.get(..self.len).unwrap_or(&[])
     }
@@ -227,15 +260,23 @@ fn span(knots: &[f64], deg: usize, n: usize, t: f64) -> usize {
 
 /// The basis functions of degree `deg` and their derivatives at `t` (the Cox-de Boor
 /// triangle with the derivative from the degree `deg - 1` functions); `None` past
-/// [`MAX_BASIS`] functions or for knots too short.
-fn basis(knots: &[f64], deg: usize, n: usize, t: f64) -> Option<Basis> {
+/// [`MAX_BASIS`] functions or for knots too short. Written into `out` (a returned
+/// `Basis` was copied on every evaluation, the largest cost at low degree).
+fn basis(
+    knots: &[f64],
+    deg: usize,
+    n: usize,
+    t: f64,
+    with_derivs: bool,
+    out: &mut Basis,
+) -> Option<()> {
     if deg + 1 > MAX_BASIS {
         return None;
     }
     let s = span(knots, deg, n, t);
     let k = |i: usize| knots.get(i).copied();
     // row[r] holds the degree-r functions N_{s-r..s}; prev the row before
-    let mut row = [0.0; MAX_BASIS];
+    let row = &mut out.values;
     let mut prev = [0.0; MAX_BASIS];
     if let Some(r0) = row.get_mut(0) {
         *r0 = 1.0;
@@ -270,8 +311,11 @@ fn basis(knots: &[f64], deg: usize, n: usize, t: f64) -> Option<Basis> {
         }
     }
     let first = s.checked_sub(deg)?;
-    let mut derivs = [0.0; MAX_BASIS];
-    if deg > 0 {
+    let derivs = &mut out.derivs;
+    if let Some(d0) = derivs.get_mut(0) {
+        *d0 = 0.0;
+    }
+    if deg > 0 && with_derivs {
         // from the degree deg - 1 functions (prev)
         let pf = deg as f64;
         for jj in 0..=deg {
@@ -294,12 +338,9 @@ fn basis(knots: &[f64], deg: usize, n: usize, t: f64) -> Option<Basis> {
             }
         }
     }
-    Some(Basis {
-        first,
-        len: deg + 1,
-        values: row,
-        derivs,
-    })
+    out.first = first;
+    out.len = deg + 1;
+    Some(())
 }
 
 #[cfg(test)]
@@ -312,7 +353,8 @@ mod tests {
         let n = knots.len() - 4; // degree 3
         for i in 0..=100 {
             let t = f64::from(i) / 100.0;
-            let b = basis(&knots, 3, n, t).unwrap();
+            let mut b = Basis::new();
+            basis(&knots, 3, n, t, true, &mut b).unwrap();
             assert!((b.n().iter().sum::<f64>() - 1.0).abs() < 1e-14, "t {t}");
             assert!(b.dn().iter().sum::<f64>().abs() < 1e-11, "t {t}");
             assert!(b.first + 3 < n);
