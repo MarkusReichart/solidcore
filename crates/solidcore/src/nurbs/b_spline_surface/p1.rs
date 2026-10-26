@@ -40,6 +40,7 @@
 //! | [`BSplineSurface::transform`]                     | `Transform`                                      |
 //! | [`BSplineSurface::is_kind_of`]                    | `IsKindOf`                                       |
 //! | [`BSplineSurface::read_from_db`]                  | `ReadFromDB`                                     |
+//! | [`BSplineSurface::write_to_db`]                   | `WriteToDB`                                      |
 //! | [`BSplineSurface::TYPE`], [`BSplineSurface::type_code`], [`BSplineSurface::type_string`], [`BSplineSurface::class_string`] | `GetType`, `GetTypeString`, `GetClassString` (`SM_COMMON`) |
 //! | [`BSplineSurface::out_of_bounds_enabled_mut`]     | `GetOutOfBoundsEnabled`                          |
 //! | [`BSplineSurface::is_out_of_bounds_enabled`]      | `IsOutOfBoundsEnabled`                           |
@@ -128,6 +129,8 @@
 //!   `IsDegenerateCurve` runs the `SmSurface` base body on a copy of the B-spline
 //!   wrapped as a `Surface` (without owner).
 
+use core::sync::atomic::{AtomicBool, Ordering};
+
 use crate::error::{Result, SolidError};
 use crate::geom::axis2_placement::Axis2Placement;
 use crate::geom::extent1d::Extent1d;
@@ -137,6 +140,7 @@ use crate::geom::geom_utility::p1::line_point_distance;
 use crate::geom::global_solver::{SolutionRequested, SolverOperation};
 use crate::geom::polar_box::{PolarBox, PolarBoxState};
 use crate::geom::pseudo_box::PseudoBox;
+use crate::geom::solution_array::SolutionObject;
 use crate::geom::tol::are_same;
 use crate::geom::vector2d::Point2;
 use crate::geom::vector3d::{Point3, Vec3};
@@ -151,7 +155,8 @@ use crate::nurbs::nurbs_crv::{extract_frame, fixup_knot_vector, get_knots, to_eu
 use crate::nurbs::nurbs_srf::{allocate_nurb_surface, copy_nurb_surface};
 use crate::nurbs::srf_basic::{Direction, Surface};
 use crate::nurbs::srf_common::{corner_pts, cyl_cone, extrude_crv, CylCone};
-use crate::topology::database_io::{DatabaseReader, FileType};
+use crate::surface::surface::p1::SurfaceSolveContext;
+use crate::topology::database_io::{DatabaseReader, DatabaseWriter, FileType};
 
 /// `SURF_BASE_TYPE` (`SmTypes.h`).
 const SURF_BASE_TYPE: i64 = 15000;
@@ -178,6 +183,7 @@ const OP_KNOTS: &str = "nurbs::b_spline_surface::p1::BSplineSurface::knots";
 const OP_STEP_INV: &str = "nurbs::b_spline_surface::p1::BSplineSurface::step_inversion";
 const OP_XFORM: &str = "nurbs::b_spline_surface::p1::BSplineSurface::transform";
 const OP_READ: &str = "nurbs::b_spline_surface::p1::BSplineSurface::read_from_db";
+const OP_WRITE: &str = "nurbs::b_spline_surface::p1::BSplineSurface::write_to_db";
 
 /// `SmBSplineSurfaceForm`: the STEP form of a B-spline surface; discriminants are the
 /// upstream values.
@@ -410,8 +416,12 @@ pub struct BSplineSurface {
     pub(crate) nurb: Option<Surface>,
     /// `m_bNurbIsBorrowed`.
     pub(crate) nurb_is_borrowed: bool,
-    /// `m_bOutOfBoundsEnabled`: evaluate beyond the natural domain.
-    pub(crate) out_of_bounds_enabled: bool,
+    /// `m_bOutOfBoundsEnabled`: evaluate beyond the natural domain. Interior-mutable
+    /// (an `AtomicBool`, relaxed: a plain `Cell` would make every arena holding a
+    /// surface non-`Sync`), so a solve can enable it for its scope on a shared surface,
+    /// as upstream's `SmTemporaryChangeValue` does on a `const` one (no copy of the
+    /// surface).
+    pub(crate) out_of_bounds_enabled: AtomicBool,
     /// `m_eKnotType`.
     pub(crate) knot_type: KnotType,
     /// `m_eBSplineSurfaceForm`.
@@ -557,6 +567,43 @@ fn local_point_solve(
 /// `SmSurface::GlobalPointSolve(domain, SM_SO_INTERSECT, point, tol, NULL,
 /// SM_SR_ALL, ..)` on `surface` (the surface the B-spline part belongs to): the start
 /// parameters of every solution.
+/// [`global_point_solve`] under the caller's face context (the context and the
+/// surface's handle in it).
+fn global_point_solve_with_context<O: SolutionObject>(
+    k: &Kernel,
+    surface: &crate::surface::surface::Surface,
+    domain: &Extent2d,
+    point: Point3,
+    tol_3d: f64,
+    context: (&mut dyn SurfaceSolveContext<O>, Option<O>),
+) -> Result<Vec<Point2>> {
+    let (context, handle) = context;
+    let mut solutions = crate::geom::solution_array::SolutionArray::<O>::new();
+    surface.global_point_solve_into_with_context(
+        k,
+        handle,
+        None,
+        context,
+        domain,
+        SolverOperation::Intersect,
+        point,
+        tol_3d,
+        None,
+        SolutionRequested::All,
+        &mut solutions,
+    )?;
+    Ok(solutions
+        .as_slice()
+        .iter()
+        .map(|s| {
+            Point2::new(
+                s.start.parameters.first().copied().unwrap_or(0.0),
+                s.start.parameters.get(1).copied().unwrap_or(0.0),
+            )
+        })
+        .collect())
+}
+
 fn global_point_solve(
     k: &Kernel,
     surface: &crate::surface::surface::Surface,
@@ -622,7 +669,7 @@ impl BSplineSurface {
         Self {
             nurb: None,
             nurb_is_borrowed: false,
-            out_of_bounds_enabled: false,
+            out_of_bounds_enabled: AtomicBool::new(false),
             knot_type: KnotType::Unspecified,
             form: BSplineSurfaceForm::Unspecified,
         }
@@ -729,7 +776,9 @@ impl BSplineSurface {
         Self {
             nurb,
             nurb_is_borrowed: false,
-            out_of_bounds_enabled: self.out_of_bounds_enabled,
+            out_of_bounds_enabled: AtomicBool::new(
+                self.out_of_bounds_enabled.load(Ordering::Relaxed),
+            ),
             knot_type: self.knot_type,
             form: self.form,
         }
@@ -744,7 +793,9 @@ impl BSplineSurface {
         Self {
             nurb: self.nurb.as_ref().map(copy_nurb_surface),
             nurb_is_borrowed: false,
-            out_of_bounds_enabled: self.out_of_bounds_enabled,
+            out_of_bounds_enabled: AtomicBool::new(
+                self.out_of_bounds_enabled.load(Ordering::Relaxed),
+            ),
             knot_type: self.knot_type,
             form: self.form,
         }
@@ -815,13 +866,20 @@ impl BSplineSurface {
 
     /// Mutable access to the out-of-bounds evaluation flag (`GetOutOfBoundsEnabled`).
     pub fn out_of_bounds_enabled_mut(&mut self) -> &mut bool {
-        &mut self.out_of_bounds_enabled
+        self.out_of_bounds_enabled.get_mut()
     }
 
     /// Whether evaluation beyond the natural domain is enabled (`IsOutOfBoundsEnabled`).
     #[must_use]
     pub fn is_out_of_bounds_enabled(&self) -> bool {
-        self.out_of_bounds_enabled
+        self.out_of_bounds_enabled.load(Ordering::Relaxed)
+    }
+
+    /// Sets the out-of-bounds evaluation flag through a shared reference: for a
+    /// temporary change that the caller restores (`SmTemporaryChangeValue` on
+    /// `GetOutOfBoundsEnabled()` of a `const` surface).
+    pub(crate) fn set_out_of_bounds_enabled_in_place(&self, enabled: bool) {
+        self.out_of_bounds_enabled.store(enabled, Ordering::Relaxed);
     }
 
     /// Whether the NURB is borrowed (`IsNurbBorrowed`).
@@ -1873,6 +1931,58 @@ impl BSplineSurface {
         tol_3d: f64,
         uv_guess: Option<Point2>,
     ) -> Result<(Point2, LocationType)> {
+        self.step_inversion_on_in::<crate::surface::surface::p4::NoObject>(
+            k,
+            surface,
+            anal_domain,
+            point_on_surf,
+            tol_3d,
+            uv_guess,
+            None,
+        )
+    }
+
+    /// [`BSplineSurface::step_inversion_on`] whose `GlobalPointSolve` runs under the
+    /// caller's face context (`context`: the solve context and the surface's handle in
+    /// it): a face-owned surface's solutions are then classified against the face's
+    /// trims, as upstream's `GlobalPointSolve` does through the surface's face.
+    ///
+    /// # Errors
+    ///
+    /// As [`BSplineSurface::step_inversion`], with those of the context.
+    #[allow(clippy::too_many_arguments)]
+    pub fn step_inversion_on_with_context<O: SolutionObject>(
+        &self,
+        k: &Kernel,
+        surface: &crate::surface::surface::Surface,
+        anal_domain: &Extent2d,
+        point_on_surf: Point3,
+        tol_3d: f64,
+        uv_guess: Option<Point2>,
+        context: (&mut dyn SurfaceSolveContext<O>, Option<O>),
+    ) -> Result<(Point2, LocationType)> {
+        self.step_inversion_on_in(
+            k,
+            surface,
+            anal_domain,
+            point_on_surf,
+            tol_3d,
+            uv_guess,
+            Some(context),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn step_inversion_on_in<O: SolutionObject>(
+        &self,
+        k: &Kernel,
+        surface: &crate::surface::surface::Surface,
+        anal_domain: &Extent2d,
+        point_on_surf: Point3,
+        tol_3d: f64,
+        uv_guess: Option<Point2>,
+        context: Option<(&mut dyn SurfaceSolveContext<O>, Option<O>)>,
+    ) -> Result<(Point2, LocationType)> {
         // init output
         let mut location = LocationType::Interior;
 
@@ -1890,13 +2000,17 @@ impl BSplineSurface {
         }
 
         if !local_succeeded {
-            solutions.extend(global_point_solve(
-                k,
-                surface,
-                anal_domain,
-                point_on_surf,
-                tol_3d,
-            )?);
+            solutions.extend(match context {
+                Some(context) => global_point_solve_with_context(
+                    k,
+                    surface,
+                    anal_domain,
+                    point_on_surf,
+                    tol_3d,
+                    context,
+                )?,
+                None => global_point_solve(k, surface, anal_domain, point_on_surf, tol_3d)?,
+            });
         }
 
         // Point not close enough to surface - error
@@ -2128,10 +2242,71 @@ impl BSplineSurface {
         Ok(Self {
             nurb: Some(sur),
             nurb_is_borrowed: false,
-            out_of_bounds_enabled: false,
+            out_of_bounds_enabled: AtomicBool::new(false),
             knot_type,
             form,
         })
+    }
+
+    /// `WriteToDB`: writes the NURB's last control point indices `n m`, degrees `p q`,
+    /// rational flag and, for `version > 32`, knot type and form; then the control
+    /// net row by row (`wx wy wz`, plus `w` when rational: the stored, weighted
+    /// values) and the u and v knots.
+    ///
+    /// # Errors
+    ///
+    /// `SM_ERR` without NURB (upstream dereferences `NULL`).
+    pub fn write_to_db(&self, db: &mut DatabaseWriter, version: u64) -> Result<()> {
+        let sur = self.nurb_or_err(OP_WRITE)?;
+        let (n, m) = (sur.n() as i64, sur.m() as i64);
+        let (p, q) = (sur.p() as i16, sur.q() as i16);
+        let knot_type = self.knot_type as u64;
+        let form = self.form as u64;
+
+        // rational flag
+        let rat: i16 = i16::from(sur.is_rational());
+
+        if db.file_type() == FileType::Ascii {
+            db.out_i64(n).out_str(" ").out_i64(m).out_str("\n");
+            db.out_i64(p.into()).out_str(" ").out_i64(q.into());
+            db.out_str("\n");
+            db.out_i64(rat.into()).out_str("\n");
+            if version > 32 {
+                db.out_u64(knot_type);
+                db.out_str(" BSplineSurface Knot Type Flag \n");
+                db.out_u64(form).out_str(" BSplineSurfaceForm Flag \n");
+            }
+        } else {
+            db.write_long(n);
+            db.write_long(m);
+            db.write_short(p);
+            db.write_short(q);
+            db.write_short(rat);
+            if version > 32 {
+                db.write_long(knot_type as i64);
+                db.write_long(form as i64);
+            }
+        }
+
+        // control points, by rational / non-rational
+        for row in sur.rows() {
+            for pw in row {
+                if rat == 1 {
+                    db.reals(&[pw.x, pw.y, pw.z, pw.w]);
+                } else {
+                    db.reals(&[pw.x, pw.y, pw.z]);
+                }
+            }
+        }
+
+        // output u knots, then v knots
+        for &u in sur.u_knots() {
+            db.reals(&[u]);
+        }
+        for &v in sur.v_knots() {
+            db.reals(&[v]);
+        }
+        Ok(())
     }
 }
 

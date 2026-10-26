@@ -26,7 +26,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use solidcore::blend::fillet_geom::p1::{FilletGeomId, FilletSolverId};
+use solidcore::blend::fillet_geom::p1::{CornerLookup, FilletGeomId, FilletSolverId};
 use solidcore::blend::fillet_geom::p4::create_uv_curve;
 use solidcore::blend::fillet_solver::p1::FilletSolver;
 use solidcore::kernel::Kernel;
@@ -37,7 +37,7 @@ use solidcore::SolidError;
 use solidcore_ffi::units::blend_fillet_geom_p4::{self as ffi, Op};
 
 use super::blend_fillet_geom_p1::{
-    analytic_surface, dump_bcurve, gen_curve, gen_cylinder, gen_model, gen_surface, push_model,
+    analytic_surface, b_spline_part, dump_bcurve, gen_curve, gen_cylinder, gen_model, gen_surface, push_model,
     push_srf, scale_of, status, surface_of, AnalyticSrf, Crv, EdgeIn, EuIn, GeomIn, Model,
     RustModel, Srf, VertexIn,
 };
@@ -387,8 +387,8 @@ fn rust(i: &Inputs) -> Result<Rec, HarnessError> {
             );
             o.push(status_of!(r));
             let curves = r.unwrap_or_default();
-            dump_bcurve(&mut o, curves.curve_3d.as_ref());
-            dump_bcurve(&mut o, curves.uv_curve1.as_ref());
+            dump_bcurve(&mut o, curves.curve_3d.as_ref().and_then(b_spline_part));
+            dump_bcurve(&mut o, curves.uv_curve1.as_ref().and_then(b_spline_part));
             dump_bcurve(&mut o, curves.uv_curve2.as_ref());
         }
         Query::RailIndex { g, v } => {
@@ -402,13 +402,13 @@ fn rust(i: &Inputs) -> Result<Rec, HarnessError> {
         }
         Query::RailIntExtended { v } | Query::Int2Fillets { v } | Query::Nx2 { v } => {
             let vid = rm.vertex(*v)?;
-            let target = rm.target.clone();
+            let mut target = rm.target.clone();
             let r = match &i.query {
                 Query::RailIntExtended { .. } => rm
                     .fb
-                    .calc_rail_int_extended_edgeuse(&k, vid, &solvers, &target),
+                    .calc_rail_int_extended_edgeuse(&k, vid, CornerLookup::default(), &solvers, &mut target),
                 Query::Int2Fillets { .. } => {
-                    rm.fb.calc_fillet_int_2_fillets(&k, vid, &solvers, &target)
+                    rm.fb.calc_fillet_int_2_fillets(&k, vid, CornerLookup::default(), &solvers, &target)
                 }
                 _ => rm.fb.calc_nx2_vert_fillet_x_fillet(&k, vid, &solvers),
             };

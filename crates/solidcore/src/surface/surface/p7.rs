@@ -24,7 +24,7 @@
 //! | [`drop_vectors_at`]                               | `DropVectors`                                    |
 //! | [`Surface::find_degen_param_for_direction`], [`DegenParam`] | `FindDegenParamForDirection`           |
 //! | [`Surface::global_point_solve_0`]                 | `GlobalPointSolve_0`                             |
-//! | [`Surface::global_curve_solve`]                   | `GlobalCurveSolve`                               |
+//! | [`Surface::global_curve_solve`], [`Surface::global_curve_solve_with_context`] | `GlobalCurveSolve`        |
 //! | [`Surface::global_surface_solve`]                 | `GlobalSurfaceSolve`                             |
 //! | [`Surface::local_curve_solve`], [`CurveSurfaceSolution`] | `LocalCurveSolve`                         |
 //! | [`Surface::create_parallel_projection_curves`]    | `CreateParallelProjectionCurves`                 |
@@ -66,7 +66,8 @@
 //!   is `FindDegenParamForDirection`'s angle bookkeeping (`dBestRad`,
 //!   `dNearBestRad`: computed in release builds but never read).
 //! - **Upstream quirks kept:** `GetFlatCorners` masks its return value with `&=` while
-//!   filling the corner points; `SmSSGlobalSolver::BranchMayContainAnswers` returns
+//!   filling the corner points (the opt-in `Kernel::fixes.flat_corners_test_bits` tests each
+//!   bit instead, WR-384); `SmSSGlobalSolver::BranchMayContainAnswers` returns
 //!   `SM_SUCCESS` (that is, `FALSE`) for a node outside its face and `NER`'s status
 //!   (non-zero: `TRUE`) for a missing patch; `sm_GoodDropResult` compares the guess and
 //!   result distances with swapped names; `FindDegenParamForDirection` compares a
@@ -93,7 +94,8 @@ use crate::geom::extent1d::Extent1d;
 use crate::geom::extent1d::ExtentNd;
 use crate::geom::extent2d::Extent2d;
 use crate::geom::geom_utility::p2::{
-    evaluate_curve_continuity, frenet_from_derivatives, ContinuityType, CurveEval,
+    evaluate_curve_continuity_with, frenet_from_derivatives, ContinuityOptions, ContinuityType,
+    CurveEval,
 };
 use crate::geom::global_solver::{
     Branch, GlobalSolve, GlobalSolver, PreferredSolution, SolutionPairType, SolutionRequested,
@@ -119,7 +121,7 @@ use crate::topology::BrepId;
 
 use super::p1::{
     evaluate_1st_derivatives, evaluate_2nd_derivatives, evaluate_directional_derivs, is_node_valid,
-    CsNormalizeEnfo, SecondDerivatives,
+    CsNormalizeEnfo, OperandDomain, SecondDerivatives, SolveOperands, SurfaceSolveContext,
 };
 use super::p2::{derivative_limit, drop_vectors, normal_limit, SurfaceEvaluate};
 use super::{Surface, SurfaceKind};
@@ -514,7 +516,8 @@ pub fn base_evaluate_normal<S: SurfaceEvaluate + ?Sized>(
 /// # Errors
 ///
 /// [`SolidError::Unported`] from the surface's evaluation; those of
-/// `smgu_EvaluateCurveContinuity` (see the module docs).
+/// `smgu_EvaluateCurveContinuity` (see the module docs; WR-380's opt-in G2 test from
+/// `Kernel::fixes.geometric_g2_continuity`).
 pub fn base_is_closed<S: SurfaceEvaluate + ?Sized>(
     k: &Kernel,
     surface: &S,
@@ -633,7 +636,7 @@ pub fn base_is_closed<S: SurfaceEvaluate + ?Sized>(
                     } else {
                         (d2_min.dv, d2_min.dvv, d2_max.dv, d2_max.dvv)
                     };
-                let curve_continuity = evaluate_curve_continuity(
+                let curve_continuity = evaluate_curve_continuity_with(
                     &CurveEval {
                         position: p_min,
                         first: first_min,
@@ -647,6 +650,9 @@ pub fn base_is_closed<S: SurfaceEvaluate + ?Sized>(
                         third: None,
                     },
                     CONTINUITY_ANGLE,
+                    &ContinuityOptions {
+                        geometric_g2: k.fixes.geometric_g2_continuity,
+                    },
                 )?;
 
                 // save lowest found continuity
@@ -776,7 +782,7 @@ impl Surface {
         u_side: Side,
         v_side: Side,
     ) -> Result<Vec3> {
-        match self.kind() {
+        match self.kind_with_nurb(k)? {
             // SmSphere::EvaluateNormal (the side flags are not used)
             SurfaceKind::Sphere(s) => s.evaluate_normal(uv),
             SurfaceKind::Cone(_)
@@ -843,7 +849,7 @@ impl Surface {
     /// of an offset surface's bounding box (its other failures are ignored, as
     /// upstream).
     pub fn is_planar(&self, k: &Kernel, tol_3d: f64) -> Result<Planar> {
-        match self.kind() {
+        match self.kind_with_nurb(k)? {
             SurfaceKind::Plane(p) => {
                 let (point, normal, deviation) = p.is_planar();
                 Ok(Planar {
@@ -858,7 +864,10 @@ impl Surface {
                 // surface by its B-rep (UNPORTED(topology.face_p2): SmFace::GetTolerance
                 // for a bare face handle without it)
                 let face_tol = self.face_zone_tol_3d()?;
-                Ok(planar_of(k, s, &self.natural_uv_domain(), face_tol)?.is_planar(tol_3d))
+                Ok(
+                    planar_of(k, s, &self.natural_uv_domain_with_nurb(k)?, face_tol)?
+                        .is_planar(tol_3d),
+                )
             }
             // SmSurfOfRevolution (and SmCone, SmSphere, SmTorus) inherit
             // SmBSplineSurface::CalculateBoundingBox:
@@ -866,33 +875,51 @@ impl Surface {
             // SmFace::GetTolerance for a bare face handle without it)
             SurfaceKind::Cone(s) => {
                 let face_tol = self.face_zone_tol_3d()?;
-                Ok(
-                    planar_of(k, s.rev().base(), &self.natural_uv_domain(), face_tol)?
-                        .is_planar(tol_3d),
-                )
+                Ok(planar_of(
+                    k,
+                    s.rev().base(),
+                    &self.natural_uv_domain_with_nurb(k)?,
+                    face_tol,
+                )?
+                .is_planar(tol_3d))
             }
             SurfaceKind::Sphere(s) => {
                 let face_tol = self.face_zone_tol_3d()?;
-                Ok(
-                    planar_of(k, s.base().base(), &self.natural_uv_domain(), face_tol)?
-                        .is_planar(tol_3d),
-                )
+                Ok(planar_of(
+                    k,
+                    s.base().base(),
+                    &self.natural_uv_domain_with_nurb(k)?,
+                    face_tol,
+                )?
+                .is_planar(tol_3d))
             }
             SurfaceKind::Torus(s) => {
                 let face_tol = self.face_zone_tol_3d()?;
-                Ok(
-                    planar_of(k, s.base().base(), &self.natural_uv_domain(), face_tol)?
-                        .is_planar(tol_3d),
-                )
+                Ok(planar_of(
+                    k,
+                    s.base().base(),
+                    &self.natural_uv_domain_with_nurb(k)?,
+                    face_tol,
+                )?
+                .is_planar(tol_3d))
             }
             SurfaceKind::SurfOfRevolution(s) => {
                 let face_tol = self.face_zone_tol_3d()?;
-                Ok(planar_of(k, s.base(), &self.natural_uv_domain(), face_tol)?.is_planar(tol_3d))
+                Ok(
+                    planar_of(k, s.base(), &self.natural_uv_domain_with_nurb(k)?, face_tol)?
+                        .is_planar(tol_3d),
+                )
             }
             // (and SmSurfOfExtrusion)
+            // (`CalculateBoundingBox`'s `GetOrCreateGwNurbPointer` makes a recognised
+            // extrusion's NURB)
             SurfaceKind::SurfOfExtrusion(s) => {
                 let face_tol = self.face_zone_tol_3d()?;
-                Ok(planar_of(k, s.base(), &self.natural_uv_domain(), face_tol)?.is_planar(tol_3d))
+                let base = s.base_with_nurb(k)?;
+                Ok(
+                    planar_of(k, &base, &self.natural_uv_domain_with_nurb(k)?, face_tol)?
+                        .is_planar(tol_3d),
+                )
             }
             // SmSurface body: use the virtual box and ignore ordinary failures,
             // which leave the default pseudo box. The kernel is available here.
@@ -902,7 +929,7 @@ impl Surface {
             | SurfaceKind::SrfInVolume(_) => {
                 let pseudo = ignored(self.calculate_bounding_box(
                     k,
-                    &self.natural_uv_domain(),
+                    &self.natural_uv_domain_with_nurb(k)?,
                     [false, true, false],
                     true,
                 ))?
@@ -945,7 +972,7 @@ impl Surface {
         let mut points = want_points.then_some([Vec3::UNDEF; 4]);
 
         // locals
-        let d = self.natural_uv_domain();
+        let d = self.natural_uv_domain_with_nurb(k)?;
         let corners = [
             Point2::new(d.u_min(), d.v_min()),
             Point2::new(d.u_min(), d.v_max()),
@@ -961,11 +988,18 @@ impl Surface {
             }
         }
 
-        // optional output (upstream masks the return value while testing)
+        // optional output (upstream masks the return value while testing: `if (lRtn &=
+        // bit)`; the opt-in `Kernel::fixes.flat_corners_test_bits` tests each bit, WR-384)
+        let test_bits = k.fixes.flat_corners_test_bits;
         if let Some(pts) = points.as_mut() {
             for ((c, bit), p) in corners.iter().zip(FLAT_CORNER_BITS).zip(pts.iter_mut()) {
-                rtn &= bit;
-                if rtn != 0 {
+                let flat = if test_bits {
+                    rtn & bit
+                } else {
+                    rtn &= bit;
+                    rtn
+                };
+                if flat != 0 {
                     if let Some(v) = ignored(self.evaluate_point(k, *c))? {
                         *p = v;
                     }
@@ -999,7 +1033,7 @@ impl Surface {
         let mut s_dir = dir.unitize()?;
 
         // locals
-        let domain = self.natural_uv_domain();
+        let domain = self.natural_uv_domain_with_nurb(k)?;
         let uv_min = domain.min();
         let uv_max = domain.max();
         let mut s_ivl = Extent1d::new();
@@ -1156,8 +1190,56 @@ impl Surface {
         opt_target_distance: Option<f64>,
         requested: SolutionRequested,
     ) -> Result<SolutionArray<O>> {
+        self.global_point_solve_0_in(
+            k,
+            surface,
+            None,
+            None,
+            false,
+            uv_domain,
+            op,
+            test_point,
+            distance_tolerance,
+            opt_target_distance,
+            requested,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn global_point_solve_0_in<O: SolutionObject>(
+        &self,
+        k: &Kernel,
+        surface: O,
+        cache: Option<&SurfaceCache<O>>,
+        mut context: Option<&mut dyn SurfaceSolveContext<O>>,
+        point_test_off: bool,
+        uv_domain: &Extent2d,
+        op: SolverOperation,
+        test_point: Point3,
+        distance_tolerance: f64,
+        opt_target_distance: Option<f64>,
+        requested: SolutionRequested,
+    ) -> Result<SolutionArray<O>> {
         // get surface spatial decomposition tree from Surface's cache
-        let cache = self.solve_cache(k, surface, OP_SOLVE)?;
+        let mut owned;
+        let cache = if let Some(c) = cache {
+            if point_test_off {
+                owned = c.clone();
+                owned.point_test_enabled = false;
+                &owned
+            } else {
+                c
+            }
+        } else {
+            owned = match context.as_deref_mut() {
+                Some(ctx) => solve_surface_cache_with(k, self, Some(surface), ctx)?,
+                None => self.solve_cache(k, surface, OP_SOLVE)?,
+            };
+            if point_test_off {
+                owned.point_test_enabled = false;
+            }
+            &owned
+        };
         let surface_tree = cache.tree().ok_or(SolidError::null_pointer(OP_SOLVE))?;
 
         // put point into a single node PointTree
@@ -1165,7 +1247,10 @@ impl Surface {
 
         // instance global Surface/Point solver
         let mut gs = SpGlobalSolver::new(k, &point_tree, surface_tree, Some(self), *uv_domain);
-        gs.surface_cache = Some(&cache);
+        gs.surface_cache = Some(cache);
+        if let Some(ctx) = context.as_deref() {
+            gs.face_queries = ctx.face_queries();
+        }
 
         // init solver.dBestAnswerSoFarSq to properly handle SM_SR_SINGLE requests
         let best = point_solve_best_answer_sq(op, opt_target_distance)?;
@@ -1214,15 +1299,88 @@ impl Surface {
         requested: SolutionRequested,
         handles: [Option<O>; 2],
     ) -> Result<SolutionArray<O>> {
+        self.global_curve_solve_in(
+            k,
+            uv_domain,
+            curve,
+            interval,
+            op,
+            distance_tolerance,
+            opt_target_distance,
+            opt_vectors,
+            requested,
+            handles,
+            None,
+        )
+    }
+
+    /// [`Surface::global_curve_solve`] of a face's surface by a caller that holds the
+    /// face: `context` makes the surface's cache (`smsurf_GetSurfaceCache`, the face's
+    /// trimmed cache) from the surface's handle, and its face queries serve the leaf
+    /// solve's trim tests.
+    ///
+    /// # Errors
+    ///
+    /// As [`Surface::global_curve_solve`], and those of the context's cache
+    /// preparation.
+    pub fn global_curve_solve_with_context<O: SolutionObject>(
+        &self,
+        k: &Kernel,
+        uv_domain: &Extent2d,
+        curve: &Curve,
+        interval: &Extent1d,
+        op: SolverOperation,
+        distance_tolerance: f64,
+        opt_target_distance: Option<f64>,
+        opt_vectors: &[Vec3],
+        requested: SolutionRequested,
+        handles: [Option<O>; 2],
+        context: &mut dyn SurfaceSolveContext<O>,
+    ) -> Result<SolutionArray<O>> {
+        self.global_curve_solve_in(
+            k,
+            uv_domain,
+            curve,
+            interval,
+            op,
+            distance_tolerance,
+            opt_target_distance,
+            opt_vectors,
+            requested,
+            handles,
+            Some(context),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn global_curve_solve_in<O: SolutionObject>(
+        &self,
+        k: &Kernel,
+        uv_domain: &Extent2d,
+        curve: &Curve,
+        interval: &Extent1d,
+        op: SolverOperation,
+        distance_tolerance: f64,
+        opt_target_distance: Option<f64>,
+        opt_vectors: &[Vec3],
+        requested: SolutionRequested,
+        handles: [Option<O>; 2],
+        mut context: Option<&mut dyn SurfaceSolveContext<O>>,
+    ) -> Result<SolutionArray<O>> {
         // get target cache locals (NER: a cache that cannot be built or has no tree)
-        let surface_cache = solve_surface_cache(k, self, handles[1])?;
+        let surface_cache = match context.as_deref_mut() {
+            Some(context) => solve_surface_cache_with(k, self, handles[1], context)?,
+            None => solve_surface_cache(k, self, handles[1])?,
+        };
         let surface_tree = surface_cache
             .tree()
             .ok_or(SolidError::null_pointer(OP_SOLVE))?;
         let curve_cache = match crate::curve::curve::p5::make_curve_cache::<O>(k, curve, handles[0])
         {
             Ok(c) => c,
-            Err(e) if e.is_unported() => return Err(e),
+            Err(e) if e.is_unported() || matches!(e, SolidError::PreparationRequired { .. }) => {
+                return Err(e);
+            }
             Err(_) => return Err(SolidError::null_pointer(OP_SOLVE)),
         };
         let curve_tree = curve_cache
@@ -1240,6 +1398,15 @@ impl Surface {
         );
         gs.curve = Some(curve);
         gs.surface_cache = Some(&surface_cache);
+        if let Some(context) = context.as_deref() {
+            gs.face_queries = context.face_queries();
+        }
+        gs.operands = Some(SolveOperands {
+            operands: [
+                handles[0].map(|h| (h, OperandDomain::Curve(curve.natural_interval()))),
+                handles[1].map(|h| (h, OperandDomain::Surface(self.natural_uv_domain()))),
+            ],
+        });
 
         let best = pair_solve_best_answer_sq(op, opt_target_distance, false)?;
         if op == SolverOperation::AtDistance {
@@ -1324,9 +1491,90 @@ impl Surface {
         requested: SolutionRequested,
         handles: [Option<O>; 2],
     ) -> Result<(SolutionArray<O>, Vec<SolutionNodes>)> {
+        self.global_surface_solve_in(
+            k,
+            uv_domain,
+            other,
+            other_uv_domain,
+            op,
+            distance_tolerance,
+            opt_target_distance,
+            opt_vectors,
+            requested,
+            handles,
+            None,
+        )
+    }
+
+    /// [`Surface::global_surface_solve`] of face surfaces by a caller that holds the
+    /// faces: `context` makes each surface's cache (`smsurf_GetSurfaceCache`, the
+    /// face's trimmed cache) from its handle, and its face queries serve the leaf
+    /// solve's trim tests.
+    ///
+    /// # Errors
+    ///
+    /// As [`Surface::global_surface_solve`], and those of the context's cache
+    /// preparation.
+    pub fn global_surface_solve_with_context<O: SolutionObject>(
+        &self,
+        k: &Kernel,
+        uv_domain: &Extent2d,
+        other: &Surface,
+        other_uv_domain: &Extent2d,
+        op: SolverOperation,
+        distance_tolerance: f64,
+        opt_target_distance: Option<f64>,
+        opt_vectors: &[Vec3],
+        requested: SolutionRequested,
+        handles: [Option<O>; 2],
+        context: &mut dyn SurfaceSolveContext<O>,
+    ) -> Result<SolutionArray<O>> {
+        Ok(self
+            .global_surface_solve_in(
+                k,
+                uv_domain,
+                other,
+                other_uv_domain,
+                op,
+                distance_tolerance,
+                opt_target_distance,
+                opt_vectors,
+                requested,
+                handles,
+                Some(context),
+            )?
+            .0)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn global_surface_solve_in<O: SolutionObject>(
+        &self,
+        k: &Kernel,
+        uv_domain: &Extent2d,
+        other: &Surface,
+        other_uv_domain: &Extent2d,
+        op: SolverOperation,
+        distance_tolerance: f64,
+        opt_target_distance: Option<f64>,
+        opt_vectors: &[Vec3],
+        requested: SolutionRequested,
+        handles: [Option<O>; 2],
+        mut context: Option<&mut dyn SurfaceSolveContext<O>>,
+    ) -> Result<(SolutionArray<O>, Vec<SolutionNodes>)> {
         // both surface caches and trees (NER)
-        let cache1 = solve_surface_cache(k, self, handles[0])?;
-        let cache2 = solve_surface_cache(k, other, handles[1])?;
+        let (cache1, cache2) = match context.as_deref_mut() {
+            Some(context) => {
+                let cache1 = solve_surface_cache_with(k, self, handles[0], context)?;
+                (
+                    cache1,
+                    solve_surface_cache_with(k, other, handles[1], context)?,
+                )
+            }
+            None => (
+                solve_surface_cache(k, self, handles[0])?,
+                solve_surface_cache(k, other, handles[1])?,
+            ),
+        };
         let tree1 = cache1.tree().ok_or(SolidError::null_pointer(OP_SOLVE))?;
         let tree2 = cache2.tree().ok_or(SolidError::null_pointer(OP_SOLVE))?;
 
@@ -1339,6 +1587,15 @@ impl Surface {
             k,
         );
         gs.caches = [Some(&cache1), Some(&cache2)];
+        if let Some(context) = context.as_deref() {
+            gs.face_queries = context.face_queries();
+        }
+        gs.operands = Some(SolveOperands {
+            operands: [
+                handles[0].map(|h| (h, OperandDomain::Surface(self.natural_uv_domain()))),
+                handles[1].map(|h| (h, OperandDomain::Surface(other.natural_uv_domain()))),
+            ],
+        });
 
         let best = pair_solve_best_answer_sq(op, opt_target_distance, true)?;
         if op == SolverOperation::AtDistance {
@@ -1478,6 +1735,64 @@ impl Surface {
         opt_approx_tol_3d: Option<f64>,
         opt_angle_tol_rad: Option<f64>,
     ) -> Result<(Vec<Curve>, Vec<Option<Curve>>)> {
+        self.create_parallel_projection_curves_in::<super::p4::NoObject>(
+            k,
+            uv_domain,
+            curve,
+            projection_vector,
+            opt_projection_distance,
+            opt_approx_tol_3d,
+            opt_angle_tol_rad,
+            None,
+        )
+    }
+
+    /// [`Surface::create_parallel_projection_curves`] of a face's surface by a caller
+    /// that holds the face: `context` makes this surface's cache from `handle`
+    /// (`smsurf_GetSurfaceCache`, the face's trimmed cache) for the continuity check
+    /// and the intersection, and the swept surface's (no handle) as its own.
+    ///
+    /// # Errors
+    ///
+    /// As [`Surface::create_parallel_projection_curves`], and those of the context's
+    /// cache preparation.
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_parallel_projection_curves_with_context<O: SolutionObject>(
+        &self,
+        k: &Kernel,
+        uv_domain: &Extent2d,
+        curve: &BSplineCurve,
+        projection_vector: Vec3,
+        opt_projection_distance: Option<f64>,
+        opt_approx_tol_3d: Option<f64>,
+        opt_angle_tol_rad: Option<f64>,
+        context: &mut dyn SurfaceSolveContext<O>,
+        handle: Option<O>,
+    ) -> Result<(Vec<Curve>, Vec<Option<Curve>>)> {
+        self.create_parallel_projection_curves_in(
+            k,
+            uv_domain,
+            curve,
+            projection_vector,
+            opt_projection_distance,
+            opt_approx_tol_3d,
+            opt_angle_tol_rad,
+            Some((context, handle)),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn create_parallel_projection_curves_in<O: SolutionObject>(
+        &self,
+        k: &Kernel,
+        uv_domain: &Extent2d,
+        curve: &BSplineCurve,
+        projection_vector: Vec3,
+        opt_projection_distance: Option<f64>,
+        opt_approx_tol_3d: Option<f64>,
+        opt_angle_tol_rad: Option<f64>,
+        mut context: Option<(&mut dyn SurfaceSolveContext<O>, Option<O>)>,
+    ) -> Result<(Vec<Curve>, Vec<Option<Curve>>)> {
         // check input (ZERO_VEC_ER: fails unless |v|^2 >= SM_EFF_ZERO_SQ, so also for NaN)
         if projection_vector
             .length_squared()
@@ -1489,14 +1804,22 @@ impl Surface {
 
         // check state - internal surface continuities are better than C0 (NER; the
         // continuity is only reported)
-        let cache = super::p2::surface_cache::<()>(k, self, None).map_err(|e| {
+        let ner = |e: SolidError| {
             if e.is_unported() {
                 e
             } else {
                 SolidError::null_pointer(OP_PROJ)
             }
-        })?;
-        cache.surface_continuity(uv_domain)?;
+        };
+        match context.as_mut() {
+            Some((context, handle)) => context
+                .build_surface_cache(k, self, *handle)
+                .map_err(ner)?
+                .surface_continuity(uv_domain)?,
+            None => super::p2::surface_cache::<()>(k, self, None)
+                .map_err(ner)?
+                .surface_continuity(uv_domain)?,
+        };
 
         // check state - internal curve continuities are better than C0 (only reported)
         curve.calculate_continuities(k, CONTINUITY_ANGLE)?;
@@ -1541,17 +1864,33 @@ impl Surface {
         }
 
         // intersection
-        let projection_domain = projection_surface.natural_uv_domain();
-        let x = crate::intersect::surface_intersector::p5::do_intersection(
-            k,
-            self,
-            uv_domain,
-            &projection_surface,
-            &projection_domain,
-            [true, true],
-            opt_approx_tol_3d,
-            opt_angle_tol_rad,
-        )?;
+        let projection_domain = projection_surface.natural_uv_domain_with_nurb(k)?;
+        let x = match context {
+            Some((context, handle)) => {
+                crate::intersect::surface_intersector::p5::do_intersection_with_context(
+                    k,
+                    self,
+                    uv_domain,
+                    &projection_surface,
+                    &projection_domain,
+                    [true, true],
+                    opt_approx_tol_3d,
+                    opt_angle_tol_rad,
+                    context,
+                    [handle, None],
+                )?
+            }
+            None => crate::intersect::surface_intersector::p5::do_intersection(
+                k,
+                self,
+                uv_domain,
+                &projection_surface,
+                &projection_domain,
+                [true, true],
+                opt_approx_tol_3d,
+                opt_angle_tol_rad,
+            )?,
+        };
         Ok((x.curves_3d, x.surface1_uv_curves))
     }
 }
@@ -1636,6 +1975,29 @@ fn solve_surface_cache<O: SolutionObject>(
     match cache.get_tree(k) {
         Ok(_) => Ok(cache),
         Err(e) if e.is_unported() => Err(e),
+        Err(_) => Err(SolidError::null_pointer(OP_SOLVE)),
+    }
+}
+
+/// [`solve_surface_cache`] through the caller's owning-face context: the context
+/// makes the cache from the surface's handle (`smsurf_GetSurfaceCache` reaching the
+/// face), with the same `NER` mapping of a cache or tree that cannot be built.
+fn solve_surface_cache_with<O: SolutionObject>(
+    k: &Kernel,
+    surface: &Surface,
+    handle: Option<O>,
+    context: &mut dyn SurfaceSolveContext<O>,
+) -> Result<SurfaceCache<O>> {
+    let mut cache = match context.build_surface_cache(k, surface, handle) {
+        Ok(c) => c,
+        Err(e) if e.is_unported() || matches!(e, SolidError::PreparationRequired { .. }) => {
+            return Err(e);
+        }
+        Err(_) => return Err(SolidError::null_pointer(OP_SOLVE)),
+    };
+    match cache.get_tree(k) {
+        Ok(_) => Ok(cache),
+        Err(e) if e.is_unported() || matches!(e, SolidError::PreparationRequired { .. }) => Err(e),
         Err(_) => Err(SolidError::null_pointer(OP_SOLVE)),
     }
 }
@@ -2471,6 +2833,10 @@ pub struct SsGlobalSolver<'t, 's, O> {
     pub caches: [Option<&'s SurfaceCache<O>>; 2],
     /// One prepared classifier for both caches, which may belong to one B-rep.
     pub face_queries: Option<&'s dyn crate::surface::surface_cache::face_context::FaceQueries<O>>,
+    /// The handles and natural UV domains of the two surfaces, which the solutions
+    /// name (`IdenticalSolutions` reads them through upstream's objects); `None` reads
+    /// them from the handles themselves.
+    pub operands: Option<SolveOperands<O>>,
 }
 
 impl<O: SolutionObject> SsGlobalSolver<'_, '_, O> {
@@ -2656,6 +3022,31 @@ fn cs_normalize_local_solve(
 mod tests {
     use super::*;
     use crate::surface::plane::Plane;
+
+    /// tangency-labs/solidcore#525 (WR-384): with the corner points wanted, upstream's
+    /// `if (lRtn &= bit)` clears the other corners' bits (4 flat corners come back as
+    /// none, with only the first point); the opt-in tests each bit.
+    #[test]
+    fn issue_525_flat_corners_keep_their_bits() {
+        let mut k = Kernel::default();
+        // a degenerate bilinear patch: every corner's derivatives are parallel
+        let s = Surface::from(
+            BSplineSurface::create_bilinear_surface(
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(1.0, 0.0, 0.0),
+                Vec3::new(2.0, 0.0, 0.0),
+                Vec3::new(3.0, 0.0, 0.0),
+            )
+            .unwrap(),
+        );
+        assert_eq!(s.flat_corners(&k, 1.0, false).unwrap().flags, 15);
+        let up = s.flat_corners(&k, 1.0, true).unwrap();
+        assert_eq!(up.flags, 0);
+        k.fixes.flat_corners_test_bits = true;
+        let fixed = s.flat_corners(&k, 1.0, true).unwrap();
+        assert_eq!(fixed.flags, 15);
+        assert!(fixed.points.unwrap().iter().all(|p| *p != Vec3::UNDEF));
+    }
 
     fn plane() -> Surface {
         Surface::from(Plane::from_normal(

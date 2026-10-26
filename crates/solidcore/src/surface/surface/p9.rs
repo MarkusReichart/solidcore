@@ -12,8 +12,9 @@
 //! recurses once with maximum length zero; an explicit depth limit of two guards
 //! that invariant. Split arrays are limited to 1,000,000 entries before allocation
 //! or concatenation. Unsupported surface virtuals return `Unported`, never an
-//! approximate replacement (the diagonal curves of a cone, sphere or torus, which
-//! the port's B-spline-only `SmCrvOnSurf` cannot carry). Iso curves come from the
+//! approximate replacement. The diagonal curves of a cone, sphere or torus are
+//! `SmCrvOnSurf` over the analytic surface itself ([`CrvOnSurf`] holds any
+//! [`Surface`]). Iso curves come from the
 //! kind's own `CreateIsoParametricCurve`, and implicit iso curves evaluate the plane,
 //! cone, sphere and torus through their own evaluation, as upstream's virtuals;
 //! curve-bounded, STEP, offset and in-volume surfaces build both kinds of iso curve
@@ -58,14 +59,12 @@ fn bss(surface: &Surface) -> Result<Cow<'_, BSplineSurface>> {
         SurfaceKind::BSpline(s) => Ok(Cow::Borrowed(s)),
         SurfaceKind::Plane(p) => Ok(p.base_for_query()),
         SurfaceKind::Cone(_) | SurfaceKind::Sphere(_) | SurfaceKind::Torus(_) => {
-            // DISPATCH GAP: only the diagonal `SmCrvOnSurf` of `FindTessellationSplits`
-            // gets here (iso curves dispatch to the kinds' own overrides; the kernel
-            // asks for diagonals only for B-spline and extrusion surfaces): the port's
-            // `CrvOnSurf` holds a B-spline surface, upstream's the analytic one.
-            // UNPORTED(surface.surface_p9): SmCrvOnSurf over an analytic surface
-            Err(SolidError::unported(
-                "SmCrvOnSurf::SmCrvOnSurf(analytic surface)",
-                "surface.surface_p9",
+            // (unreachable: iso curves of these kinds dispatch to the kinds' own
+            // overrides, and the diagonal `SmCrvOnSurf` of `FindTessellationSplits`
+            // holds the analytic surface itself, as upstream, not a B-spline view)
+            Err(SolidError::invalid_input(
+                OP,
+                "surface has no B-spline view",
             ))
         }
         SurfaceKind::SurfOfRevolution(s) => Ok(Cow::Borrowed(s.base())),
@@ -106,7 +105,7 @@ fn typed_iso_curve(
     value: f64,
     approx_tol: f64,
 ) -> Result<(BSplineCurve, Curve)> {
-    let typed = match surface.kind() {
+    let typed = match surface.kind_with_nurb(k)? {
         // (no override: the `SmSurface` body, whose approximation uses the tolerance)
         SurfaceKind::CurveBounded(_)
         | SurfaceKind::Step(_)
@@ -225,7 +224,7 @@ impl Surface {
         direction: SurfParamType,
         tolerance: f64,
     ) -> Result<Option<(Curve, Curve)>> {
-        let domain = self.natural_uv_domain();
+        let domain = self.natural_uv_domain_with_nurb(k)?;
         let (min, max) = match direction {
             SurfParamType::U => (domain.min().x, domain.max().x),
             SurfParamType::V => (domain.min().y, domain.max().y),
@@ -556,6 +555,32 @@ fn filter_solution<O: SolutionObject>(
         k, surface, domain, curve, interval, u_conts, v_conts, t_conts, solution,
     )
 }
+/// The tolerance of the edge owning `curve` (`pCurveOwner->GetTolerance()` in
+/// `sm_ClassifyCurveSurfaceXSectPoint`), through a face-aware caller's `queries` and
+/// the curve's `handle`; `None` for a curve no edge owns, or when the caller cannot
+/// resolve it.
+///
+/// # Errors
+///
+/// Those of the caller's edge resolution.
+pub(super) fn curve_edge_tolerance<O>(
+    curve: &Curve,
+    handle: Option<O>,
+    queries: Option<&dyn crate::surface::surface_cache::face_context::FaceQueries<O>>,
+) -> Result<Option<f64>> {
+    if curve
+        .owner()
+        .is_none_or(|o| o.type_code != crate::geom::assert_array::labels::EDGE_TYPE)
+    {
+        return Ok(None);
+    }
+    match (queries, handle) {
+        (Some(queries), Some(handle)) => queries.curve_edge_tolerance(handle).transpose(),
+        _ => Ok(None),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn nearby_intersection(
     k: &Kernel,
     surface: &Surface,
@@ -564,9 +589,18 @@ fn nearby_intersection(
     interval: &Extent1d,
     uv: Point2,
     t: f64,
+    edge_tolerance: Option<f64>,
 ) -> Result<Option<(Point2, f64)>> {
-    let c =
-        super::p4::classify_curve_surface_xsect_point(k, surface, domain, curve, interval, uv, t)?;
+    let c = super::p4::classify_curve_surface_xsect_point_with(
+        k,
+        surface,
+        domain,
+        curve,
+        interval,
+        uv,
+        t,
+        edge_tolerance,
+    )?;
     Ok(c.found_guess.then_some((c.new_uv_guess, c.new_t_guess)))
 }
 fn surface_point_solve<O: Copy>(
@@ -597,11 +631,43 @@ impl<'a, O: SolutionObject + 'a> GlobalSolve<'a, O> for CsiGlobalSolver<'a, '_, 
         second: &Solution<O>,
     ) -> Result<(SolutionPairType, Option<PreferredSolution>)> {
         let k = self.kernel;
-        super::p5::csi_identical_solutions(k, &self.base, self.surface, first, second)
+        // the solutions name the solve's curve and surface (the trees' owners)
+        if let Some(operands) = &self.operands {
+            super::p5::csi_identical_solutions_in(
+                k,
+                &self.base,
+                self.surface,
+                first,
+                second,
+                operands,
+            )
+        } else {
+            let domains = super::p1::SolveOperands {
+                operands: [
+                    super::p5::curve_operand(&self.base, 0, self.curve),
+                    super::p5::surface_operand(&self.base, 1, self.surface_cache, self.surface),
+                ],
+            };
+            super::p5::csi_identical_solutions_in(
+                k,
+                &self.base,
+                self.surface,
+                first,
+                second,
+                &domains,
+            )
+        }
     }
 }
 
 impl<'a, O: SolutionObject + 'a> CsiGlobalSolver<'a, '_, O> {
+    /// The tolerance of the edge owning `curve` ([`curve_edge_tolerance`]) through
+    /// this solve's face services and curve operand.
+    fn curve_edge_tolerance(&self, curve: &Curve) -> Result<Option<f64>> {
+        let handle = self.operands.and_then(|o| o.operands[0]).map(|(h, _)| h);
+        curve_edge_tolerance(curve, handle, self.face_queries)
+    }
+
     fn solution(&self, branch: &Branch, t: f64, uv: Point2, deviation: f64) -> Result<Solution<O>> {
         let mut solution = Solution::new();
         solution.num_variables = 3;
@@ -803,7 +869,7 @@ impl<'a, O: SolutionObject + 'a> CsiGlobalSolver<'a, '_, O> {
                 t_conts[1] = continuity;
             }
         }
-        let natural_domain = parent_surface.natural_uv_domain();
+        let natural_domain = parent_surface.natural_uv_domain_with_nurb(k)?;
         for (dir, leaf, parent, work, conts) in [
             (
                 SurfParamType::U,
@@ -988,14 +1054,16 @@ impl<'a, O: SolutionObject + 'a> CsiGlobalSolver<'a, '_, O> {
                     return Ok(false);
                 }
                 if index < 1 {
+                    let curve = self.curve.ok_or(SolidError::null_pointer(OP))?;
                     if let Some(new_guess) = ignored(nearby_intersection(
                         k,
                         eval_surface,
                         &domain,
-                        self.curve.ok_or(SolidError::null_pointer(OP))?,
+                        curve,
                         &interval,
                         hit.uv,
                         hit.parameter,
+                        self.curve_edge_tolerance(curve)?,
                     ))?
                     .flatten()
                     {

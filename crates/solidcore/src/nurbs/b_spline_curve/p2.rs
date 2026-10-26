@@ -9,6 +9,7 @@
 //! |---------------------------------------------------|----------------------------------------|
 //! | [`BSplineCurve::is_intersector_approx`]           | `IsIntersectorApprox`                  |
 //! | [`BSplineCurve::calculate_bounding_box`], [`BoundingBoxRequest`], [`BoundingBoxes`] | `CalculateBoundingBox` |
+//! | [`BSplineCurve::is_planar`], [`Planar`]     | `SmCurve::IsPlanar`                    |
 //! | [`BSplineCurve::create_analytic_curve`], [`AnalyticCurve`] | `CreateAnalyticCurve`         |
 //! | [`BSplineCurve::create_by_joining`]               | `CreateByJoining`                      |
 //! | [`BSplineCurve::create_point_curve`]              | `CreatePointCurve`                     |
@@ -29,6 +30,7 @@
 //! | [`BSplineCurve::set_control_point`]               | `SetControlPoint`                      |
 //! | [`BSplineCurve::adjust_step_interval`]            | `AdjustSTEPInterval`                   |
 //! | [`BSplineCurve::read_from_db`]                    | `ReadFromDB`                           |
+//! | [`BSplineCurve::write_to_db`]                     | `WriteToDB`                            |
 //!
 //! The other members of the file belong to `nurbs.b_spline_curve_p1`, `_p3`, ... and
 //! `nurbs.b_spline_curve_n_lib`.
@@ -88,14 +90,14 @@ use crate::curve::curve::{Curve, CurveKind};
 use crate::curve::ellipse::{Ellipse, EllipseOptions};
 use crate::curve::line::{BoundedLineOptions, Line};
 use crate::curve::offset_curve::OffsetCurve;
-use crate::error::{Result, SolidError};
+use crate::error::{ignored, Result, SolidError};
 use crate::geom::axis2_placement::Axis2Placement;
 use crate::geom::extent1d::Extent1d;
 use crate::geom::extent3d::Extent3d;
 use crate::geom::geom_utility::p1::triangle_area_squared;
 use crate::geom::geom_utility::p2::ContinuityType;
 use crate::geom::polar_box::PolarBox;
-use crate::geom::pseudo_box::PseudoBox;
+use crate::geom::pseudo_box::{Planar, PseudoBox};
 use crate::geom::tol::{are_same, is_zero, is_zero_to_tol, ANG_TOL_DEG, ZONE_TOL_3D};
 use crate::geom::vector3d::{Point3, Vec3};
 use crate::kernel::Kernel;
@@ -109,7 +111,7 @@ use crate::nurbs::geom::dist_cpt_cpt;
 use crate::nurbs::knots::Side;
 use crate::nurbs::math::{CPoint, NOW, NOZ};
 use crate::nurbs::nurbs_crv::{allocate_nurb_curve, is_ncrv_degenerate, to_euclid};
-use crate::topology::database_io::{DatabaseReader, FileType, InputStream};
+use crate::topology::database_io::{DatabaseReader, DatabaseWriter, FileType, InputStream};
 
 /// `SmCrvOnSurf_TYPE` (`CURV_BASE_TYPE + 48`).
 const CRV_ON_SURF_TYPE: i64 = BSplineCurve::TYPE - 33 + 48;
@@ -439,6 +441,27 @@ impl BSplineCurve {
         req: BoundingBoxRequest,
     ) -> Result<BoundingBoxes> {
         self.calculate_bounding_box_onto(interval, req, PseudoBox::new())
+    }
+
+    /// `IsPlanar` (`SmCurve::IsPlanar` on a B-spline curve): [`PseudoBox::is_planar`] of
+    /// the curve's pseudo box over its natural interval, with the plane point, the
+    /// (not unitised) plane normal and the deviation (`tol == EFF_ZERO` lets the box pick
+    /// its scaled zero).
+    ///
+    /// # Errors
+    ///
+    /// [`SolidError::Unported`] from [`BSplineCurve::calculate_bounding_box`] (whose
+    /// other failures leave the default box, as upstream ignores the status).
+    pub fn is_planar(&self, tol: f64) -> Result<Planar> {
+        let req = BoundingBoxRequest {
+            normal: false,
+            pseudo: true,
+            polar: false,
+        };
+        let pseudo = ignored(self.calculate_bounding_box(&self.natural_interval(), req))?
+            .and_then(|b| b.pseudo)
+            .unwrap_or_else(PseudoBox::new);
+        Ok(pseudo.is_planar(tol))
     }
 
     /// [`BSplineCurve::calculate_bounding_box`] onto the caller's pseudo box (upstream's
@@ -1334,11 +1357,15 @@ impl BSplineCurve {
                 .ok_or_else(|| invalid(OP_C0, "no knots"))
         };
 
+        let Some(degree_plus) = degree.checked_add(1) else {
+            return Ok(false);
+        };
+
         // when every knot is of multiplicity degree (+1 on the ends)
         // and the curve is non-rational
         let mut is_piecewise_c0 = !self.is_rational()?
-            && mult(0)? == degree + 1
-            && mult(unique_knot_count.wrapping_sub(1))? == degree + 1;
+            && mult(0)? == degree_plus
+            && mult(unique_knot_count.wrapping_sub(1))? == degree_plus;
 
         // Check all internal knot multiplicities equal lDegree
         if is_piecewise_c0 {
@@ -1907,6 +1934,91 @@ impl BSplineCurve {
         }
         Ok(new_curve)
     }
+
+    /// `WriteToDB`: writes the NURB's header (last control point index, degree,
+    /// rational flag and dimension, then for `version > 32` the knot type and form),
+    /// its control points (`x y`, `x y z`, `wx wy w` or `wx wy wz w`: Euclidean for a
+    /// non-rational NURB, weighted for a rational one) and its knots.
+    ///
+    /// # Errors
+    ///
+    /// `SM_ERR` without NURB (`GetOrCreateGwNurbPointer` cannot make one for a
+    /// B-spline; the analytic kinds always hold theirs).
+    pub fn write_to_db(&self, db: &mut DatabaseWriter, version: u64) -> Result<()> {
+        let cur = self.nurb_ref()?;
+        let n = cur.n() as i64;
+        let p = cur.degree() as i16;
+        let knot_type = self.knot_type as u64;
+        let form = self.form as u64;
+
+        // set type flag for different types of output
+        let rat: i16 = i16::from(cur.is_rational());
+        let dim: i16 = if cur.is_3d() { 3 } else { 2 };
+
+        // output header, n, p, rat, and dim
+        let ascii = db.file_type() == FileType::Ascii;
+        if ascii {
+            db.out_i64(n).out_str(" Number of Control Points \n");
+            db.out_i64(p.into()).out_str(" Degree \n");
+            db.out_i64(rat.into()).out_str(" RationalFlag \n");
+            db.out_i64(dim.into()).out_str(" Dimension \n");
+            if version > 32 {
+                db.out_u64(knot_type);
+                db.out_str(
+                    " Knot Type Enum: 1=2d NonRational, 2=3d NonRational, 3=2d Rational, \
+                     4=3d Rational\n",
+                );
+                db.out_u64(form).out_str(" BSplineCurveForm Enum\n");
+            }
+        } else {
+            db.write_long(n);
+            db.write_short(p);
+            db.write_short(rat);
+            db.write_short(dim);
+            if version > 32 {
+                db.write_long(knot_type as i64);
+                db.write_long(form as i64);
+            }
+        }
+
+        // for every control point, by curve type
+        for pw in cur.cpts() {
+            let [x, y, z] = cpt_to_xyz(*pw);
+            let values = match (rat == 1, dim == 3) {
+                // 2-D non-rational
+                (false, false) => [x, y, 0.0, 0.0],
+                // 3-D non-rational
+                (false, true) => [x, y, z, 0.0],
+                // 2-D rational
+                (true, false) => [pw.x, pw.y, pw.w, 0.0],
+                // 3-D rational
+                (true, true) => [pw.x, pw.y, pw.z, pw.w],
+            };
+            let count = 2 + usize::from(dim == 3) + usize::from(rat == 1);
+            db.reals(values.get(..count).unwrap_or_default());
+        }
+
+        // for every knot
+        for &u in cur.knots() {
+            db.reals(&[u]);
+        }
+        Ok(())
+    }
+}
+
+/// `N_CPtToXYZ`: the Euclidean coordinates of a control point (`z` of a 2D point is
+/// `0`; a weighted point is divided by its weight).
+fn cpt_to_xyz(pw: CPoint) -> [f64; 3] {
+    let mut x = pw.x;
+    let mut y = pw.y;
+    let mut z = if pw.z == NOZ { 0.0 } else { pw.z };
+    if pw.w != NOW {
+        let w = pw.w;
+        x /= w;
+        y /= w;
+        z /= w;
+    }
+    [x, y, z]
 }
 
 #[cfg(test)]
@@ -1952,6 +2064,14 @@ mod tests {
         assert_eq!(c.number_of_unique_knots().unwrap(), 3);
         assert!(!c.is_piecewise_c0().unwrap());
         assert!(!c.is_intersector_approx().unwrap());
+    }
+
+    #[test]
+    fn piecewise_c0_rejects_unrepresentable_endpoint_multiplicity() {
+        let nurb =
+            Curve::new(vec![CPoint::new(0.0, 0.0, 0.0, NOW)], usize::MAX, vec![0.0]).unwrap();
+        let c = BSplineCurve::from_nurb(nurb, 3, false);
+        assert_eq!(c.is_piecewise_c0(), Ok(false));
     }
 
     #[test]

@@ -9,7 +9,7 @@
 //! | [`MergeOptions::default`]    | `SmMergeOptions()` (all default arguments)       |
 //! | `Clone`                      | `SmMergeOptions(const SmMergeOptions&)`          |
 //! | [`MergeState`] | `SmMerge(context)`, `SetMergeOptions`, setters, `GetTopologyIntersector` |
-//! | [`fix_found_face_coincidence`] | `SmMerge::FixFoundFaceCoincidence` |
+//! | [`check_face_coincidence`], [`finish_face_coincidence`] | `SmMerge::FixFoundFaceCoincidence` (the checks before and after `MergeCoincidentSurfaces`, which the caller runs between them) |
 //! | [`find_brep_region_of_other_face`] | `sm_FindBrepRegionOfOtherFace` |
 //! | [`edge_borders_solid`] | `sm_EdgeBordersSolid` |
 //! | [`merge_vertex`] | `SmMerge::MergeVertex` |
@@ -32,8 +32,17 @@
 //! bounding boxes before any mutation; no translation is faked. Destruction is
 //! Rust ownership; the temporary-transform token is restored explicitly after the
 //! caller's complete scope, including error exits. There is no input-dependent recursion.
+//! `BooleanPostProcess`'s `DeleteTopologicalVertex` runs without the caller's
+//! notification identities, so the survivor edge's joined curve comes back owned under
+//! a kernel-issued identity of that edge; the owner identity the curve of each
+//! surviving edge had before the call is put back (upstream the owner is the same
+//! `SmEdge*`), so the caller's identity-keyed walks (the temporary transform's inverse
+//! `Transform`) still find the curve.
+//! Opt-in `Kernel::fixes.boolean_cleanup_removes_slits` (WR-304, #1120): after each
+//! edge removal `boolean_post_process` also checks the merged face's edges that have
+//! it on both sides (slits), skipping any a later removal deleted.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::boolean::topology_intersector::p1::Relations;
 use crate::error::{EntityRef, Result, SolidError};
@@ -150,10 +159,6 @@ impl<T> MergeState<T> {
     }
 }
 
-fn unavailable<T>(symbol: &'static str, unit: &'static str) -> Result<T> {
-    Err(SolidError::unported(symbol, unit))
-}
-
 fn ignore_failure<T>(r: Result<T>) -> Result<Option<T>> {
     match r {
         Ok(v) => Ok(Some(v)),
@@ -162,18 +167,43 @@ fn ignore_failure<T>(r: Result<T>) -> Result<Option<T>> {
     }
 }
 
-/// Return matched coincident face lists and whether topology was modified.
-/// The fast path tests existence of mates, as upstream; it deliberately does not
-/// require the mates to belong to the supplied opposite face's boundary.
-/// A mismatch reaches the unported coincident-surface merger.
-pub fn fix_found_face_coincidence(
-    brep: &mut Brep,
-    other: &mut Brep,
+/// What `SmMerge::FixFoundFaceCoincidence` does before it merges coincident surfaces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FaceCoincidenceCheck {
+    /// Every edge around both faces has a mate: the faces are taken as coincident
+    /// and `FixFoundFaceCoincidence` returns them without merging anything.
+    Matched,
+    /// A mismatch: the caller merges the coincident surfaces
+    /// (`SmTopologyIntersector::MergeCoincidentSurfaces`, unit
+    /// `boolean.topology_intersector_p3`) and finishes with
+    /// [`finish_face_coincidence`], passing these edge counts of the B-reps (the
+    /// primary's, then the other's) from before the merge.
+    NeedsMerge {
+        /// `pBrep->GetEdges` and `pOther->GetEdges` sizes before the merge.
+        edge_counts: (usize, usize),
+    },
+}
+
+/// The first half of `SmMerge::FixFoundFaceCoincidence`: whether all edges around
+/// `face` and `other_face` are mated (`other_mates`: the primary's edges to their
+/// other mates, `brep_mates`: the reverse). The test is the existence of mates, as
+/// upstream; it deliberately does not require the mates to belong to the supplied
+/// opposite face's boundary.
+///
+/// The split exists because the merge between the halves edits the mate store
+/// the maps belong to; [`FaceCoincidenceCheck::NeedsMerge`] hands that step back.
+///
+/// # Errors
+///
+/// Those of the face and B-rep edge walks.
+pub fn check_face_coincidence(
+    brep: &Brep,
+    other: &Brep,
     face: FaceId,
     other_face: FaceId,
     other_mates: &BTreeMap<EdgeId, EdgeId>,
     brep_mates: &BTreeMap<EdgeId, EdgeId>,
-) -> Result<(Vec<FaceId>, Vec<FaceId>, bool)> {
+) -> Result<FaceCoincidenceCheck> {
     let edges = face_edges(brep, face)?;
     let other_edges = face_edges(other, other_face)?;
     if edges.len() == other_edges.len()
@@ -182,25 +212,27 @@ pub fn fix_found_face_coincidence(
             .zip(&other_edges)
             .all(|(a, b)| other_mates.contains_key(a) && brep_mates.contains_key(b))
     {
-        return Ok((vec![face], vec![other_face], false));
+        return Ok(FaceCoincidenceCheck::Matched);
     }
-    let counts = (brep_edges(brep)?.len(), brep_edges(other)?.len());
-    let (faces, other_faces) = merge_coincident_surfaces(brep, other, face, other_face)?;
-    let changed = brep_edges(brep)?.len() != counts.0 || brep_edges(other)?.len() != counts.1;
-    Ok((faces, other_faces, changed))
+    Ok(FaceCoincidenceCheck::NeedsMerge {
+        edge_counts: (brep_edges(brep)?.len(), brep_edges(other)?.len()),
+    })
 }
 
-fn merge_coincident_surfaces(
-    _brep: &mut Brep,
-    _other: &mut Brep,
-    _face: FaceId,
-    _other_face: FaceId,
-) -> Result<(Vec<FaceId>, Vec<FaceId>)> {
-    // UNPORTED(boolean.topology_intersector_p3): SmTopologyIntersector::MergeCoincidentSurfaces
-    unavailable(
-        "SmTopologyIntersector::MergeCoincidentSurfaces",
-        "boolean.topology_intersector_p3",
-    )
+/// The second half of `SmMerge::FixFoundFaceCoincidence`, after
+/// `MergeCoincidentSurfaces` returned `faces` / `other_faces`: whether either B-rep's
+/// edge count differs from `edge_counts` ([`FaceCoincidenceCheck::NeedsMerge`]), that
+/// is `rbModifiedTopology`.
+///
+/// # Errors
+///
+/// Those of the B-rep edge walks.
+pub fn finish_face_coincidence(
+    brep: &Brep,
+    other: &Brep,
+    edge_counts: (usize, usize),
+) -> Result<bool> {
+    Ok(brep_edges(brep)?.len() != edge_counts.0 || brep_edges(other)?.len() != edge_counts.1)
 }
 
 /// Classify an other-operand face use into a primary region. A single primary
@@ -266,7 +298,7 @@ pub fn find_brep_region_of_other_face(
         // (the classification's construction tolerance, the edge's, is not read)
         let Some(pc) = ignore_failure(classify_point_editing_disabled(
             k,
-            &BrepQuery::default(),
+            &BrepQuery::of_brep(brep),
             brep,
             point,
             0.0,
@@ -445,14 +477,30 @@ pub fn boolean_post_process(
     relations: &CleanupRelations,
     check_all_edges: bool,
 ) -> Result<()> {
-    let edges: Vec<_> = if check_all_edges {
+    let mut edges: Vec<_> = if check_all_edges {
         brep_edges(brep)?
     } else {
         relations.edges.clone()
     };
     let mut endpoints = Vec::new();
-    for e in edges {
-        if !check_all_edges && relations.mates.edges.other(e).is_none() {
+    // WR-304: the edges checked so far, and those the merging below left with one face
+    // on both sides (checked too, though they are no intersection edges).
+    let slits = k.fixes.boolean_cleanup_removes_slits;
+    let mut queued: BTreeSet<EdgeId> = if slits {
+        edges.iter().copied().collect()
+    } else {
+        BTreeSet::new()
+    };
+    let mut left_inside_face: BTreeSet<EdgeId> = BTreeSet::new();
+    let mut next = 0;
+    while let Some(&e) = edges.get(next) {
+        next += 1;
+        if left_inside_face.contains(&e) {
+            // A later removal may have deleted it
+            if !brep.edge_list().contains(&e) {
+                continue;
+            }
+        } else if !check_all_edges && relations.mates.edges.other(e).is_none() {
             continue;
         }
         let topological = edge::is_topological(k, brep, e, 10.0)?;
@@ -496,10 +544,29 @@ pub fn boolean_post_process(
         }
         // SER(DeleteEdge(pEdge, pSurfToKeep)); the cleanup holds no notification state
         p4::with_local_env(|env| p4::delete_edge(k, brep, env, e, Some(keep)))?;
+        // `pSurfToKeep->GetFace()`: when the face holding the kept surface is the one
+        // merged away, DeleteEdge swaps that surface onto the surviving face first
+        let keep = if brep.face(keep).is_ok() {
+            keep
+        } else if keep == f0 {
+            f1
+        } else {
+            f0
+        };
         // The native output starts as a default SmExtent2d and is written back
         // unconditionally, even if IsTopological left it untouched.
         let domain = topological.merged_face_domain.unwrap_or_default();
         crate::topology::face::p2::set_uv_domain(brep, keep, &domain)?;
+        if slits {
+            // WR-304: an operand edge between two faces that are now one bounds the
+            // merged face on both sides (a slit); check it by the same test.
+            for face_edge in face_edges(brep, keep)? {
+                if edge::faces(brep, face_edge, None)?.len() == 1 && queued.insert(face_edge) {
+                    edges.push(face_edge);
+                    left_inside_face.insert(face_edge);
+                }
+            }
+        }
     }
     let mut vertices = relations.vertices.clone();
     for v in endpoints {
@@ -522,6 +589,19 @@ pub fn boolean_post_process(
         }
         if vertex::is_topological_vertex(k, brep, v)? {
             let editing = brep.editing_enabled();
+            // The owners of the two edges' curves: the survivor's joined curve is owned
+            // by the same edge (`SetCurve`), under the caller's identity of that edge.
+            let mut owners = Vec::new();
+            for e in vertex::edges(brep, v, None)? {
+                owners.push((
+                    e,
+                    brep.edge(e)?
+                        .curve
+                        .as_ref()
+                        .and_then(crate::curve::curve::p2::Curve::owner),
+                    brep.geometry_owner_key(EntityRef::Edge(e)),
+                ));
+            }
             ignore_failure(crate::topology::brep::p5::delete_topological_vertex(
                 k,
                 brep,
@@ -529,6 +609,21 @@ pub fn boolean_post_process(
                 Some(v),
                 None,
             ))?;
+            for (e, owner, proven) in owners {
+                if !brep.edge_list().contains(&e) {
+                    continue;
+                }
+                let restored = brep.edge_mut(e)?.curve.as_mut().is_some_and(|curve| {
+                    let changed = curve.owner() != owner;
+                    if changed {
+                        curve.set_owner(owner, None);
+                    }
+                    changed
+                });
+                if restored {
+                    brep.set_geometry_owner_key(EntityRef::Edge(e), proven);
+                }
+            }
         }
     }
     // Combine a wire shell with a faceuse shell when the B-rep has just those two

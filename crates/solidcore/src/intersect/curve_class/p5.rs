@@ -5,7 +5,7 @@
 //! | Rust | Upstream |
 //! |------|----------|
 //! | [`insert_solutions`], [`insert_solutions_mut`] | `sm_InsertSolutions` (static) |
-//! | [`CurveClassification::extract_geometry`] | `SmCurveClassification::ExtractGeometry` |
+//! | [`CurveClassification::extract_geometry`], [`CurveClassification::extract_geometry_mut`] | `SmCurveClassification::ExtractGeometry` |
 //! | [`CurveClassification::fixup_classification`] | `SmCurveClassification::FixupClassification` |
 //! | [`CurveClassification::insert_topology_intersections`] | `SmCurveClassification::InsertTopologyIntersections` |
 //! | [`CurveClassification::intersect_vertices`], [`CurveClassification::intersect_vertices_mut`] | `SmCurveClassification::IntersectVertices` |
@@ -50,7 +50,10 @@
 //! The differential runner's face zone tolerance of zero is not compared against C++.
 
 use super::p1::{out_of_bounds, set_xsect_curve_through_point};
-use super::p2::refine_cci_to_surfaces_in;
+use super::p2::{refine_cci_to_surfaces_in, refine_cci_to_surfaces_mut, RefineCci};
+use super::p6::{
+    FilletPeer, Imprint, MergeIntervalBrep, Mutable as MutableImprint, ReadOnly as ReadOnlyImprint,
+};
 use super::{
     make_consistent_classifications, src_zone_tol_3d_of, CurveClassification, CurveInterval,
 };
@@ -88,10 +91,33 @@ pub trait ClassGeometryMut<O>: ClassGeometry<O> {
     /// [`ClassGeometry::topology_entity`]); `None` for a handle the adapter cannot
     /// resolve (an invalid-input error for the caller).
     fn topology_entity_mut(&mut self, o: O) -> Option<(&mut Brep, EntityRef)>;
+    /// `sm_SetDoFilletingGeometry` replaces an edge's curve at its native setter
+    /// position. The default preserves the older direct arena assignment;
+    /// retained adapters override it to perform `SetCurve` invalidation and notify.
+    ///
+    /// # Errors
+    /// Missing mutable edge context or the retained setter's original error.
+    fn set_filleting_edge_curve(&mut self, edge: O, curve: Curve) -> Result<()> {
+        match self.topology_entity_mut(edge) {
+            Some((b, EntityRef::Edge(e))) => {
+                b.edge_mut(e)?.curve = Some(curve);
+                Ok(())
+            }
+            // UNPORTED(topology.edge): SmEdge::SetCurve
+            _ => Err(SolidError::unported("SmEdge::SetCurve", "topology.edge")),
+        }
+    }
+    /// [`ClassGeometryMut::topology_entity_mut`] for a query (a classification or a
+    /// point solve on a face) that only makes caches and UV trim curves on the B-rep,
+    /// as upstream's queries of a face make them without editing it. An adapter that
+    /// keeps caches of the B-rep's faces keeps them over such a lend.
+    fn topology_entity_for_query(&mut self, o: O) -> Option<(&mut Brep, EntityRef)> {
+        self.topology_entity_mut(o)
+    }
 }
 
 /// The edits of part 5 over either kind of adapter.
-trait Access<O> {
+trait Access<O: ClassObject> {
     type Geometry: ClassGeometry<O>;
     fn geometry(&self) -> &Self::Geometry;
     /// `pVtx->SetTolerance(tol)` (upstream defaults: only if larger).
@@ -100,43 +126,62 @@ trait Access<O> {
     fn curve_mut(&mut self, curve: O) -> Result<&mut Curve>;
     /// `pEdgeuse->SetUVTrimCurve(NULL, 0.0, TRUE)`.
     fn delete_uv_trim_curve(&mut self, edgeuse: O) -> Result<()>;
+    /// `sm_RefineCCIToSurfaces(pCurveClassification, rSol, pEdge, ..)` with a fresh
+    /// recursion counter and an undefined `vSSSPoint`: the read-only adapter defers its
+    /// large-gap edits, the mutable one makes them.
+    fn refine_cci_to_surfaces(
+        &mut self,
+        k: &Kernel,
+        classification: &mut CurveClassification<O>,
+        solution: &mut Solution<O>,
+        edge: O,
+    ) -> Result<RefineCci>;
 }
 
 /// A read-only adapter: every edit defers.
 struct ReadOnly<'g, G>(&'g G);
 
-impl<O, G: ClassGeometry<O>> Access<O> for ReadOnly<'_, G> {
+impl<O: ClassObject, G: ClassGeometry<O>> Access<O> for ReadOnly<'_, G> {
     type Geometry = G;
     fn geometry(&self) -> &G {
         self.0
     }
     fn set_vertex_tolerance(&mut self, _vertex: O, _tol: f64) -> Result<()> {
-        // UNPORTED(topology.brep_p1): SmBrep mutable owning context
+        // DISPATCH GAP: SmBrep mutable owning context (read-only adapter without a Brep)
         Err(SolidError::unported(
             "SmBrep mutable owning context (SmVertex::SetTolerance)",
             "topology.brep_p1",
         ))
     }
     fn curve_mut(&mut self, _curve: O) -> Result<&mut Curve> {
-        // UNPORTED(topology.brep_p1): SmBrep mutable owning context
+        // DISPATCH GAP: SmBrep mutable owning context (read-only adapter without a Brep)
         Err(SolidError::unported(
             "SmBrep mutable owning context (sm_SetXSectCurveThroughPoint)",
             "topology.brep_p1",
         ))
     }
     fn delete_uv_trim_curve(&mut self, _edgeuse: O) -> Result<()> {
-        // UNPORTED(topology.brep_p1): SmBrep mutable owning context
+        // DISPATCH GAP: SmBrep mutable owning context (read-only adapter without a Brep)
         Err(SolidError::unported(
             "SmBrep mutable owning context (SmEdgeuse::SetUVTrimCurve)",
             "topology.brep_p1",
         ))
+    }
+    fn refine_cci_to_surfaces(
+        &mut self,
+        k: &Kernel,
+        classification: &mut CurveClassification<O>,
+        solution: &mut Solution<O>,
+        edge: O,
+    ) -> Result<RefineCci> {
+        refine_cci_to_surfaces_in(k, self.0, classification, solution, edge, Point3::UNDEF, 0)
     }
 }
 
 /// A mutable adapter: the edits are made.
 struct Mutable<'g, G>(&'g mut G);
 
-impl<O, G: ClassGeometryMut<O>> Access<O> for Mutable<'_, G> {
+impl<O: ClassObject, G: ClassGeometryMut<O>> Access<O> for Mutable<'_, G> {
     type Geometry = G;
     fn geometry(&self) -> &G {
         self.0
@@ -162,6 +207,15 @@ impl<O, G: ClassGeometryMut<O>> Access<O> for Mutable<'_, G> {
             _ => Err(SolidError::invalid_input(OP, "unresolved mutable edge use")),
         }
     }
+    fn refine_cci_to_surfaces(
+        &mut self,
+        k: &Kernel,
+        classification: &mut CurveClassification<O>,
+        solution: &mut Solution<O>,
+        edge: O,
+    ) -> Result<RefineCci> {
+        refine_cci_to_surfaces_mut(k, self.0, classification, solution, edge, Point3::UNDEF, 0)
+    }
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -170,6 +224,12 @@ impl SolutionObject for NoObject {
     fn kind(&self) -> ObjectKind {
         ObjectKind::Curve
     }
+}
+
+#[derive(Clone, Copy)]
+enum PairLink {
+    Metadata,
+    Linked,
 }
 
 const OP: &str = "intersect::curve_class::p5";
@@ -413,6 +473,21 @@ impl<O: ClassObject> CurveClassification<O> {
         })
     }
 
+    fn p5_merge_interval_in(
+        classification: &mut Self,
+        a: &mut impl Imprint<O>,
+        index: usize,
+        vertices_only: bool,
+        peer: FilletPeer<'_, O>,
+    ) -> Result<MergedTopology<O>> {
+        let merged = classification.merge_interval_using_peer(a, index, vertices_only, peer)?;
+        Ok(MergedTopology {
+            faces: merged.new_faces,
+            edges: merged.new_edges,
+            vertices: merged.new_vertices,
+        })
+    }
+
     /// Extracts common geometry after homogenizing and cleaning both classifications.
     ///
     /// # Errors
@@ -424,8 +499,36 @@ impl<O: ClassObject> CurveClassification<O> {
         other: &mut Self,
         options: ExtractOptions,
     ) -> Result<ExtractedGeometry> {
-        let mut out = ExtractedGeometry::default();
         self.homogenize(k, geometry, other)?;
+        self.extract_homogenized(k, geometry, other, options)
+    }
+
+    /// [`CurveClassification::extract_geometry`] over topology the homogenization's
+    /// point drops may change ([`CurveClassification::homogenize_mut`]): a drop onto a
+    /// face makes and keeps the face's trimmed surface cache on its B-rep, as upstream.
+    ///
+    /// # Errors
+    /// Those of [`CurveClassification::extract_geometry`].
+    pub fn extract_geometry_mut(
+        &mut self,
+        k: &Kernel,
+        geometry: &mut impl ClassGeometryMut<O>,
+        other: &mut Self,
+        options: ExtractOptions,
+    ) -> Result<ExtractedGeometry> {
+        self.homogenize_mut(k, geometry, other)?;
+        self.extract_homogenized(k, &*geometry, other, options)
+    }
+
+    /// `ExtractGeometry` after its `Homogenize`.
+    fn extract_homogenized(
+        &mut self,
+        k: &Kernel,
+        geometry: &impl ClassGeometry<O>,
+        other: &mut Self,
+        options: ExtractOptions,
+    ) -> Result<ExtractedGeometry> {
+        let mut out = ExtractedGeometry::default();
         self.cleanup_and_validate(k, geometry, other)?;
         if self.size() != other.size() {
             return Err(SolidError::sm_err(OP));
@@ -1076,6 +1179,63 @@ impl<O: ClassObject> CurveClassification<O> {
         other: &mut Self,
         merge_singularities: bool,
     ) -> Result<(MergedTopology<O>, MergedTopology<O>)> {
+        self.merge_classifications_in(
+            &mut ReadOnlyImprint { k, g: geometry },
+            other,
+            merge_singularities,
+            PairLink::Metadata,
+        )
+    }
+
+    /// [`CurveClassification::merge_classifications`] editing the B-reps behind the
+    /// classifications' topology handles ([`CurveClassification::merge_interval_mut`],
+    /// [`CurveClassification::merge_point_class_mut`]).
+    ///
+    /// # Errors
+    /// Those of [`CurveClassification::merge_classifications`] and of the B-rep edits.
+    pub fn merge_classifications_mut(
+        &mut self,
+        k: &mut Kernel,
+        geometry: &mut impl MergeIntervalBrep<O>,
+        other: &mut Self,
+        merge_singularities: bool,
+    ) -> Result<(MergedTopology<O>, MergedTopology<O>)> {
+        self.merge_classifications_in(
+            &mut MutableImprint { k, g: geometry },
+            other,
+            merge_singularities,
+            PairLink::Metadata,
+        )
+    }
+
+    /// Merge an actual local pair whose native peer pointers are linked for this
+    /// call. No opaque handle is assigned; each peer is borrowed directly. Existing
+    /// metadata-based entrypoints retain their original absence semantics.
+    ///
+    /// # Errors
+    /// Those of [`Self::merge_classifications_mut`].
+    pub fn merge_classifications_linked_mut(
+        &mut self,
+        k: &mut Kernel,
+        geometry: &mut impl MergeIntervalBrep<O>,
+        other: &mut Self,
+        merge_singularities: bool,
+    ) -> Result<(MergedTopology<O>, MergedTopology<O>)> {
+        self.merge_classifications_in(
+            &mut MutableImprint { k, g: geometry },
+            other,
+            merge_singularities,
+            PairLink::Linked,
+        )
+    }
+
+    fn merge_classifications_in(
+        &mut self,
+        a: &mut impl Imprint<O>,
+        other: &mut Self,
+        merge_singularities: bool,
+        link: PairLink,
+    ) -> Result<(MergedTopology<O>, MergedTopology<O>)> {
         if self.size() != other.size() {
             return Err(SolidError::sm_err(OP));
         }
@@ -1083,18 +1243,36 @@ impl<O: ClassObject> CurveClassification<O> {
         let mut out_other = MergedTopology::default();
         let mut scratch = MergedTopology::default();
         let mut scratch_other = MergedTopology::default();
-        let closed = self.p5_closed(k, geometry)?;
+        let closed = self.p5_closed(a.kernel(), a.geometry())?;
         for i in 0..self.size() {
             if !contained_mid(self.at(i)?.mid.point_class())
                 || !contained_mid(other.at(i)?.mid.point_class())
             {
                 continue;
             }
-            scratch = Self::p5_merge_interval(self, k, geometry, i, false)?;
+            scratch = Self::p5_merge_interval_in(
+                self,
+                a,
+                i,
+                false,
+                match link {
+                    PairLink::Metadata => FilletPeer::Metadata(Some(other)),
+                    PairLink::Linked => FilletPeer::Linked(other),
+                },
+            )?;
             append_unique(&mut out.faces, scratch.faces.iter().copied());
             append_unique(&mut out.edges, scratch.edges.iter().copied());
             append_unique(&mut out.vertices, scratch.vertices.iter().copied());
-            scratch_other = Self::p5_merge_interval(other, k, geometry, i, false)?;
+            scratch_other = Self::p5_merge_interval_in(
+                other,
+                a,
+                i,
+                false,
+                match link {
+                    PairLink::Metadata => FilletPeer::Metadata(Some(self)),
+                    PairLink::Linked => FilletPeer::Linked(self),
+                },
+            )?;
             append_unique(&mut out_other.faces, scratch_other.faces.iter().copied());
             append_unique(&mut out_other.edges, scratch_other.edges.iter().copied());
             append_unique(
@@ -1112,9 +1290,8 @@ impl<O: ClassObject> CurveClassification<O> {
                 if contained_point(Self::p5_point_class_by_index(self, j)?.0.point_class())
                     && contained_point(Self::p5_point_class_by_index(other, j)?.0.point_class())
                 {
-                    self.merge_point_class(
-                        k,
-                        geometry,
+                    self.merge_point_class_in(
+                        a,
                         j,
                         Some(&mut scratch.edges),
                         Some(&mut scratch.vertices),
@@ -1123,9 +1300,8 @@ impl<O: ClassObject> CurveClassification<O> {
                     // Append copies the whole lists, retaining repeated prefixes.
                     out.edges.extend_from_slice(&scratch.edges);
                     out.vertices.extend_from_slice(&scratch.vertices);
-                    other.merge_point_class(
-                        k,
-                        geometry,
+                    other.merge_point_class_in(
+                        a,
                         j,
                         Some(&mut scratch_other.edges),
                         Some(&mut scratch_other.vertices),
@@ -1165,6 +1341,35 @@ impl<O: ClassObject> CurveClassification<O> {
     ) -> Result<MergedTopology<O>, PartialMergeError<O>> {
         self.merge_intervals_using(vertices_only, |c, j, v| {
             Self::p5_merge_interval(c, k, geometry, j, v)
+        })
+    }
+
+    /// [`CurveClassification::merge_intervals`] editing the B-reps behind the
+    /// classification's topology handles ([`CurveClassification::merge_interval_mut`]).
+    ///
+    /// # Errors
+    /// Those of [`CurveClassification::merge_intervals`] and of the B-rep edits.
+    pub fn merge_intervals_mut(
+        &mut self,
+        k: &mut Kernel,
+        geometry: &mut impl MergeIntervalBrep<O>,
+        vertices_only: bool,
+    ) -> Result<MergedTopology<O>> {
+        self.merge_intervals_mut_with_partial(k, geometry, vertices_only)
+            .map_err(|e| e.error)
+    }
+
+    /// [`CurveClassification::merge_intervals_mut`] with the completed-interval output
+    /// also on failure (upstream fills its output lists as the intervals merge).
+    pub(crate) fn merge_intervals_mut_with_partial(
+        &mut self,
+        k: &mut Kernel,
+        geometry: &mut impl MergeIntervalBrep<O>,
+        vertices_only: bool,
+    ) -> Result<MergedTopology<O>, PartialMergeError<O>> {
+        let mut a = MutableImprint { k, g: geometry };
+        self.merge_intervals_using(vertices_only, |c, j, v| {
+            Self::p5_merge_interval_in(c, &mut a, j, v, FilletPeer::Metadata(None))
         })
     }
 
@@ -1303,24 +1508,15 @@ fn insert_solutions_in<O: ClassObject>(
                     continue;
                 }
             }
+            // only try SSS for edge solutions: see if vertex should be placed at a
+            // surf/surf/surf intersection (which may edit the curves and the solution)
+            let refine = match edge {
+                Some(e) => Some(access.refine_cci_to_surfaces(k, classification, sol, e)?),
+                None => None,
+            };
             let geometry = access.geometry();
             let source = classification.curve_geometry(geometry)?;
             let target = target_curve(geometry, edge, object)?;
-
-            // only try SSS for edge solutions: see if vertex should be placed at a
-            // surf/surf/surf intersection
-            let refine = match edge {
-                Some(e) => Some(refine_cci_to_surfaces_in(
-                    k,
-                    geometry,
-                    classification,
-                    sol,
-                    e,
-                    Point3::UNDEF,
-                    0,
-                )?),
-                None => None,
-            };
             let sss_point_flag = refine.is_some_and(|r| r.sss_point_flag);
 
             let mut pc = PointClassification::new(source_zone);
