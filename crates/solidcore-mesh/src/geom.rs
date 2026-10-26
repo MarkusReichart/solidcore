@@ -155,19 +155,21 @@ pub(crate) fn foot(
     (uv, Some(best))
 }
 
-/// The UV of `target` by a coarse search over `domain` and a Newton polish.
+/// The UV of the surface point nearest `target`: the nearest of a sample grid over
+/// `grid`, polished by [`foot`] within `domain`.
 pub(crate) fn invert_point(
     k: &Kernel,
     s: &Surface,
     target: Point3,
+    grid: &Extent2d,
     domain: &Extent2d,
 ) -> Result<Point2> {
     let mut best: Option<(f64, Point2)> = None;
     for j in 0..=INVERT_GRID {
         for i in 0..=INVERT_GRID {
             let uv = Point2::new(
-                domain.u_min() + (domain.u_max() - domain.u_min()) * i as f64 / INVERT_GRID as f64,
-                domain.v_min() + (domain.v_max() - domain.v_min()) * j as f64 / INVERT_GRID as f64,
+                grid.u_min() + (grid.u_max() - grid.u_min()) * i as f64 / INVERT_GRID as f64,
+                grid.v_min() + (grid.v_max() - grid.v_min()) * j as f64 / INVERT_GRID as f64,
             );
             if let Ok(p) = s.evaluate_point(k, uv) {
                 let d = p.distance(target);

@@ -13,7 +13,7 @@ use solidcore::curve::curve::Curve;
 use solidcore::geom::extent1d::Extent1d;
 use solidcore::geom::extent2d::Extent2d;
 use solidcore::kernel::Kernel;
-use solidcore::math::{Point2, Point3, Vec3};
+use solidcore::math::{Point2, Point3, Vec3, INFINITE_PARAMETER};
 use solidcore::nurbs::b_spline_surface_n_lib::p2::OrientType;
 use solidcore::surface::surface::Surface;
 use solidcore::topology::edgeuse::p1 as eu1;
@@ -61,6 +61,15 @@ const MAX_POLE_SEGMENTS: u32 = 1024;
 pub const MAX_LOCAL_DEPTH: u8 = 48;
 /// Largest loop a face with no area in UV is ear-clipped from, in points.
 const MAX_EAR_LOOP: usize = 256;
+/// An interior point closer than this fraction of the face's scaled UV extent to a
+/// point already there is not inserted (spade's rounded geometry fails on such pairs).
+const NEAR_DUPLICATE: f64 = 1e-12;
+/// Two boundary segments crossing in UV are split at the crossing only when the sine of
+/// their angle is at least this: the rounded crossing point of a grazing pair can land
+/// on the wrong side of an edge and corrupt the triangulation, so such a face fails.
+const MIN_CROSSING_SINE: f64 = 1e-3;
+/// ... and when the crossing is at least this fraction of each segment from its ends.
+const CROSSING_MARGIN: f64 = 1e-6;
 
 /// One point of a face's boundary loop in UV.
 #[derive(Debug, Clone, Copy)]
@@ -74,6 +83,95 @@ struct LoopPoint {
 
 /// A boundary point as inserted: UV, position and mesh vertex.
 type BoundaryPoint = (Point2, Point3, u32);
+
+/// A face's loops and, for each, the direction it goes once around a period in, when
+/// it does ([`FaceState::face_loops`]).
+type FaceLoops = (Vec<Vec<LoopPoint>>, Vec<Option<bool>>);
+
+/// How a loop meets itself where it closes, or two edge uses meet: at one UV point, at
+/// a pole, or one period away on a closed surface.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Junction {
+    /// Within the tolerance in UV.
+    Same,
+    /// Far apart in UV, but the surface stays at the vertex between them.
+    Pole,
+    /// One whole number of periods away: the shift `(du, dv)` that closes the gap.
+    Period(f64, f64),
+}
+
+/// The plane a periodic face bounded by loops that each go once around the period (no
+/// seam edge) is triangulated in: the periodic coordinate `a` turns about the origin
+/// (one period one turn), the other coordinate `b` runs out along the radius. The face
+/// then is an annulus there, and no seam is needed.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Annulus {
+    /// The periodic coordinate is u (else v).
+    along_u: bool,
+    /// Its period.
+    period: f64,
+    /// The `a` at angle zero.
+    ref_a: f64,
+    /// The `b` at the inner radius.
+    ref_b: f64,
+    /// The span of `b` over the loops (the inner radius is at least this, scaled, so
+    /// the outer radius is at most twice the inner).
+    span_b: f64,
+}
+
+impl Annulus {
+    /// `(a, b)` of `uv` and their scale factors.
+    fn split(&self, uv: Point2, scale: (f64, f64)) -> (f64, f64, f64, f64) {
+        if self.along_u {
+            (uv.x, uv.y, scale.0, scale.1)
+        } else {
+            (uv.y, uv.x, scale.1, scale.0)
+        }
+    }
+
+    /// The inner radius: one period around at the speed of `a`, at least the scaled span
+    /// of `b`.
+    fn inner(&self, sa: f64, sb: f64) -> f64 {
+        (sa * self.period / core::f64::consts::TAU).max(self.span_b * sb)
+    }
+
+    /// The turn of one unit of `a`: clockwise for u, counter-clockwise for v, so the
+    /// map keeps the orientation of (u, v).
+    fn turn(&self) -> f64 {
+        let t = core::f64::consts::TAU / self.period;
+        if self.along_u {
+            -t
+        } else {
+            t
+        }
+    }
+
+    /// The plane point of `uv` with the triangulation's `scale`.
+    fn to_plane(&self, uv: Point2, scale: (f64, f64)) -> (f64, f64) {
+        let (a, b, sa, sb) = self.split(uv, scale);
+        let r = self.inner(sa, sb) + (b - self.ref_b) * sb;
+        let th = (a - self.ref_a) * self.turn();
+        (r * th.cos(), r * th.sin())
+    }
+
+    /// The UV of plane point `(x, y)` (its `a` within half a period of
+    /// [`Annulus::ref_a`]).
+    fn from_plane(&self, x: f64, y: f64, scale: (f64, f64)) -> Point2 {
+        let (sa, sb) = if self.along_u {
+            (scale.0, scale.1)
+        } else {
+            (scale.1, scale.0)
+        };
+        let r = (x * x + y * y).sqrt();
+        let a = self.ref_a + y.atan2(x) / self.turn();
+        let b = self.ref_b + (r - self.inner(sa, sb)) / sb;
+        if self.along_u {
+            Point2::new(a, b)
+        } else {
+            Point2::new(b, a)
+        }
+    }
+}
 
 /// A vertex of a face's triangulation.
 #[derive(Debug, Clone, Copy)]
@@ -114,7 +212,11 @@ impl HasPosition for CdtVertex {
 }
 
 /// The triangulation, located through a hierarchy (logarithmic point location,
-/// deterministic: a vertex's levels follow from its index).
+/// deterministic: a vertex's levels follow from its index). Spade's
+/// `add_constraint_and_split` appends its split vertices without telling the hierarchy
+/// and its `remove` then corrupts it: vertices are never removed here (a new
+/// triangulation is made instead), and after a split the hierarchy is not used
+/// ([`FaceState::stale_hints`]) until the triangulation is made again.
 type Cdt =
     ConstrainedDelaunayTriangulation<CdtVertex, (), (), (), spade::HierarchyHintGenerator<f64>>;
 
@@ -219,6 +321,18 @@ pub(crate) struct FaceState {
     bbox: Extent2d,
     /// A backend took the face and failed; the triangulation meshed it instead.
     backend_failed: bool,
+    /// The face's loops each go once around a period with no seam edge: it is
+    /// triangulated in that annulus.
+    annulus: Option<Annulus>,
+    /// A split constraint added vertices the triangulation's hierarchy does not know:
+    /// points are located and inserted from [`FaceState::last_vertex`] instead until
+    /// the triangulation is made again.
+    stale_hints: bool,
+    /// The vertex last inserted (the hint while the hierarchy is stale).
+    last_vertex: Option<FixedVertexHandle>,
+    /// The face's UV domain is unbounded (an infinite surface's parameter range): the
+    /// triangulation's origin and scale are taken from the loops on the first level.
+    rescale: bool,
 }
 
 /// The outward side of face `f`: `+1` when it is the surface normal's side. A solid's
@@ -256,6 +370,31 @@ pub(crate) fn outward_sense(b: &Brep, f: FaceId) -> Result<f64> {
     sign(up)
 }
 
+/// The periods of surface `s` over its natural domain `natural`: in u (v) when the
+/// surface closes across `probe` in that direction ([`closes`] at `1e-9` of the model
+/// size), its natural width.
+fn periods(
+    k: &Kernel,
+    s: &Surface,
+    natural: &Extent2d,
+    probe: &Extent2d,
+    model_size: f64,
+) -> (Option<f64>, Option<f64>) {
+    let tol = 1e-9 * model_size.max(1e-300);
+    (
+        closes(k, s, probe, true, tol).then(|| natural.u_max() - natural.u_min()),
+        closes(k, s, probe, false, tol).then(|| natural.v_max() - natural.v_min()),
+    )
+}
+
+/// Whether a bound of `d` is at the unbounded-parameter sentinel (or beyond, or not a
+/// number).
+fn unbounded(d: &Extent2d) -> bool {
+    [d.u_min(), d.u_max(), d.v_min(), d.v_max()]
+        .iter()
+        .any(|x| x.is_nan() || x.abs() >= INFINITE_PARAMETER)
+}
+
 fn surface_of(b: &Brep, f: FaceId) -> Result<&Surface> {
     b.face(f)?
         .surface
@@ -277,12 +416,29 @@ impl FaceState {
         if !(domain.u_min() < domain.u_max() && domain.v_min() < domain.v_max()) {
             domain = natural;
         }
-        let scale = surface_scales(k, surface, &domain);
-        let tol = 1e-9 * model_size.max(1e-300);
-        let period = (
-            closes(k, surface, &natural, true, tol).then(|| natural.u_max() - natural.u_min()),
-            closes(k, surface, &natural, false, tol).then(|| natural.v_max() - natural.v_min()),
+        // an unbounded domain (an infinite cone or cylinder) says nothing about the
+        // face's size: sampled far out it would set the scale from points thousands of
+        // times farther than the face
+        let rescale = unbounded(&domain) || unbounded(&natural);
+        // (until then: the scale near the parameter origin in an unbounded direction)
+        let bound = |x: f64, near: f64| if x.abs() < INFINITE_PARAMETER { x } else { near };
+        let sampled = Extent2d::from_bounds(
+            bound(domain.u_min(), -1.0),
+            bound(domain.v_min(), -1.0),
+            bound(domain.u_max(), 1.0),
+            bound(domain.v_max(), 1.0),
         );
+        let scale = surface_scales(k, surface, &sampled);
+        // across the natural domain where it is bounded, near the parameter origin where
+        // not (its far ends say nothing; the loops' box refines it, see
+        // FaceState::rescale_to)
+        let probe = Extent2d::from_bounds(
+            bound(natural.u_min(), -1.0),
+            bound(natural.v_min(), -1.0),
+            bound(natural.u_max(), 1.0),
+            bound(natural.v_max(), 1.0),
+        );
+        let period = periods(k, surface, &natural, &probe, model_size);
         Ok(Self {
             face: f,
             origin: domain.mid(),
@@ -314,10 +470,18 @@ impl FaceState {
             backend: None,
             backend_failed: false,
             bbox: Extent2d::new(),
+            annulus: None,
+            stale_hints: false,
+            last_vertex: None,
+            rescale,
         })
     }
 
     fn scaled(&self, uv: Point2) -> spade::Point2<f64> {
+        if let Some(an) = &self.annulus {
+            let (x, y) = an.to_plane(uv, self.scale);
+            return spade::mitigate_underflow(spade::Point2::new(x, y));
+        }
         spade::mitigate_underflow(spade::Point2::new(
             (uv.x - self.origin.x) * self.scale.0,
             (uv.y - self.origin.y) * self.scale.1,
@@ -325,10 +489,24 @@ impl FaceState {
     }
 
     fn unscaled(&self, p: spade::Point2<f64>) -> Point2 {
+        if let Some(an) = &self.annulus {
+            return an.from_plane(p.x, p.y, self.scale);
+        }
         Point2::new(
             self.origin.x + p.x / self.scale.0,
             self.origin.y + p.y / self.scale.1,
         )
+    }
+
+    /// The UV at barycentric weights `w` of the UVs `uv`, blended in the plane of the
+    /// triangulation (on an annulus a triangle may straddle the period, where blending
+    /// the UVs themselves would land on the far side).
+    fn plane_blend(&self, uv: [Point2; 3], w: [f64; 3]) -> Point2 {
+        let [p, q, r] = uv.map(|x| self.scaled(x));
+        self.unscaled(spade::Point2::new(
+            p.x * w[0] + q.x * w[1] + r.x * w[2],
+            p.y * w[0] + q.y * w[1] + r.y * w[2],
+        ))
     }
 
     /// The surface point at `uv` (from the B-spline directly when checked).
@@ -394,28 +572,80 @@ impl FaceState {
     fn insert(&mut self, v: FaceVertex) -> Result<FixedVertexHandle> {
         let id = self.vertices.len();
         self.vertices.push(v);
-        self.insert_existing(id)
+        self.insert_existing(id)?
+            .ok_or_else(|| invalid("two points at one UV position"))
     }
 
-    /// Puts vertex `id` of the table into the triangulation.
-    fn insert_existing(&mut self, id: usize) -> Result<FixedVertexHandle> {
+    /// The triangulation's `locate` of a finite position (`NoTriangulation` for any
+    /// other: spade asserts on NaN), from [`FaceState::last_vertex`] while the hierarchy
+    /// is stale.
+    fn locate(&self, pos: spade::Point2<f64>) -> PositionInTriangulation {
+        if !(pos.x.is_finite() && pos.y.is_finite()) {
+            PositionInTriangulation::NoTriangulation
+        } else if self.stale_hints {
+            let hint = self
+                .last_vertex
+                .unwrap_or_else(|| FixedVertexHandle::from_index(0));
+            self.cdt.locate_with_hint(pos, hint)
+        } else {
+            self.cdt.locate(pos)
+        }
+    }
+
+    /// Whether `pos` is on, or within [`NEAR_DUPLICATE`] of the face's scaled UV extent
+    /// of, a vertex of the triangulation around it.
+    fn near_duplicate(&self, pos: spade::Point2<f64>) -> bool {
+        let b = self.bbox;
+        let extent = ((b.u_max() - b.u_min()) * self.scale.0)
+            .abs()
+            .max(((b.v_max() - b.v_min()) * self.scale.1).abs());
+        let gap = if extent.is_finite() {
+            NEAR_DUPLICATE * extent
+        } else {
+            0.0
+        };
+        let near: Vec<spade::Point2<f64>> = match self.locate(pos) {
+            PositionInTriangulation::OnVertex(_) => return true,
+            PositionInTriangulation::OnFace(f) => self.cdt.face(f).positions().to_vec(),
+            PositionInTriangulation::OnEdge(e) => self.cdt.directed_edge(e).positions().to_vec(),
+            _ => Vec::new(),
+        };
+        near.iter()
+            .any(|q| (q.x - pos.x).abs() <= gap && (q.y - pos.y).abs() <= gap)
+    }
+
+    /// Puts vertex `id` of the table into the triangulation; `None` (nothing inserted)
+    /// when a vertex is already there or all but there ([`FaceState::near_duplicate`]).
+    fn insert_existing(&mut self, id: usize) -> Result<Option<FixedVertexHandle>> {
         let uv = self
             .vertices
             .get(id)
             .ok_or_else(|| invalid("vertex out of range"))?
             .uv;
         let pos = self.scaled(uv);
-        let h = self
-            .cdt
-            .insert(CdtVertex { pos, id })
-            .map_err(|_| invalid("UV point cannot be triangulated"))?;
+        let vertex = CdtVertex { pos, id };
+        spade::validate_vertex(&vertex).map_err(|_| invalid("UV point cannot be triangulated"))?;
+        if self.near_duplicate(pos) {
+            return Ok(None);
+        }
+        let inserted = if self.stale_hints {
+            let hint = self
+                .last_vertex
+                .unwrap_or_else(|| FixedVertexHandle::from_index(0));
+            self.cdt.insert_with_hint(vertex, hint)
+        } else {
+            self.cdt.insert(vertex)
+        };
+        let h = inserted.map_err(|_| invalid("UV point cannot be triangulated"))?;
+        self.last_vertex = Some(h);
         if let Some(v) = self.vertices.get_mut(id) {
             v.alive = true;
         }
-        Ok(h)
+        Ok(Some(h))
     }
 
-    /// Inserts an interior point at `uv` with its surface point and normal.
+    /// Inserts an interior point at `uv` with its surface point and normal (`None`:
+    /// a point is already there, nothing inserted).
     fn insert_interior(
         &mut self,
         k: &Kernel,
@@ -423,21 +653,31 @@ impl FaceState {
         uv: Point2,
         xyz: Option<(Point3, Option<Vec3>)>,
         depth: u8,
-    ) -> Result<FixedVertexHandle> {
+    ) -> Result<Option<FixedVertexHandle>> {
+        if self.near_duplicate(self.scaled(uv)) {
+            return Ok(None);
+        }
         let (xyz, normal) = match xyz {
             Some(x) => x,
             None => (self.point(k, s, uv)?, self.outward(k, s, uv)),
         };
-        self.insert(FaceVertex {
+        let id = self.vertices.len();
+        self.vertices.push(FaceVertex {
             uv,
             xyz,
             vertex: None,
             normal,
             boundary: false,
-            alive: true,
+            alive: false,
             gap: 0.0,
             depth,
-        })
+        });
+        let h = self.insert_existing(id)?;
+        if h.is_none() {
+            // not in the triangulation: drop it from the table again
+            self.vertices.truncate(id);
+        }
+        Ok(h)
     }
 
     /// The handle of the boundary point at `uv` on mesh vertex `vertex`, inserting it
@@ -450,7 +690,7 @@ impl FaceState {
         xyz: Point3,
         vertex: u32,
     ) -> Result<FixedVertexHandle> {
-        if let PositionInTriangulation::OnVertex(h) = self.cdt.locate(self.scaled(uv)) {
+        if let PositionInTriangulation::OnVertex(h) = self.locate(self.scaled(uv)) {
             let v = self.vertex(h)?;
             return if v.vertex == Some(vertex) && v.boundary {
                 Ok(h)
@@ -488,6 +728,21 @@ impl FaceState {
         if !self.cdt.try_add_constraint(a, c).is_empty() || self.cdt.exists_constraint(a, c) {
             return Ok(());
         }
+        // the constraints in the way: each must cross cleanly, else spade's split at a
+        // rounded crossing point can corrupt the triangulation (and panic)
+        let (pa, pc) = (self.cdt.vertex(a).position(), self.cdt.vertex(c).position());
+        let mut crossings: Vec<[spade::Point2<f64>; 2]> = Vec::new();
+        for e in self.cdt.get_conflicting_edges_between_vertices(a, c) {
+            crossings.push(e.positions());
+        }
+        if crossings.is_empty() {
+            return Err(invalid("boundary constraint cannot be added"));
+        }
+        if !crossings.iter().all(|[p, q]| clean_crossing(pa, pc, *p, *q)) {
+            return Err(invalid(
+                "boundary crosses itself in UV at a grazing angle or near a point",
+            ));
+        }
         let edges = self.cdt.add_constraint_and_split(a, c, |pos| CdtVertex {
             pos,
             id: usize::MAX,
@@ -496,6 +751,7 @@ impl FaceState {
             return Err(invalid("boundary constraint cannot be added"));
         }
         self.split_boundary = true;
+        self.stale_hints = true;
         // the split points become boundary vertices on the surface
         for e in edges {
             let to = self.cdt.directed_edge(e).to().fix();
@@ -542,7 +798,14 @@ impl FaceState {
         self.depth_capped = false;
         self.backend_failed = false;
         self.requests.clear();
-        let loops = self.face_loops(k, b, s, edges, p)?;
+        let (mut loops, mut wraps) = self.face_loops(k, b, s, edges, p)?;
+        if self.rescale {
+            // an unbounded domain: the origin, scale and periods of the loops' own
+            // box, and the loops mapped again with them
+            if self.rescale_to(k, s, &loops) {
+                (loops, wraps) = self.face_loops(k, b, s, edges, p)?;
+            }
+        }
         if loops.is_empty() {
             return Err(invalid("face without boundary loops"));
         }
@@ -607,6 +870,12 @@ impl FaceState {
         let step =
             |lines: &[f64], lo: f64, hi: f64, sc: f64| (hi - lo) * sc / (lines.len() + 1) as f64;
         let has_pole = loops.iter().flatten().any(|q| q.pole_next);
+        // loops each once around a period (no seam edge): the face is an annulus
+        let annulus = self.annulus_of(&wraps, &bbox, has_pole)?;
+        let new_annulus = annulus.map(|a| a.along_u) != self.annulus.map(|a| a.along_u);
+        if new_annulus {
+            self.annulus = annulus;
+        }
         let mut metric = self.speed;
         if !has_pole {
             // the triangulation's metric: UV scaled so the grid cells the tolerances
@@ -645,7 +914,7 @@ impl FaceState {
         // the boundary, pole runs expanded
         let expanded = self.expand_poles(&loops, scaled_step);
 
-        if first || remetric || !self.update_boundary(k, s, &loops, &expanded)? {
+        if first || remetric || new_annulus || !self.update_boundary(k, s, &loops, &expanded)? {
             self.rebuild(k, s, &loops, &expanded)?;
         }
         self.boundary = expanded
@@ -654,7 +923,12 @@ impl FaceState {
             .collect();
         self.flip = self.uv_ccw_faces_inward(k, s, &bbox)?;
         if !first {
-            self.remove_stale_interior();
+            self.remove_stale_interior(k, s)?;
+        }
+        // split constraints left the hierarchy behind: a new triangulation of the same
+        // points and constraints (no crossings now) has a whole one
+        if self.stale_hints {
+            self.retriangulate(k, s, &BTreeSet::new())?;
         }
 
         // grid points, away from the boundary and the points already there; a finer
@@ -686,7 +960,7 @@ impl FaceState {
                     break;
                 }
                 let pos = self.scaled(uv);
-                let near = match self.cdt.locate(pos) {
+                let near = match self.locate(pos) {
                     PositionInTriangulation::OnFace(f) => self.cdt.face(f).vertices().to_vec(),
                     PositionInTriangulation::OnEdge(e)
                         if !self.cdt.is_constraint_edge(e.as_undirected()) =>
@@ -704,7 +978,9 @@ impl FaceState {
                 }) {
                     continue;
                 }
-                inserted.push(self.insert_interior(k, s, uv, None, depth)?);
+                if let Some(h) = self.insert_interior(k, s, uv, None, depth)? {
+                    inserted.push(h);
+                }
             }
             let added = inserted.len();
             changed = Some(inserted);
@@ -724,7 +1000,225 @@ impl FaceState {
         Ok(())
     }
 
-    /// The boundary loops of the face in UV, outer first, each closed implicitly.
+    /// The domains mapping edge uses into UV searches ([`MapContext`]): Newton feet
+    /// within the natural domain widened by a period on each side of a closed
+    /// direction, and a point with no seed first sampled over the natural domain with
+    /// an unbounded direction replaced by the loops' box (once known, else `[-1, 1]`).
+    fn map_domains(&self) -> (Extent2d, Extent2d) {
+        let n = self.domain;
+        let widen = |lo: f64, hi: f64, p: Option<f64>| match p {
+            Some(p) if p > 0.0 && p.is_finite() => (lo - p, hi + p),
+            _ => (lo, hi),
+        };
+        let (u0, u1) = widen(n.u_min(), n.u_max(), self.period.0);
+        let (v0, v1) = widen(n.v_min(), n.v_max(), self.period.1);
+        let search = Extent2d::from_bounds(u0, v0, u1, v1);
+        let bb = self.bbox;
+        let known = bb.u_min() < bb.u_max() && bb.v_min() < bb.v_max();
+        let pick = |x: f64, from_box: f64, fallback: f64| {
+            if x.abs() < INFINITE_PARAMETER {
+                x
+            } else if known {
+                from_box
+            } else {
+                fallback
+            }
+        };
+        let grid = Extent2d::from_bounds(
+            pick(n.u_min(), bb.u_min(), -1.0),
+            pick(n.v_min(), bb.v_min(), -1.0),
+            pick(n.u_max(), bb.u_max(), 1.0),
+            pick(n.v_max(), bb.v_max(), 1.0),
+        );
+        (search, grid)
+    }
+
+    /// On an unbounded domain ([`FaceState::rescale`]): takes the triangulation's origin
+    /// and scale from the box of `loops`, and the periods from the surface over it (the
+    /// natural domain's far ends say nothing about the face). `true` when it did (the
+    /// caller maps the loops again).
+    fn rescale_to(&mut self, k: &Kernel, s: &Surface, loops: &[Vec<LoopPoint>]) -> bool {
+        self.rescale = false;
+        let mut bb = Extent2d::new();
+        for q in loops.iter().flatten() {
+            bb.add_point(q.uv);
+        }
+        if !(bb.u_min() < bb.u_max() && bb.v_min() < bb.v_max()) {
+            return false;
+        }
+        self.origin = bb.mid();
+        self.speed = surface_scales(k, s, &bb);
+        self.scale = self.speed;
+        self.bbox = bb;
+        // the natural domain where bounded, the loops' box where not
+        let n = self.domain;
+        let pick = |x: f64, y: f64| if x.abs() < INFINITE_PARAMETER { x } else { y };
+        let probe = Extent2d::from_bounds(
+            pick(n.u_min(), bb.u_min()),
+            pick(n.v_min(), bb.v_min()),
+            pick(n.u_max(), bb.u_max()),
+            pick(n.v_max(), bb.v_max()),
+        );
+        self.period = periods(k, s, &n, &probe, self.size);
+        true
+    }
+
+    /// A text report of how the face's loops map into UV, for diagnosing a face that
+    /// does not mesh: the triangulation's origin, scale and periods, then per loop and
+    /// edge use the edge, its orientation, how it was mapped (UV trim curve or point
+    /// inversion), its first and last points and how it meets the previous edge use
+    /// ([`junction`]). Takes the scale of the loops' box on an unbounded domain, as the
+    /// first level does.
+    pub(crate) fn loop_report(
+        &mut self,
+        k: &Kernel,
+        b: &Brep,
+        edges: &EdgeSet,
+        p: &FaceParams,
+    ) -> Result<String> {
+        use core::fmt::Write as _;
+        let s = surface_of(b, self.face)?;
+        if self.rescale {
+            if let Ok((loops, _)) = self.face_loops(k, b, s, edges, p) {
+                self.rescale_to(k, s, &loops);
+            }
+            self.rescale = false;
+        }
+        let mut out = String::new();
+        let _ = writeln!(
+            out,
+            "face {} origin {:?} scale {:?} period {:?} natural {:?} chord {}",
+            self.face.index(),
+            self.origin,
+            self.scale,
+            self.period,
+            self.domain,
+            p.chord
+        );
+        let (search, grid) = self.map_domains();
+        let fu = b
+            .face(self.face)?
+            .faceuse
+            .ok_or_else(|| invalid("face without face use"))?;
+        let loopuses = eu1::faceuse_loopuses(b, fu, false, None)?;
+        for (li, lu) in loopuses.into_iter().enumerate() {
+            let _ = writeln!(out, " loop {li}");
+            let mut last: Option<LoopPoint> = None;
+            let mut first: Option<LoopPoint> = None;
+            for eu in eu1::loopuse_edgeuses(b, lu)? {
+                let e = eu1::edge(b, eu)?.ok_or_else(|| invalid("edge use without edge"))?;
+                let (ei, ui) = (e.index(), eu.index());
+                let Some(poly) = edges.polyline(e) else {
+                    let _ = writeln!(out, "  eu {ui} edge {ei}: no polyline");
+                    continue;
+                };
+                let ivl = b.edge(e)?.interval;
+                let trim = eu1::uv_trim_curve(b, eu)?.0;
+                let reverse = eu1::orientation(b, eu)? == OrientType::Opposite;
+                let ctx = MapContext {
+                    k,
+                    s,
+                    domain: &search,
+                    grid: &grid,
+                    edges,
+                    polish_above: POLISH_FRACTION * p.chord,
+                    period: self.period,
+                };
+                let seed = last.map(|q| q.uv);
+                let by_trim = trim.map(|c| ctx.edgeuse_points(poly, &ivl, Some(c), reverse, seed));
+                let (how, seq) = match by_trim {
+                    Some(Ok(seq)) => ("trim", Ok(seq)),
+                    Some(Err(_)) => (
+                        "trim failed, inverted",
+                        ctx.edgeuse_points(poly, &ivl, None, reverse, seed),
+                    ),
+                    None => ("inverted", ctx.edgeuse_points(poly, &ivl, None, reverse, seed)),
+                };
+                let seq = match seq {
+                    Ok(seq) => seq,
+                    Err(err) => {
+                        let _ = writeln!(out, "  eu {ui} edge {ei}: {how}: {err:?}");
+                        continue;
+                    }
+                };
+                let (Some(a), Some(z)) = (seq.first().copied(), seq.last().copied()) else {
+                    continue;
+                };
+                let meets = match last {
+                    Some(l) => format!(
+                        "{:?}",
+                        junction(k, s, p.chord, l, a, f64::INFINITY, self.scale, self.period)
+                    ),
+                    None => "start".to_string(),
+                };
+                let _ = writeln!(
+                    out,
+                    "  eu {ui} edge {ei} {} {how} n {} degenerate {} first v{} {:?} last v{} \
+                     {:?} meets {meets}",
+                    if reverse { "rev" } else { "fwd" },
+                    seq.len(),
+                    poly.degenerate,
+                    a.vertex,
+                    a.uv,
+                    z.vertex,
+                    z.uv
+                );
+                first = first.or(Some(a));
+                last = Some(z);
+            }
+            if let (Some(l), Some(f)) = (last, first) {
+                let _ = writeln!(
+                    out,
+                    "  closes {:?}",
+                    junction(k, s, p.chord, l, f, f64::INFINITY, self.scale, self.period)
+                );
+            }
+        }
+        Ok(out)
+    }
+
+    /// The annulus a face whose loops `wraps` go around a period is triangulated in:
+    /// `None` when no loop does; an error unless at least two do, all around the same
+    /// closed direction, with no pole.
+    fn annulus_of(
+        &self,
+        wraps: &[Option<bool>],
+        bbox: &Extent2d,
+        has_pole: bool,
+    ) -> Result<Option<Annulus>> {
+        let around: Vec<bool> = wraps.iter().flatten().copied().collect();
+        let Some(&along_u) = around.first() else {
+            return Ok(None);
+        };
+        let period = if along_u { self.period.0 } else { self.period.1 };
+        let fail = || invalid("loop does not close in UV (periodic face without seam edge)");
+        let Some(period) = period.filter(|p| *p > 0.0 && p.is_finite()) else {
+            return Err(fail());
+        };
+        if has_pole || around.len() < 2 || around.iter().any(|d| *d != along_u) {
+            return Err(fail());
+        }
+        // a later level keeps the map (its points stay where they were inserted)
+        if let Some(an) = self.annulus.filter(|a| a.along_u == along_u) {
+            return Ok(Some(an));
+        }
+        let (a_lo, a_hi, b_lo, b_hi) = if along_u {
+            (bbox.u_min(), bbox.u_max(), bbox.v_min(), bbox.v_max())
+        } else {
+            (bbox.v_min(), bbox.v_max(), bbox.u_min(), bbox.u_max())
+        };
+        Ok(Some(Annulus {
+            along_u,
+            period,
+            ref_a: (a_lo + a_hi) / 2.0,
+            ref_b: b_lo,
+            span_b: b_hi - b_lo,
+        }))
+    }
+
+    /// The boundary loops of the face in UV, outer first, each closed implicitly, and
+    /// for each whether it goes once around a period instead of closing (`Some(true)`
+    /// around u, `Some(false)` around v).
     fn face_loops(
         &mut self,
         k: &Kernel,
@@ -732,17 +1226,36 @@ impl FaceState {
         s: &Surface,
         edges: &EdgeSet,
         p: &FaceParams,
-    ) -> Result<Vec<Vec<LoopPoint>>> {
+    ) -> Result<FaceLoops> {
         let domain = self.domain;
+        let (search, grid) = self.map_domains();
         let scale = self.scale;
-        let span = ((domain.u_max() - domain.u_min()) * scale.0)
-            .max((domain.v_max() - domain.v_min()) * scale.1);
+        // the domain's size, a direction it is unbounded in left out (else the face's
+        // own box, else unbounded: no jump is too long)
+        let extent = |lo: f64, hi: f64, sc: f64| {
+            if lo.abs() >= INFINITE_PARAMETER || hi.abs() >= INFINITE_PARAMETER {
+                0.0
+            } else {
+                (hi - lo) * sc
+            }
+        };
+        let mut span = extent(domain.u_min(), domain.u_max(), scale.0)
+            .max(extent(domain.v_min(), domain.v_max(), scale.1));
+        if span.is_nan() || span <= 0.0 {
+            let bb = self.bbox;
+            span = ((bb.u_max() - bb.u_min()) * scale.0)
+                .max((bb.v_max() - bb.v_min()) * scale.1);
+        }
+        if span.is_nan() || span <= 0.0 {
+            span = f64::INFINITY;
+        }
         let polish_above = POLISH_FRACTION * p.chord;
         let fu = b
             .face(self.face)?
             .faceuse
             .ok_or_else(|| invalid("face without face use"))?;
         let mut loops = Vec::new();
+        let mut wraps = Vec::new();
         let mut inverted = Vec::new();
         for lu in eu1::faceuse_loopuses(b, fu, false, None)? {
             let mut pts: Vec<LoopPoint> = Vec::new();
@@ -770,7 +1283,8 @@ impl FaceState {
                 let ctx = MapContext {
                     k,
                     s,
-                    domain: &domain,
+                    domain: &search,
+                    grid: &grid,
                     edges,
                     polish_above,
                     period: self.period,
@@ -785,25 +1299,40 @@ impl FaceState {
                     inverted.push(eu);
                     ctx.edgeuse_points(poly, &ivl, None, reverse, seed)?
                 };
-                join(&mut pts, seq, k, s, p.chord, span, scale)?;
+                join(&mut pts, seq, k, s, p.chord, span, scale, self.period)?;
             }
-            // close the loop
+            // close the loop: at its start, at a pole, or a period on (a loop once
+            // around a closed surface with no seam edge)
+            let mut wrap = None;
             if pts.len() > 1 {
                 if let (Some(first), Some(last)) = (pts.first().copied(), pts.last().copied()) {
                     if first.vertex != last.vertex {
                         return Err(invalid("loop does not close"));
                     }
-                    if junction_is_pole(k, s, p.chord, last, first, span, scale)? {
-                        if let Some(l) = pts.last_mut() {
-                            l.pole_next = true;
+                    match junction(k, s, p.chord, last, first, span, scale, self.period)? {
+                        Junction::Pole => {
+                            if let Some(l) = pts.last_mut() {
+                                l.pole_next = true;
+                            }
                         }
-                    } else {
-                        pts.pop();
+                        Junction::Same => {
+                            pts.pop();
+                        }
+                        Junction::Period(du, dv) => {
+                            if (du != 0.0) == (dv != 0.0) {
+                                return Err(invalid(
+                                    "loop does not close in UV (periodic face without seam edge)",
+                                ));
+                            }
+                            pts.pop();
+                            wrap = Some(du != 0.0);
+                        }
                     }
                 }
             }
             if pts.len() >= 2 {
                 loops.push(pts);
+                wraps.push(wrap);
             }
         }
         for eu in inverted {
@@ -811,7 +1340,7 @@ impl FaceState {
                 self.inverted.push(eu);
             }
         }
-        Ok(loops)
+        Ok((loops, wraps))
     }
 
     /// The loops with every pole run sampled at about the grid spacing (a power of two
@@ -892,7 +1421,10 @@ impl FaceState {
         for lp in expanded {
             let mut ids: Vec<usize> = Vec::with_capacity(lp.len());
             for (uv, xyz, vertex) in lp {
-                let key = (uv.x.to_bits(), uv.y.to_bits());
+                // by position in the triangulation (on an annulus, UVs a period apart
+                // are one point)
+                let pos = self.scaled(*uv);
+                let key = (pos.x.to_bits(), pos.y.to_bits());
                 let i = if let Some(i) = index.get(&key) {
                     let id = points.get(*i).map_or(usize::MAX, |p| p.id);
                     if self.vertices.get(id).and_then(|v| v.vertex) != Some(*vertex) {
@@ -912,7 +1444,6 @@ impl FaceState {
                         gap: surface_gap(k, s, *uv, *xyz),
                         depth: 0,
                     });
-                    let pos = self.scaled(*uv);
                     spade::validate_vertex(&CdtVertex { pos, id })
                         .map_err(|_| invalid("UV point cannot be triangulated"))?;
                     index.insert(key, points.len());
@@ -935,20 +1466,7 @@ impl FaceState {
                 }
             }
         }
-        let ids: Vec<usize> = points.iter().map(|p| p.id).collect();
-        let mut conflicts = Vec::new();
-        self.cdt = Cdt::try_bulk_load_cdt(points, segments, |e| conflicts.push(e))
-            .map_err(|_| invalid("UV boundary cannot be triangulated"))?;
-        // a segment crossing another is added with splits
-        for [a, c] in conflicts {
-            let (Some(ia), Some(ic)) = (ids.get(a), ids.get(c)) else {
-                continue;
-            };
-            let (Some(ha), Some(hc)) = (self.handle_of(*ia), self.handle_of(*ic)) else {
-                continue;
-            };
-            self.constrain(k, s, ha, hc)?;
-        }
+        self.bulk_load(k, s, points, segments)?;
         if !old.is_empty() {
             // which points are inside, all decided on the boundary's triangulation (an
             // insertion makes faces the flood fill has not seen)
@@ -964,6 +1482,79 @@ impl FaceState {
             for id in keep {
                 self.insert_existing(id)?;
             }
+        }
+        Ok(())
+    }
+
+    /// A new triangulation of the boundary `points` and its `segments` (indices into
+    /// `points`); a segment crossing another is added with splits.
+    fn bulk_load(
+        &mut self,
+        k: &Kernel,
+        s: &Surface,
+        points: Vec<CdtVertex>,
+        segments: Vec<[usize; 2]>,
+    ) -> Result<()> {
+        let ids: Vec<usize> = points.iter().map(|p| p.id).collect();
+        let mut conflicts = Vec::new();
+        self.cdt = Cdt::try_bulk_load_cdt(points, segments, |e| conflicts.push(e))
+            .map_err(|_| invalid("UV boundary cannot be triangulated"))?;
+        self.stale_hints = false;
+        self.last_vertex = None;
+        for [a, c] in conflicts {
+            let (Some(ia), Some(ic)) = (ids.get(a), ids.get(c)) else {
+                continue;
+            };
+            let (Some(ha), Some(hc)) = (self.handle_of(*ia), self.handle_of(*ic)) else {
+                continue;
+            };
+            self.constrain(k, s, ha, hc)?;
+        }
+        Ok(())
+    }
+
+    /// A new triangulation of the points still in it but those in `drop`, with its
+    /// constraint edges: how points leave the triangulation (spade's vertex removal
+    /// is not used: it has corrupted the triangulation's hint and point location).
+    fn retriangulate(&mut self, k: &Kernel, s: &Surface, drop: &BTreeSet<usize>) -> Result<()> {
+        let mut index: BTreeMap<usize, usize> = BTreeMap::new();
+        let mut points: Vec<CdtVertex> = Vec::new();
+        let mut interior: Vec<usize> = Vec::new();
+        for v in self.cdt.vertices() {
+            let id = v.data().id;
+            if drop.contains(&id) {
+                continue;
+            }
+            if self.vertices.get(id).is_some_and(|x| x.boundary) {
+                index.insert(id, points.len());
+                points.push(*v.data());
+            } else {
+                interior.push(id);
+            }
+        }
+        let mut segments: Vec<[usize; 2]> = Vec::new();
+        for e in self.cdt.undirected_edges() {
+            if !self.cdt.is_constraint_edge(e.fix()) {
+                continue;
+            }
+            let [x, y] = e.vertices().map(|v| v.data().id);
+            if let (Some(i), Some(j)) = (index.get(&x), index.get(&y)) {
+                segments.push([*i, *j]);
+            }
+        }
+        for id in drop {
+            if let Some(v) = self.vertices.get_mut(*id) {
+                v.alive = false;
+            }
+        }
+        for id in &interior {
+            if let Some(v) = self.vertices.get_mut(*id) {
+                v.alive = false;
+            }
+        }
+        self.bulk_load(k, s, points, segments)?;
+        for id in interior {
+            self.insert_existing(id)?;
         }
         Ok(())
     }
@@ -1063,14 +1654,14 @@ impl FaceState {
     /// The handle of vertex `id` of the table, by its position.
     fn handle_of(&self, id: usize) -> Option<FixedVertexHandle> {
         let uv = self.vertices.get(id)?.uv;
-        match self.cdt.locate(self.scaled(uv)) {
+        match self.locate(self.scaled(uv)) {
             PositionInTriangulation::OnVertex(h) => Some(h),
             _ => None,
         }
     }
 
     fn find_boundary(&self, uv: Point2, vertex: u32) -> Result<Option<FixedVertexHandle>> {
-        match self.cdt.locate(self.scaled(uv)) {
+        match self.locate(self.scaled(uv)) {
             PositionInTriangulation::OnVertex(h) if self.vertex(h)?.vertex == Some(vertex) => {
                 Ok(Some(h))
             }
@@ -1080,9 +1671,9 @@ impl FaceState {
 
     /// Removes interior points the refined boundary leaves outside, or closer to it
     /// than a tenth of their shortest edge.
-    fn remove_stale_interior(&mut self) {
+    fn remove_stale_interior(&mut self, k: &Kernel, s: &Surface) -> Result<()> {
         let inside = inside_faces(&self.cdt);
-        let mut stale = Vec::new();
+        let mut stale = BTreeSet::new();
         for v in self.cdt.vertices() {
             let id = v.data().id;
             if self.vertices.get(id).is_none_or(|x| x.boundary) {
@@ -1103,18 +1694,13 @@ impl FaceState {
                 shortest = shortest.min(((q.x - pos.x).powi(2) + (q.y - pos.y).powi(2)).sqrt());
             }
             if out || near < CLEARANCE_FRACTION * shortest {
-                stale.push(pos);
+                stale.insert(id);
             }
         }
-        for pos in stale {
-            if let PositionInTriangulation::OnVertex(h) = self.cdt.locate(pos) {
-                let id = self.id(h);
-                self.cdt.remove(h);
-                if let Some(v) = self.vertices.get_mut(id) {
-                    v.alive = false;
-                }
-            }
+        if stale.is_empty() {
+            return Ok(());
         }
+        self.retriangulate(k, s, &stale)
     }
 
     /// Inserts the grid points inside the loops that are clear of the boundary (0.3 of
@@ -1159,7 +1745,7 @@ impl FaceState {
                     continue;
                 };
                 let pos = self.scaled(uv);
-                let PositionInTriangulation::OnFace(fh) = self.cdt.locate(pos) else {
+                let PositionInTriangulation::OnFace(fh) = self.locate(pos) else {
                     continue;
                 };
                 if !is_inside(&inside, fh) || constraint_clearance(&self.cdt, fh, pos) < clearance {
@@ -1230,7 +1816,7 @@ impl FaceState {
     /// least `need` (scaled UV) from the boundary edges near it.
     fn clear_of_boundary(&self, inside: &[bool], uv: Point2, need: f64) -> bool {
         let pos = self.scaled(uv);
-        let faces = match self.cdt.locate(pos) {
+        let faces = match self.locate(pos) {
             PositionInTriangulation::OnFace(f) => vec![f],
             PositionInTriangulation::OnEdge(e)
                 if !self.cdt.is_constraint_edge(e.as_undirected()) =>
@@ -1288,7 +1874,7 @@ impl FaceState {
     /// it is longer than `len` (scaled UV).
     fn blocking_segment(&self, inside: &[bool], uv: Point2, len: f64) -> Option<SegmentSplit> {
         let pos = self.scaled(uv);
-        let f = match self.cdt.locate(pos) {
+        let f = match self.locate(pos) {
             PositionInTriangulation::OnFace(f) => f,
             PositionInTriangulation::OnEdge(e) => {
                 let d = self.cdt.directed_edge(e);
@@ -1329,7 +1915,7 @@ impl FaceState {
         }
         // the face is on the edge's left: go right
         let pos = spade::Point2::new((p.x + q.x) / 2.0 + dy * 0.25, (p.y + q.y) / 2.0 - dx * 0.25);
-        let PositionInTriangulation::OnFace(f) = self.cdt.locate(pos) else {
+        let PositionInTriangulation::OnFace(f) = self.locate(pos) else {
             return None;
         };
         if !is_inside(inside, f) || constraint_clearance(&self.cdt, f, pos) < 0.05 * len {
@@ -1402,10 +1988,14 @@ impl FaceState {
             if same(a, b) || same(b, c) || same(c, a) {
                 continue;
             }
-            let uv = Point2::new(
-                (a.uv.x + b.uv.x + c.uv.x) / 3.0,
-                (a.uv.y + b.uv.y + c.uv.y) / 3.0,
-            );
+            let uv = if self.annulus.is_some() {
+                self.plane_blend([a.uv, b.uv, c.uv], [1.0 / 3.0; 3])
+            } else {
+                Point2::new(
+                    (a.uv.x + b.uv.x + c.uv.x) / 3.0,
+                    (a.uv.y + b.uv.y + c.uv.y) / 3.0,
+                )
+            };
             let mut n = (b.xyz - a.xyz).cross(c.xyz - a.xyz);
             if self.flip {
                 n = -n;
@@ -1426,10 +2016,14 @@ impl FaceState {
                     [1.0 / 6.0, 2.0 / 3.0, 1.0 / 6.0],
                     [1.0 / 6.0, 1.0 / 6.0, 2.0 / 3.0],
                 ] {
-                    let q = Point2::new(
-                        a.uv.x * w[0] + b.uv.x * w[1] + c.uv.x * w[2],
-                        a.uv.y * w[0] + b.uv.y * w[1] + c.uv.y * w[2],
-                    );
+                    let q = if self.annulus.is_some() {
+                        self.plane_blend([a.uv, b.uv, c.uv], w)
+                    } else {
+                        Point2::new(
+                            a.uv.x * w[0] + b.uv.x * w[1] + c.uv.x * w[2],
+                            a.uv.y * w[0] + b.uv.y * w[1] + c.uv.y * w[2],
+                        )
+                    };
                     let pt = self.point(k, s, q)?;
                     if ((pt - a.xyz).dot(n) / nl).abs() > tol + a.gap.max(b.gap).max(c.gap) {
                         bad = true;
@@ -1540,7 +2134,11 @@ impl FaceState {
             if len < 2.0 * p.min_len {
                 continue;
             }
-            let uv = Point2::new((a.uv.x + b.uv.x) / 2.0, (a.uv.y + b.uv.y) / 2.0);
+            let uv = if self.annulus.is_some() {
+                self.plane_blend([a.uv, b.uv, b.uv], [0.5, 0.5, 0.0])
+            } else {
+                Point2::new((a.uv.x + b.uv.x) / 2.0, (a.uv.y + b.uv.y) / 2.0)
+            };
             let mut split = p.max_len.is_some_and(|l| len > l);
             if !split {
                 let pt = self.point(k, s, uv)?;
@@ -1562,7 +2160,11 @@ impl FaceState {
             let [va, vb] = edge.vertices();
             let a = self.vertex(va.fix())?;
             let b = self.vertex(vb.fix())?;
-            let uv = Point2::new((a.uv.x + b.uv.x) / 2.0, (a.uv.y + b.uv.y) / 2.0);
+            let uv = if self.annulus.is_some() {
+                self.plane_blend([a.uv, b.uv, b.uv], [0.5, 0.5, 0.0])
+            } else {
+                Point2::new((a.uv.x + b.uv.x) / 2.0, (a.uv.y + b.uv.y) / 2.0)
+            };
             let depth = a.depth.max(b.depth).saturating_add(1);
             if depth > MAX_LOCAL_DEPTH {
                 self.depth_capped = true;
@@ -1720,7 +2322,8 @@ impl FaceState {
         }
         if let Some(chord) = chord {
             let s = surface_of(b, self.face)?;
-            let (dev, over) = crate::deviation::face_mesh_deviation(k, s, &self.domain, &m, chord);
+            let (dev, over) =
+                crate::deviation::face_mesh_deviation(k, s, &self.domain, self.period, &m, chord);
             m.deviation = Some(dev);
             m.triangles_over = over;
             // the backend's own measure of a face whose grid it placed
@@ -1783,7 +2386,12 @@ impl FaceState {
 struct MapContext<'a> {
     k: &'a Kernel,
     s: &'a Surface,
+    /// Where Newton feet may go: the natural domain, a period wider on each side in a
+    /// closed direction (the loop is unwrapped across it, not stopped at it).
     domain: &'a Extent2d,
+    /// Where a point with no seed is first looked for ([`invert_point`]): the natural
+    /// domain where bounded.
+    grid: &'a Extent2d,
     edges: &'a EdgeSet,
     polish_above: f64,
     period: (Option<f64>, Option<f64>),
@@ -1821,6 +2429,20 @@ impl MapContext<'_> {
         let n = poly.params.len();
         let mut out = Vec::with_capacity(n);
         let mut prev = seed;
+        // a UV trim curve must follow its edge: at its ends (an imported curve may run
+        // against the edge, or over another interval than the edge's) and half way
+        // (a closed edge's curve run backwards meets the right ends)
+        let check = if trim.is_some() && !poly.degenerate {
+            let mut length = 0.0;
+            for w in poly.vertices.windows(2) {
+                if let [a, c] = w {
+                    length += self.edges.position(*a)?.distance(self.edges.position(*c)?);
+                }
+            }
+            Some((self.polish_above.max(0.05 * length), 0.25 * length))
+        } else {
+            None
+        };
         for pos in 0..n {
             let i = if reverse { n - 1 - pos } else { pos };
             let (Some(t), Some(v)) = (poly.params.get(i), poly.vertices.get(i)) else {
@@ -1842,9 +2464,20 @@ impl MapContext<'_> {
                         return Err(invalid("UV trim curve is not finite"));
                     }
                     let uv = Point2::new(q.x, q.y);
-                    if poly.degenerate
-                        || surface_point(k, s, uv)?.distance(xyz) <= self.polish_above
-                    {
+                    let off = surface_point(k, s, uv)?.distance(xyz);
+                    if let Some((at_end, inside)) = check {
+                        let limit = if pos == 0 || pos + 1 == n {
+                            at_end
+                        } else if pos == n / 2 {
+                            inside
+                        } else {
+                            f64::INFINITY
+                        };
+                        if off > limit {
+                            return Err(invalid("UV trim curve does not follow its edge"));
+                        }
+                    }
+                    if poly.degenerate || off <= self.polish_above {
                         uv
                     } else {
                         foot(k, s, uv, xyz, self.domain).0
@@ -1855,7 +2488,7 @@ impl MapContext<'_> {
                         let uv = foot(k, s, seed, xyz, self.domain).0;
                         self.unwrap(uv, seed)
                     }
-                    None => invert_point(k, s, xyz, self.domain)?,
+                    None => invert_point(k, s, xyz, self.grid, self.domain)?,
                 },
             };
             prev = Some(uv);
@@ -1890,10 +2523,11 @@ fn scaled_gap(a: Point2, c: Point2, scale: (f64, f64)) -> f64 {
     (du * du + dv * dv).sqrt()
 }
 
-/// Whether the UV jump from `a` to `b` (one mesh vertex) is a pole: far apart in UV but
-/// the surface stays at the vertex between them. A jump across most of the domain where
-/// the surface does not stay is a loop that only closes across a seam.
-fn junction_is_pole(
+/// How the UV jump from `a` to `b` (one mesh vertex) closes: a pole when they are far
+/// apart in UV but the surface stays at the vertex between them; a whole number of
+/// periods on a closed surface (`period`) when moving `b` by that brings it to `a`. Any
+/// other jump across most of the domain is a loop that does not close.
+fn junction(
     k: &Kernel,
     s: &Surface,
     chord: f64,
@@ -1901,24 +2535,42 @@ fn junction_is_pole(
     b: LoopPoint,
     span: f64,
     scale: (f64, f64),
-) -> Result<bool> {
+    period: (Option<f64>, Option<f64>),
+) -> Result<Junction> {
+    let close = if span.is_finite() {
+        chord.max(1e-9 * span)
+    } else {
+        chord
+    };
     let gap = scaled_gap(a.uv, b.uv, scale);
-    if gap <= chord.max(1e-9 * span) {
-        return Ok(false);
+    if gap <= close {
+        return Ok(Junction::Same);
     }
     let mid = Point2::new((a.uv.x + b.uv.x) / 2.0, (a.uv.y + b.uv.y) / 2.0);
     if surface_point(k, s, mid)?.distance(a.xyz) <= chord {
-        return Ok(true);
+        return Ok(Junction::Pole);
+    }
+    let near = |x: f64, c: f64, p: Option<f64>| match p {
+        Some(p) if p > 0.0 => x - ((x - c) / p).round() * p,
+        _ => x,
+    };
+    let w = Point2::new(
+        near(b.uv.x, a.uv.x, period.0),
+        near(b.uv.y, a.uv.y, period.1),
+    );
+    if !same_uv(w, b.uv) && scaled_gap(a.uv, w, scale) <= close {
+        return Ok(Junction::Period(w.x - b.uv.x, w.y - b.uv.y));
     }
     if gap > 0.1 * span {
         return Err(invalid(
             "loop does not close in UV (periodic face without seam edge)",
         ));
     }
-    Ok(false)
+    Ok(Junction::Same)
 }
 
-/// Appends an edge use's points to a loop, merging the shared junction point.
+/// Appends an edge use's points to a loop, merging the shared junction point (the edge
+/// use moved by whole periods where it starts a period away).
 fn join(
     pts: &mut Vec<LoopPoint>,
     mut seq: Vec<LoopPoint>,
@@ -1927,19 +2579,28 @@ fn join(
     chord: f64,
     span: f64,
     scale: (f64, f64),
+    period: (Option<f64>, Option<f64>),
 ) -> Result<()> {
     if let (Some(last), Some(first)) = (pts.last().copied(), seq.first().copied()) {
         if last.vertex != first.vertex {
             return Err(invalid("loop edge uses do not connect"));
         }
-        if junction_is_pole(k, s, chord, last, first, span, scale)? {
-            if let Some(l) = pts.last_mut() {
-                l.pole_next = true;
+        match junction(k, s, chord, last, first, span, scale, period)? {
+            Junction::Pole => {
+                if let Some(l) = pts.last_mut() {
+                    l.pole_next = true;
+                }
             }
-        } else {
-            pts.pop();
-            if let Some(f) = seq.first_mut() {
-                f.pole_next |= last.pole_next;
+            j => {
+                if let Junction::Period(du, dv) = j {
+                    for q in &mut seq {
+                        q.uv = Point2::new(q.uv.x + du, q.uv.y + dv);
+                    }
+                }
+                pts.pop();
+                if let Some(f) = seq.first_mut() {
+                    f.pole_next |= last.pole_next;
+                }
             }
         }
     }
@@ -1984,6 +2645,31 @@ fn inside_faces(cdt: &Cdt) -> Vec<bool> {
 
 fn is_inside(inside: &[bool], f: FixedFaceHandle<InnerTag>) -> bool {
     inside.get(f.index()).copied().unwrap_or(false)
+}
+
+/// Whether segment `a`-`c` crosses segment `p`-`q` at an angle whose sine is at least
+/// [`MIN_CROSSING_SINE`] and at least [`CROSSING_MARGIN`] of each from its ends: a
+/// crossing whose rounded point stays on the right side of both.
+fn clean_crossing(
+    a: spade::Point2<f64>,
+    c: spade::Point2<f64>,
+    p: spade::Point2<f64>,
+    q: spade::Point2<f64>,
+) -> bool {
+    let cross = |x: (f64, f64), y: (f64, f64)| x.0 * y.1 - x.1 * y.0;
+    let d1 = (c.x - a.x, c.y - a.y);
+    let d2 = (q.x - p.x, q.y - p.y);
+    let l1 = (d1.0 * d1.0 + d1.1 * d1.1).sqrt();
+    let l2 = (d2.0 * d2.0 + d2.1 * d2.1).sqrt();
+    let den = cross(d1, d2);
+    if !den.is_finite() || den.abs() < MIN_CROSSING_SINE * l1 * l2 {
+        return false;
+    }
+    let ap = (p.x - a.x, p.y - a.y);
+    let t = cross(ap, d2) / den;
+    let u = cross(ap, d1) / den;
+    let inner = |x: f64| (CROSSING_MARGIN..=1.0 - CROSSING_MARGIN).contains(&x);
+    inner(t) && inner(u)
 }
 
 /// Distance in the plane from `p` to segment `a`-`b`.
@@ -2132,6 +2818,226 @@ mod tests {
         }
         // seen from the other side the polygon is clockwise: no ear, nothing clipped
         assert!(ear_clip_polygon(&l, -z).is_empty());
+    }
+
+    #[test]
+    fn clean_crossing_rejects_grazing_and_end_crossings() {
+        let p = |x: f64, y: f64| spade::Point2::new(x, y);
+        // a plain X
+        assert!(clean_crossing(p(0.0, 0.0), p(2.0, 2.0), p(0.0, 2.0), p(2.0, 0.0)));
+        // nearly parallel: rejected
+        assert!(!clean_crossing(
+            p(0.0, 0.0),
+            p(2.0, 0.0),
+            p(0.0, 1e-5),
+            p(2.0, -1e-5)
+        ));
+        // through an end point: rejected
+        assert!(!clean_crossing(p(0.0, 0.0), p(2.0, 0.0), p(1.0, 0.0), p(1.0, 1.0)));
+        // apart: rejected
+        assert!(!clean_crossing(p(0.0, 0.0), p(1.0, 0.0), p(2.0, -1.0), p(2.0, 1.0)));
+    }
+
+    /// A split constraint, then many locates and inserts: the hint generator must
+    /// follow the split vertices (spade's hierarchy did not and indexed out of
+    /// bounds).
+    #[test]
+    fn split_constraints_keep_point_location_valid() {
+        let mut cdt = Cdt::new();
+        let ins = |x: f64, y: f64, id: usize, cdt: &mut Cdt| {
+            cdt.insert(CdtVertex {
+                pos: spade::Point2::new(x, y),
+                id,
+            })
+            .unwrap()
+        };
+        let a = ins(0.0, 0.0, 0, &mut cdt);
+        let b = ins(4.0, 4.0, 1, &mut cdt);
+        let c = ins(0.0, 4.0, 2, &mut cdt);
+        let d = ins(4.0, 0.0, 3, &mut cdt);
+        assert!(!cdt.try_add_constraint(a, b).is_empty());
+        let split = cdt.add_constraint_and_split(c, d, |pos| CdtVertex {
+            pos,
+            id: usize::MAX,
+        });
+        assert!(!split.is_empty());
+        for i in 0..64 {
+            let x = 0.1 + 3.8 * f64::from(i % 8) / 7.0;
+            let y = 0.1 + 3.8 * f64::from(i / 8) / 7.0;
+            let _ = cdt.locate(spade::Point2::new(x, y));
+            ins(x + 1e-3, y + 2e-3, 10 + i as usize, &mut cdt);
+        }
+        assert_eq!(cdt.num_vertices(), 5 + 64);
+    }
+
+    fn cylinder_annulus() -> Annulus {
+        Annulus {
+            along_u: true,
+            period: core::f64::consts::TAU,
+            ref_a: core::f64::consts::PI,
+            ref_b: 0.0,
+            span_b: 1.0,
+        }
+    }
+
+    #[test]
+    fn annulus_map_round_trips_and_keeps_orientation() {
+        for an in [
+            cylinder_annulus(),
+            Annulus {
+                along_u: false,
+                ..cylinder_annulus()
+            },
+        ] {
+            let scale = (2.0, 0.5);
+            for (u, v) in [(0.3, 0.2), (3.0, 0.9), (6.0, 0.5), (1.0, 0.0)] {
+                let uv = if an.along_u {
+                    Point2::new(u, v)
+                } else {
+                    Point2::new(v, u)
+                };
+                let (x, y) = an.to_plane(uv, scale);
+                let back = an.from_plane(x, y, scale);
+                let (a0, a1) = if an.along_u {
+                    (uv.x, back.x)
+                } else {
+                    (uv.y, back.y)
+                };
+                let turns = (a1 - a0) / an.period;
+                assert!((turns - turns.round()).abs() < 1e-12, "{uv:?} {back:?}");
+                let (b0, b1) = if an.along_u {
+                    (uv.y, back.y)
+                } else {
+                    (uv.x, back.x)
+                };
+                assert!((b0 - b1).abs() < 1e-12, "{uv:?} {back:?}");
+            }
+            // a small triangle counter-clockwise in UV stays counter-clockwise
+            let [p, q, r] = [(1.0, 0.5), (1.1, 0.5), (1.0, 0.6)]
+                .map(|(x, y)| an.to_plane(Point2::new(x, y), scale));
+            let area = (q.0 - p.0) * (r.1 - p.1) - (q.1 - p.1) * (r.0 - p.0);
+            assert!(area > 0.0, "{:?}", an.along_u);
+        }
+    }
+
+    /// A cylinder face bounded by two circles and no seam edge: both loops go once
+    /// around u. In the annulus plane they are two concentric rings and the inside is
+    /// the band between them, every triangle of it within the face's v range.
+    #[test]
+    fn seamless_cylinder_band_is_an_annulus() {
+        let an = cylinder_annulus();
+        let scale = (1.0, 1.0);
+        let n = 32;
+        let mut cdt = Cdt::new();
+        let mut rings = Vec::new();
+        for (ring, v) in [0.0, 1.0].into_iter().enumerate() {
+            let mut hs = Vec::new();
+            for i in 0..n {
+                let u = core::f64::consts::TAU * f64::from(i) / f64::from(n);
+                let (x, y) = an.to_plane(Point2::new(u, v), scale);
+                hs.push(
+                    cdt.insert(CdtVertex {
+                        pos: spade::Point2::new(x, y),
+                        id: ring * 100 + i as usize,
+                    })
+                    .unwrap(),
+                );
+            }
+            rings.push(hs);
+        }
+        for hs in &rings {
+            for i in 0..hs.len() {
+                assert!(!cdt.try_add_constraint(hs[i], hs[(i + 1) % hs.len()]).is_empty());
+            }
+        }
+        let inside = inside_faces(&cdt);
+        let mut count = 0;
+        for f in cdt.inner_faces() {
+            if !is_inside(&inside, f.fix()) {
+                continue;
+            }
+            count += 1;
+            let [p, q, r] = f.positions();
+            let c = an.from_plane((p.x + q.x + r.x) / 3.0, (p.y + q.y + r.y) / 3.0, scale);
+            assert!(c.y > 0.0 && c.y < 1.0, "{c:?}");
+        }
+        // a band of 32 + 32 boundary points: 64 triangles
+        assert_eq!(count, 2 * n as usize);
+    }
+
+    /// A face of a unit box, as a [`FaceState`] with its UV box set (the inputs below
+    /// are put into its triangulation directly). `None` where the box cannot be built.
+    fn box_face() -> Option<(Kernel, Brep, FaceId)> {
+        let mut k = Kernel::default();
+        let b = solidcore::primitive::api_primitives::create_box(
+            &mut k,
+            Point3::new(0.0, 0.0, 0.0),
+            1.0,
+            1.0,
+            1.0,
+        )
+        .ok()?;
+        let f = b.faces().ids().next()?;
+        Some((k, b, f))
+    }
+
+    fn boundary_point(uv: Point2, vertex: u32) -> FaceVertex {
+        FaceVertex {
+            uv,
+            xyz: Point3::new(uv.x, uv.y, 0.0),
+            vertex: Some(vertex),
+            normal: None,
+            boundary: true,
+            alive: true,
+            gap: 0.0,
+            depth: 0,
+        }
+    }
+
+    /// Grazing boundary crossings and near-duplicate points fail the face (or are
+    /// skipped) instead of reaching spade's rounded splits, which panicked.
+    #[test]
+    fn grazing_and_near_duplicate_inputs_do_not_panic() {
+        let Some((k, b, f)) = box_face() else {
+            return;
+        };
+        let s = surface_of(&b, f).unwrap();
+        let mut st = FaceState::new(&k, &b, f, 1.0).unwrap();
+        st.bbox = Extent2d::from_bounds(0.0, 0.0, 1.0, 1.0);
+        st.origin = Point2::new(0.0, 0.0);
+        st.scale = (1.0, 1.0);
+        // a segment, then one crossing it at a grazing angle
+        let a = st.insert(boundary_point(Point2::new(0.0, 0.5), 0)).unwrap();
+        let c = st.insert(boundary_point(Point2::new(1.0, 0.5), 1)).unwrap();
+        st.constrain(&k, s, a, c).unwrap();
+        let p = st.insert(boundary_point(Point2::new(0.0, 0.5 + 1e-7), 2)).unwrap();
+        let q = st.insert(boundary_point(Point2::new(1.0, 0.5 - 1e-7), 3)).unwrap();
+        assert!(st.constrain(&k, s, p, q).is_err());
+        // a clean crossing is split, and the triangulation stays usable
+        let x = st.insert(boundary_point(Point2::new(0.5, 0.0), 4)).unwrap();
+        let y = st.insert(boundary_point(Point2::new(0.5, 1.0), 5)).unwrap();
+        st.constrain(&k, s, x, y).unwrap();
+        assert!(st.stale_hints && st.split_boundary);
+        // near-duplicate interior points are skipped, distinct ones go in
+        let uv = Point2::new(0.3, 0.3);
+        assert!(st.insert_interior(&k, s, uv, None, 0).unwrap().is_some());
+        assert!(st.insert_interior(&k, s, uv, None, 0).unwrap().is_none());
+        let nudged = Point2::new(0.3 + 1e-15, 0.3);
+        assert!(st.insert_interior(&k, s, nudged, None, 0).unwrap().is_none());
+        assert!(st.insert_interior(&k, s, Point2::new(0.6, 0.6), None, 0).unwrap().is_some());
+        // non-finite positions are refused, not located
+        assert!(matches!(
+            st.locate(spade::Point2::new(f64::NAN, 0.0)),
+            PositionInTriangulation::NoTriangulation
+        ));
+        assert!(st.insert_interior(&k, s, Point2::new(f64::NAN, 0.0), None, 0).is_err());
+        // a new triangulation of the same points has a whole hierarchy again
+        st.retriangulate(&k, s, &BTreeSet::new()).unwrap();
+        assert!(!st.stale_hints);
+        assert!(matches!(
+            st.locate(st.scaled(Point2::new(0.6, 0.6))),
+            PositionInTriangulation::OnVertex(_)
+        ));
     }
 
     #[test]

@@ -1543,6 +1543,9 @@ fn put_vertex_points(o: &mut Vec<f64>, b: &Brep, vertices: &[VertexId]) -> Resul
 
 fn run_rust(i: &Inputs) -> Result<Output, HarnessError> {
     let mut k = Kernel::default();
+    // Compare against pinned C++ c9c5979 (pre-tangency-labs/smlib@5af7070, WR-255 / #570):
+    // `sm_FixUVTrimCurves` trims and stretches the UV trim curves (TurnToNURBS).
+    k.context.set_trim_uv_curves_at_corner_drops(true);
     if standalone(&i.op) {
         let Some((_, args)) = op_args(&i.op, &[0; 10])? else {
             return Ok(Output::err("no target"));

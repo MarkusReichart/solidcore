@@ -34,7 +34,7 @@
 use std::collections::BTreeMap;
 
 use crate::blend::fillet_executive::p1::ExecutiveObjects;
-use crate::blend::fillet_geom::p1::{FilStatus, FilletCornerType, FilletEdgeType};
+use crate::blend::fillet_geom::p1::{FilStatus, FilletCornerType, FilletEdgeType, FilletErrorType};
 use crate::blend::fillet_solver::p1::FilletSurfaceGenerator;
 use crate::boolean::topology_intersector::p1::TopologyIntersector;
 use crate::error::{EntityRef, Result, SolidError};
@@ -786,13 +786,16 @@ pub trait ExecutiveAccess<O: ClassObject + SolutionObject + Ord> {
         allow_spine_edges: bool,
     ) -> Result<StitchAttempt>;
 
-    /// `SmFilletExecutive::DoPiecewiseMerge`; waiting for `blend.fillet_executive_p1`.
+    /// `SmFilletExecutive::DoPiecewiseMerge`: dead upstream. `m_bDoPiecewiseMerge` is
+    /// `FALSE` in both executive constructors and neither SM_API nor SMLib calls its
+    /// setter, so `DoFilleting` never takes this branch; it is not ported and stays
+    /// [`SolidError::Unported`].
     fn piecewise_merge(
         &mut self,
         _k: &mut Kernel,
         _executive: &mut FilletExecutive<O>,
     ) -> Result<()> {
-        // UNPORTED(blend.fillet_executive_p1): SmFilletExecutive::DoPiecewiseMerge
+        // UNPORTED(blend.fillet_executive_p1): SmFilletExecutive::DoPiecewiseMerge -- justified: unreachable upstream (m_bDoPiecewiseMerge is never set)
         Err(SolidError::unported(
             "SmFilletExecutive::DoPiecewiseMerge",
             "blend.fillet_executive_p1",
@@ -1454,6 +1457,35 @@ pub trait BrepCreationAccess<O: ClassObject + SolutionObject + Ord>:
     /// Real smoothing or missing live tangent-collection context.
     fn creation_smooth(&mut self, k: &mut Kernel, executive: &mut FilletExecutive<O>)
         -> Result<()>;
+    /// Not upstream (the SolidCraft fork's `SmFilletExecutive::FacesOutlastTheirBlends`,
+    /// tangency-labs/solidcore#879): `false` when the blends of `solvers` take the whole
+    /// of a face they roll on, some meeting it at an angle. A loop of a face closes to a
+    /// point when every edge of it is blended and each of those blends' default-geometry
+    /// rails on the face is a point (`IsDegenerate` within the solver's approximation
+    /// tolerance); that is a fault only when some blend there has a cross section that
+    /// is not tangent to the face
+    /// ([`FilletSurfaceGenerator::meets_its_faces_tangentially`]), a chamfer's cone then
+    /// ending in a point. Adapters without the rails' geometry keep the default `true`.
+    ///
+    /// # Errors
+    /// Missing solver, edge use, generator, rail, rail curve or face (the fork's `NER`),
+    /// and the degeneracy tests' errors.
+    fn creation_faces_outlast_their_blends(&self, k: &Kernel, solvers: &[O]) -> Result<bool> {
+        let _ = (k, solvers);
+        Ok(true)
+    }
+    /// Not upstream (the SolidCraft fork's `SmFilletSolver::RailsFitTheirFaces`, WR-302,
+    /// tangency-labs/solidcore#841/#1024): `false` when a rail of `solver` leaves the face
+    /// it rolls on other than past an end of the filleted edge or across a tangent rollover
+    /// edge (`FilletSolver::rails_fit_their_faces`). Adapters without the rails keep
+    /// `true`.
+    ///
+    /// # Errors
+    /// Those of `FilletSolver::rails_fit_their_faces_with_context`.
+    fn creation_rails_fit_their_faces(&mut self, k: &Kernel, solver: O) -> Result<bool> {
+        let _ = (k, solver);
+        Ok(true)
+    }
 }
 impl<O, A> BrepCreationAccess<O> for A
 where
@@ -2103,9 +2135,39 @@ impl<O: ClassObject + SolutionObject + Ord> FilletExecutive<O> {
         self.create_corner_vertices(k, access)?;
         self.adjust_corner_topology(k, access)?;
         self.calculate_solver_geometry(k, access)?;
+        // Not upstream (the SolidCraft fork, WR-302; opt-in): a blend whose rails leave the
+        // faces they roll on is larger than those faces allow. Upstream builds it across
+        // what lies beyond them.
+        if k.fixes.fillet_refuse_rails_leaving_faces {
+            let mut index = 0;
+            while let Some(solver) = self.solvers.get(index).copied() {
+                if !access.creation_rails_fit_their_faces(k, solver)? {
+                    self.error.code = FilletErrorType::NoRoom as i32;
+                    self.error.comment = "Fillet Error: a rail leaves the face it rolls on (the \
+                                          blend is larger than the faces allow)"
+                        .into();
+                    return Err(failure());
+                }
+                index += 1;
+            }
+        }
         self.calculate_corner_edges(k, access)?;
         self.trim_solver_rails(k, access)?;
         self.classify_solver_rails(k, access)?;
+        // Not upstream (the SolidCraft fork, tangency-labs/solidcore#879; opt-in): blends
+        // that take the whole of a face, closing a loop of it to a point, some meeting the
+        // face at an angle (a chamfer's cone ending in a point), are larger than that
+        // face allows. Upstream builds them.
+        if k.fixes.fillet_refuse_face_consuming_blends
+            && !access.creation_faces_outlast_their_blends(k, &self.solvers)?
+        {
+            self.error.code = FilletErrorType::NoRoom as i32;
+            self.error.comment = "Fillet Error: the blends take the whole of a face they roll \
+                                  on, some at an angle to it (the blend is larger than the \
+                                  faces allow)"
+                .into();
+            return Err(failure());
+        }
         let fillet = self.build_fillet_faces(k, access)?;
         self.stitch_fillet_faces(k, access, fillet)?;
         if let Some(output) = error_out {

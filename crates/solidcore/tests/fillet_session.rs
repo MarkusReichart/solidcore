@@ -8,7 +8,7 @@ use solidcore::geom::attribute::ids;
 use solidcore::math::{Point3, PI};
 use solidcore::primitive::api_primitives::create_box;
 use solidcore::topology::edge;
-use solidcore::{EntityRef, Kernel};
+use solidcore::{EntityRef, Kernel, SolidError};
 
 #[test]
 fn actual_box_solver_stays_authoritative_through_corner_creation() {
@@ -334,8 +334,11 @@ fn actual_box_all_solver_stage_builds_retained_fillet_surface() {
     }
 }
 
+/// The live `CollectTangentEdgeSequence` reads the solvers' corners: before the corners
+/// are made, a solver's vertex still holds its pending solver list (upstream casts it to
+/// a corner, UB-209), which the session refuses.
 #[test]
-fn smooth_prelude_requires_live_tangent_context_for_multiple_solvers() {
+fn smooth_prelude_needs_the_corners_for_multiple_solvers() {
     let mut k = Kernel::default();
     let mut target = create_box(&mut k, Point3::ZERO, 10.0, 20.0, 30.0).unwrap();
     let edges: Vec<_> = target.edges().ids().take(2).collect();
@@ -347,7 +350,7 @@ fn smooth_prelude_requires_live_tangent_context_for_multiple_solvers() {
     assert_eq!(session.executive().solvers.len(), 2);
     let solvers = session.executive().solvers.clone();
     let error = session.process_smooth_edge_sequences(&mut k).unwrap_err();
-    assert!(error.is_unported());
+    assert!(matches!(error, SolidError::InvalidInput { .. }), "{error:?}");
     assert_eq!(session.executive().solvers, solvers);
 }
 

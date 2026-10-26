@@ -299,11 +299,23 @@ impl TopologyChangesAccess<FilletObject> for TargetTopologyChanges<'_> {
                 return Ok(None);
             }
         }
-        // UNPORTED(blend.fillet_executive_p1): actual marker-user object classification.
-        Err(SolidError::unported(
-            "SmFilletExecutive::UpdateTopologyChanges (actual marker user)",
-            "blend.fillet_executive_p1",
-        ))
+        // a face of the pseudo-B-rep is a face too (`SM_CAST_PTR(SmFace, ..)` takes any)
+        if let Some(serial) = self.pseudo.brep().notify_serial() {
+            for (face, _) in self.pseudo.brep().faces().iter() {
+                if crate::topology::brep::p3::topology_ref(serial, EntityRef::Face(face)).key
+                    == user
+                {
+                    return Ok(Some(FilletObject::Topology(
+                        FilletBody::Pseudo,
+                        EntityRef::Face(face),
+                    )));
+                }
+            }
+        }
+        // `SM_CAST_PTR(SmFace, pUser)` is `NULL` for every other user (the marker is
+        // attached to a target face and spread only by that body's split notifications,
+        // so any other user is no face): skipped
+        Ok(None)
     }
     fn change_geometries(&self, solver: FilletObject) -> Result<Vec<FilletObject>> {
         let FilletObject::Solver(id) = solver else {

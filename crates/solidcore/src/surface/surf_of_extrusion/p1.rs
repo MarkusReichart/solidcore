@@ -2232,6 +2232,55 @@ mod tests {
         Kernel::default()
     }
 
+    /// The fixed-matrix evaluations hand a lazy extrusion (no NURB yet) back to the Vec
+    /// path, which (in a tree that makes analytic NURBs on demand) makes it first; with
+    /// a NURB they match the Vec path bit for bit. (cycle 16: going to the NURB-less base
+    /// failed 34 corpus models with SM_ERR.)
+    #[test]
+    fn fixed_matrix_evaluations_leave_a_lazy_extrusion_to_the_vec_path() {
+        use crate::nurbs::b_spline_surface_n_lib::p2::EvaluateFlags;
+        use crate::nurbs::math::MAX_DERIVATIVE;
+        use crate::surface::surface::Surface;
+        let k = k();
+        let lazy = SurfOfExtrusion::new(
+            &k,
+            arc_gen(),
+            Point3::ZERO,
+            Vec3::new(0.0, 0.0, 2.0),
+            Extent2d::from_bounds(0.0, 0.0, 1.0, 1.0),
+            false,
+        )
+        .unwrap();
+        assert!(lazy.base().gw_nurb().is_none());
+        let mut ready = lazy.clone_exact();
+        ready.make_nurb(&k).unwrap();
+        let marker = Vec3::new(7.0, 7.0, 7.0);
+        let flags = EvaluateFlags::default();
+        let uv = Point2::new(0.3, 0.6);
+
+        let lazy = Surface::from(lazy);
+        let mut sd = [[marker; MAX_DERIVATIVE + 1]; MAX_DERIVATIVE + 1];
+        assert!(!lazy.evaluate_simple_into(uv, 1, 1, flags, &mut sd).unwrap());
+        assert!(!lazy.evaluate_into(uv, 1, 1, flags, &mut sd).unwrap());
+        assert!(sd.iter().flatten().all(|v| *v == marker), "nothing written");
+
+        let ready = Surface::from(ready);
+        for (hu, hv) in [(0, 0), (1, 1), (2, 2), (2, 1)] {
+            let want = ready.evaluate_simple(&k, uv, hu, hv, flags).unwrap();
+            assert!(ready.evaluate_simple_into(uv, hu, hv, flags, &mut sd).unwrap());
+            for (i, row) in want.iter().enumerate() {
+                for (j, w) in row.iter().enumerate() {
+                    let x = sd[i][j];
+                    assert_eq!(
+                        [x.x.to_bits(), x.y.to_bits(), x.z.to_bits()],
+                        [w.x.to_bits(), w.y.to_bits(), w.z.to_bits()],
+                        "D[{i}][{j}] ({hu},{hv})"
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn lazy_transform_matches_materialized_transform() {
         let k = k();
@@ -2274,6 +2323,65 @@ mod tests {
                 ready.base().evaluate_point(uv).unwrap()
             );
         }
+    }
+
+    #[test]
+    fn kept_made_nurb_is_bit_identical_to_a_fresh_one() {
+        use crate::nurbs::b_spline_surface_n_lib::p2::EvaluateFlags;
+        use crate::surface::surface::{Surface, SurfaceKind};
+        let k = k();
+        let lazy = SurfOfExtrusion::new(
+            &k,
+            arc_gen(),
+            Point3::ZERO,
+            Vec3::new(0.0, 0.0, 2.0),
+            Extent2d::from_bounds(0.0, 0.0, 1.0, 1.0),
+            false,
+        )
+        .unwrap();
+        assert!(lazy.base().gw_nurb().is_none());
+        let mut surf = Surface::from(lazy);
+        let fresh = |surf: &Surface| {
+            let SurfaceKind::SurfOfExtrusion(e) = surf.kind() else {
+                panic!("an extrusion");
+            };
+            Surface::from(e.clone_exact())
+        };
+        let eval = |surf: &Surface, uv: Point2| -> Vec<u64> {
+            let mut out = Vec::new();
+            let p = surf.evaluate_point(&k, uv).unwrap();
+            out.extend([p.x, p.y, p.z].map(f64::to_bits));
+            let flags = EvaluateFlags::default();
+            for row in surf.evaluate(&k, uv, 2, 2, flags).unwrap() {
+                for v in row {
+                    out.extend([v.x, v.y, v.z].map(f64::to_bits));
+                }
+            }
+            out
+        };
+        let uvs = [
+            Point2::new(0.0, 0.0),
+            Point2::new(0.25, 0.75),
+            Point2::new(0.6, 0.1),
+            Point2::new(1.0, 1.0),
+        ];
+        for round in 0..2 {
+            for &uv in &uvs {
+                assert_eq!(eval(&surf, uv), eval(&fresh(&surf), uv), "round {round} at {uv:?}");
+            }
+        }
+        assert!(surf.has_made_nurb(), "the made NURB is kept");
+        // mutate, then evaluate: the kept NURB must not survive the edit
+        let SurfaceKind::SurfOfExtrusion(e) = surf.kind_mut() else {
+            panic!("an extrusion");
+        };
+        e.extrusion_vec = Vec3::new(0.0, 0.5, 3.0);
+        assert!(!surf.has_made_nurb(), "an edit empties the kept NURB");
+        for &uv in &uvs {
+            assert_eq!(eval(&surf, uv), eval(&fresh(&surf), uv), "after the edit at {uv:?}");
+        }
+        // a copy starts without one
+        assert!(!surf.clone().has_made_nurb());
     }
 
     /// A planar quadratic B-spline in the z = 0 plane.
@@ -2491,6 +2599,69 @@ mod tests {
         let knots = vec![0.0, 0.0, 0.0, 0.0, 1.0 / 3.0, 2.0 / 3.0, 1.0, 1.0, 1.0, 1.0];
         let cur = NurbCurve::new(pw, 3, knots).unwrap();
         Curve::from(BSplineCurve::from_nurb(cur, 3, false))
+    }
+
+    /// GetDegree makes a lazy extrusion's NURB first: a straight generator extruded is
+    /// bilinear, so a long step on it crosses no seam (sm_CrossedSeamOrPole), and it is
+    /// no analytic-low-degree surface for the cache tolerances unless its NURB says so.
+    #[test]
+    fn lazy_extrusion_degree_callers_see_the_made_nurb() {
+        use crate::surface::surface::p1::crossed_seam_or_pole;
+        use crate::surface::surface::Surface;
+        let k = k();
+        let pw = vec![CPoint::new(0.0, 0.0, 0.0, NOW), CPoint::new(2.0, 1.0, 0.0, NOW)];
+        let line = NurbCurve::new(pw, 1, vec![0.0, 0.0, 1.0, 1.0]).unwrap();
+        let gen = Curve::from(BSplineCurve::from_nurb(line, 1, false));
+        let lazy = SurfOfExtrusion::new(
+            &k,
+            gen,
+            Point3::ZERO,
+            Vec3::new(0.0, 0.0, 2.0),
+            Extent2d::from_bounds(0.0, 0.0, 1.0, 1.0),
+            false,
+        )
+        .unwrap();
+        assert!(lazy.base().gw_nurb().is_none());
+        let surf = Surface::from(lazy);
+        assert_eq!(surf.degree(SurfParamType::U), 0, "the stored base has no NURB");
+        assert_eq!(surf.degree_with_nurb(&k, SurfParamType::U).unwrap(), 1);
+        assert_eq!(surf.degree_with_nurb(&k, SurfParamType::V).unwrap(), 1);
+        let dom = Extent2d::from_bounds(0.0, 0.0, 1.0, 1.0);
+        let crossed =
+            crossed_seam_or_pole(&k, &surf, Point2::new(0.0, 0.0), Point2::new(1.0, 1.0), &dom)
+                .unwrap();
+        assert!(!crossed, "bilinear: never a seam");
+    }
+
+    /// GetKnots makes a lazy extrusion's NURB first, also through a STEP surface's
+    /// base `GetDegree`: knots_with_nurb answers the made NURB's knots.
+    #[test]
+    fn lazy_extrusion_knots_read_the_made_nurb() {
+        use crate::surface::surface::{StepSurface, Surface};
+        let k = k();
+        let lazy = SurfOfExtrusion::new(
+            &k,
+            arc_gen(),
+            Point3::ZERO,
+            Vec3::new(0.0, 0.0, 2.0),
+            Extent2d::from_bounds(0.0, 0.0, 1.0, 1.0),
+            false,
+        )
+        .unwrap();
+        assert!(lazy.base().gw_nurb().is_none());
+        let made = lazy.base_with_nurb(&k).unwrap().into_owned();
+        let surf = Surface::from(lazy.clone_exact());
+        for param in [SurfParamType::U, SurfParamType::V] {
+            let want = made.knots(param, None).unwrap();
+            assert_eq!(surf.knots_with_nurb(&k, param, None).unwrap(), want);
+            assert_ne!(surf.knots(param, None).ok(), Some(want), "the stored base has none");
+        }
+        // a STEP surface's knots: its domain ends, each `degree + 1` times
+        let step = Surface::from(StepSurface::new(Surface::from(lazy), true).unwrap());
+        let (_, mults) = step.knots_with_nurb(&k, SurfParamType::U, None).unwrap();
+        let degree = made.degree(SurfParamType::U);
+        assert!(degree > 0);
+        assert!(mults.iter().all(|&m| m == degree + 1), "{mults:?}");
     }
 
     #[test]

@@ -50,24 +50,33 @@
 //!   test (its sweep amount is unused); `SM_DEBUG_CODE` blocks, `SM_ASSERT`s and
 //!   `smos_WriteBuffer` messages are dropped.
 //! - **Recursion.** None.
+//! - **Analytic surfaces** (not upstream, WR-401, tangency-labs/solidcore#545, opt-in
+//!   `Kernel::fixes.revolve_analytic_profile_faces`): `revolved_analytic_surface`
+//!   (crate) gives a revolved line or circular arc its cylinder, cone, sphere or torus;
+//!   [`RotationalSweepGeometry::edge_sweep_higher`] uses it in place of `sm_CreateRotSrf`,
+//!   and the full-turn `PrimitiveCreation::create_rotational_sweep` per profile curve.
 
 use crate::curve::curve::p8::CurveIntersectOptions;
 use crate::curve::curve::{Curve, CurveKind};
 use crate::curve::line::Line;
-use crate::error::{Result, SolidError};
+use crate::error::{ignored, Result, SolidError};
 use crate::geom::axis2_placement::Axis2Placement;
 use crate::geom::extent1d::Extent1d;
+use crate::geom::extent2d::Extent2d;
 use crate::geom::geom_utility::p1::{line_closest_point, line_point_distance};
 use crate::geom::solution_array::{ObjectKind, SolutionObject, SolutionType};
 use crate::geom::vector3d::{Point3, Vec3};
 use crate::kernel::Kernel;
-use crate::math::{EFF_ZERO, EFF_ZERO_DEG, EFF_ZERO_SQRT, PI};
+use crate::math::{max4, EFF_ZERO, EFF_ZERO_DEG, EFF_ZERO_SQRT, PI};
 use crate::nurbs::b_spline_curve::{BSplineCurve, NurbCircleParam};
 use crate::nurbs::b_spline_curve_n_lib::TrimMode;
 use crate::nurbs::b_spline_surface::{BSplineSurface, SurfParamType};
 use crate::nurbs::b_spline_surface_n_lib::p2::OrientType;
 use crate::nurbs::knots::Side;
+use crate::surface::cone::p1::Cone;
+use crate::surface::sphere::Sphere;
 use crate::surface::surface::Surface;
+use crate::surface::torus::{Torus, TorusOptions};
 use crate::topology::{edge, face, vertex, Brep, EdgeId, FaceId, VertexId};
 
 use super::topology_sweep::{SweepCheckType, SweepGeometryCreation};
@@ -325,6 +334,198 @@ fn check_edge_on_axis(
         return Err(SolidError::sm_err(OP_ON_AXIS));
     }
     Ok(true)
+}
+
+/// Not upstream (WR-401, tangency-labs/solidcore#545): the analytic surface a turn of
+/// `angle_deg` degrees (counter-clockwise about `axis`, from the curve's half-plane) of
+/// profile curve `curve` about the axis through `axis_base` along `axis` sweeps,
+/// bounded to the curve and the turn: a line parallel to the axis gives a cylinder, another line
+/// (not perpendicular to the axis, and not crossing it) a cone, a circular arc in a
+/// plane through the axis a sphere (centre on the axis) or a torus (centre off it).
+/// `None` for any other curve, which keeps upstream's surface of revolution.
+///
+/// # Errors
+///
+/// Those of the curve queries and a zero `axis`.
+pub(crate) fn revolved_analytic_surface(
+    k: &crate::kernel::Kernel,
+    curve: &Curve,
+    axis_base: Point3,
+    axis: Vec3,
+    angle_deg: f64,
+    tol: f64,
+) -> Result<Option<Surface>> {
+    let Some(mut surface) = revolved_full_turn_surface(k, curve, axis_base, axis, tol)? else {
+        return Ok(None);
+    };
+    if angle_deg < 360.0 - EFF_ZERO_SQRT {
+        // a partial turn: angles 0 to `angle_deg` from the curve's half-plane
+        let step = surface.step_uv_domain();
+        let turn = Extent2d::from_bounds(
+            step.min().x,
+            step.min().y,
+            step.min().x + angle_deg,
+            step.max().y,
+        );
+        if ignored(surface.adjust_step_uv_domain(k, &turn))?.is_none() {
+            return Ok(None);
+        }
+    }
+    Ok(Some(surface))
+}
+
+/// [`revolved_analytic_surface`] for a full turn: u is the angle about `axis`, from
+/// the curve's half-plane, counter-clockwise about `axis`.
+fn revolved_full_turn_surface(
+    k: &crate::kernel::Kernel,
+    curve: &Curve,
+    axis_base: Point3,
+    axis: Vec3,
+    tol: f64,
+) -> Result<Option<Surface>> {
+    let axis = axis.unitize()?;
+    // the foot of `p` on the axis and its distance from it
+    let foot = |p: Point3| axis_base + axis * (p - axis_base).dot(axis);
+    let radius_of = |p: Point3| (p - foot(p)).length();
+    let ends = curve.ends(k)?;
+    let (start, end) = (ends.start, ends.end);
+    let (start_radius, end_radius) = (radius_of(start), radius_of(end));
+
+    if curve.is_linear(k, EFF_ZERO, false)?.linear {
+        let length = (end - start).length();
+        if length < tol {
+            return Ok(None);
+        }
+        let direction = (end - start) / length;
+        let scale = max4(start_radius, end_radius, length, EFF_ZERO_SQRT);
+        let angle = tol / scale * (180.0 / PI);
+        if direction.is_parallel_to(axis, angle) {
+            if start_radius <= tol {
+                return Ok(None);
+            }
+            // about the axis itself (the turn's sense), from the line's lower end
+            let low = if axis.dot(direction) < 0.0 { end } else { start };
+            let y = axis.cross(low - axis_base).unitize()?;
+            let frame = Axis2Placement::new(foot(low), y.cross(axis), y);
+            let cylinder = ignored(Cone::create_canonical_cylinder(k, &frame, start_radius))?;
+            let Some(mut cylinder) = cylinder else {
+                return Ok(None);
+            };
+            if ignored(cylinder.adjust_step_uv_domain(
+                k,
+                &Extent2d::from_bounds(0.0, 0.0, 360.0, length),
+            ))?
+            .is_none()
+            {
+                return Ok(None);
+            }
+            return Ok(Some(Surface::from(cylinder)));
+        }
+        if direction.is_perpendicular_to(axis, angle) {
+            return Ok(None);
+        }
+        // a line crossing the axis sweeps two cones
+        if start_radius > tol
+            && end_radius > tol
+            && (start - foot(start)).dot(end - foot(end)) < 0.0
+        {
+            return Ok(None);
+        }
+        // about the axis itself (the turn's sense), from the line's lower end
+        let (low, high) = if axis.dot(direction) < 0.0 {
+            (end, start)
+        } else {
+            (start, end)
+        };
+        let off_axis = if start_radius > tol { start } else { end };
+        let y = axis.cross(off_axis - axis_base).unitize()?;
+        let bottom = foot(low);
+        let height = (foot(high) - bottom).length();
+        let frame = Axis2Placement::new(bottom, y.cross(axis), y);
+        return Ok(ignored(Cone::create_canonical(
+            k,
+            &frame,
+            radius_of(low),
+            radius_of(high),
+            height,
+            false,
+            false,
+        ))?
+        .map(Surface::from));
+    }
+
+    let Some((arc_frame, radius, arc_start, arc_end)) = curve.is_arc(k, 8, tol)? else {
+        return Ok(None);
+    };
+    // a full circle, or an arc out of the planes through the axis
+    if (arc_end - arc_start).abs() >= 360.0 - EFF_ZERO_SQRT
+        || !arc_frame.z_axis().is_perpendicular_to(axis, tol / radius * (180.0 / PI))
+    {
+        return Ok(None);
+    }
+    let centre = arc_frame.origin();
+    let domain = curve.natural_interval();
+    let middle = curve.evaluate_point(k, domain.evaluate(0.5))?;
+    let centre_radius = radius_of(centre);
+    if centre_radius <= tol {
+        // a sphere about the axis: the arc's latitudes, which must not pass a pole
+        let radial = [start, end, middle]
+            .into_iter()
+            .map(|p| p - foot(p))
+            .find(|r| r.length() > tol)
+            .map(Vec3::unitize)
+            .transpose()?;
+        let Some(x) = radial else {
+            return Ok(None);
+        };
+        let latitude = |p: Point3| {
+            ((p - centre).dot(axis) / radius).clamp(-1.0, 1.0).asin() * (180.0 / PI)
+        };
+        let (v_start, v_end, v_middle) = (latitude(start), latitude(end), latitude(middle));
+        let (low, high) = (v_start.min(v_end), v_start.max(v_end));
+        if high - low <= EFF_ZERO_SQRT
+            || v_middle < low - EFF_ZERO_SQRT
+            || v_middle > high + EFF_ZERO_SQRT
+        {
+            return Ok(None);
+        }
+        let frame = Axis2Placement::new(centre, x, axis.cross(x));
+        let Some(mut sphere) = ignored(Sphere::create_canonical(k, &frame, radius))? else {
+            return Ok(None);
+        };
+        let latitudes = Extent2d::from_bounds(0.0, low, 360.0, high);
+        if ignored(sphere.adjust_step_uv_domain(k, &latitudes))?.is_none() {
+            return Ok(None);
+        }
+        return Ok(Some(Surface::from(sphere)));
+    }
+    // a torus: the tube must stay off the axis
+    if centre_radius <= radius + tol {
+        return Ok(None);
+    }
+    let x = (centre - foot(centre)).unitize()?;
+    let minor_angle = |p: Point3| {
+        let r = p - centre;
+        r.dot(axis).atan2(r.dot(x)) * (180.0 / PI)
+    };
+    let (v_start, v_end, v_middle) = (minor_angle(start), minor_angle(end), minor_angle(middle));
+    let span = (v_end - v_start).rem_euclid(360.0);
+    let (from, sweep) = if (v_middle - v_start).rem_euclid(360.0) <= span {
+        (v_start, span)
+    } else {
+        (v_end, 360.0 - span)
+    };
+    let low = (from + 180.0).rem_euclid(360.0) - 180.0;
+    let frame = Axis2Placement::new(foot(centre), x, axis.cross(x));
+    Ok(ignored(Torus::create_canonical(
+        k,
+        &frame,
+        centre_radius,
+        radius,
+        TorusOptions::default(),
+        Some(&Extent2d::from_bounds(0.0, low, 360.0, low + sweep)),
+    ))?
+    .map(Surface::from))
 }
 
 /// `sm_CreateRotSrf`: the B-spline surface of revolution of `curve` (which must be of
@@ -773,7 +974,24 @@ impl RotationalSweepGeometry {
         // This setting seems to be needed for CreateLinearSweep
         let start_trim_curve_param = SurfParamType::U;
         let mut is_plane = false;
-        let (new_surf, surf_to_trim) = if is_line && on_axis.perp {
+        // not upstream (WR-401, #545, opt-in): the edge's analytic surface of revolution
+        let analytic = if k.fixes.revolve_analytic_profile_faces && !(is_line && on_axis.perp) {
+            ignored(revolved_analytic_surface(
+                k,
+                &copied_orig_edge_curve,
+                self.base_pt,
+                self.axis,
+                self.angle,
+                eps,
+            ))?
+            .flatten()
+        } else {
+            None
+        };
+        let is_analytic = analytic.is_some();
+        let (new_surf, surf_to_trim) = if let Some(surface) = analytic {
+            (surface, None)
+        } else if is_line && on_axis.perp {
             // Creates the surface by SmBSplineSurface::CreateSurfOfRevolution
             let surf_to_trim = create_rot_srf(
                 k,
@@ -827,7 +1045,7 @@ impl RotationalSweepGeometry {
                 plane_uv00, plane_uv01, plane_uv10, plane_uv11,
             )?;
             is_plane = true;
-            (new_surf, Some(Surface::from(surf_to_trim)))
+            (Surface::from(new_surf), Some(Surface::from(surf_to_trim)))
         } else {
             // Creates the surface by SmBSplineSurface::CreateSurfOfRevolution
             let new_surf = create_rot_srf(
@@ -837,9 +1055,9 @@ impl RotationalSweepGeometry {
                 self.axis,
                 self.angle,
             )?;
-            (new_surf, None)
+            (Surface::from(new_surf), None)
         };
-        let mut new_surf = Surface::from(new_surf);
+        let mut new_surf = new_surf;
 
         let start_uv = new_surf.natural_uv_domain().min();
         let normal = new_surf.evaluate_normal(k, start_uv, Side::Left, Side::Left)?;
@@ -859,7 +1077,7 @@ impl RotationalSweepGeometry {
         }
 
         // Create corresponding analytics if requested
-        if self.base.make_analytics {
+        if self.base.make_analytics && !is_analytic {
             // Copy pNewSurf, when possible as an analytic surface
             new_surf = new_surf.copy_and_add_analytics(k)?;
         }
@@ -908,6 +1126,13 @@ impl RotationalSweepGeometry {
             }
         } else if end_end > eps || st_st > eps {
             return Err(SolidError::sm_err(OP_EDGE_HIGHER));
+        }
+
+        // not upstream (WR-401): an analytic surface runs v along the axis (or the
+        // arc's angle), so where it runs against the edge curve its normal is opposite
+        // to the B-spline surface of revolution's: orient the loop as for the plane
+        if is_analytic && swap_start_end {
+            flip_orients = true;
         }
 
         // With the purpose to orient the loop correctly, here we invert the

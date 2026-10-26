@@ -1052,7 +1052,7 @@ impl<'s> SurfaceDropCurve<'s> {
 
         // add every Surface U internal continuity boundary to sIsoCurves array
         let u_conts: Vec<ContinuityType> = cache.u_continuities().to_vec();
-        let (u_knots, _) = surface.knots(SurfParamType::U, None)?;
+        let (u_knots, _) = surface.knots_with_nurb(k, SurfParamType::U, None)?;
         for ii in 1..u_conts.len().saturating_sub(1) {
             if is_c0(&u_conts, ii)? {
                 let value = index(&u_knots, ii)?;
@@ -1067,7 +1067,7 @@ impl<'s> SurfaceDropCurve<'s> {
         }
 
         // add every surface V internal continuity boundary to sIsoCurves array
-        let (v_knots, _) = surface.knots(SurfParamType::V, None)?;
+        let (v_knots, _) = surface.knots_with_nurb(k, SurfParamType::V, None)?;
         let v_conts: Vec<ContinuityType> = cache.v_continuities().to_vec();
         for ii in 1..v_conts.len().saturating_sub(1) {
             if is_c0(&v_conts, ii)? {

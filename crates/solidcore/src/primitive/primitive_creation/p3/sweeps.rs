@@ -11,6 +11,16 @@
 //! Deviations: typed services and owned curve slots replace pointers; null curve
 //! dereferences become errors. The existing sweep engine bounds repetitions to
 //! 4096. No additional recursion. Unavailable calls retain their full caller tails.
+//! Not upstream (WR-401, tangency-labs/solidcore#545, opt-in
+//! `Kernel::fixes.revolve_analytic_profile_faces`): a full turn of a
+//! multi-curve profile sweeps each line or circular arc to its analytic surface
+//! (cylinder, cone, sphere, torus) bounded to the curve, instead of an
+//! `SmSurfOfRevolution` (`revolved_analytic_surface`, in
+//! `sweep::rotational_sweep_geometry`, which also serves the partial turn); other
+//! curves keep upstream's surface of revolution.
+//! Not upstream (WR-403, tangency-labs/solidcore#478, opt-in
+//! `Kernel::fixes.revolve_nested_shells_as_cavities`): after a full turn's
+//! stitch, a closed shell inside another becomes that solid's cavity.
 
 use super::{construct::target, geometry::bspline, PrimitiveAccess};
 use crate::curve::curve::Curve;
@@ -26,7 +36,7 @@ use crate::nurbs::b_spline_curve::p1::BSplineCurve;
 use crate::primitive::primitive_creation::p1::{analytic_rotational_sweep, PrimitiveCreation};
 use crate::surface::surf_of_revolution::p1::SurfOfRevolution;
 use crate::surface::surface::Surface;
-use crate::sweep::rotational_sweep_geometry::RotationalSweepGeometry;
+use crate::sweep::rotational_sweep_geometry::{revolved_analytic_surface, RotationalSweepGeometry};
 use crate::sweep::topology_sweep::{
     engine::SweepTargets, geometry::SweepGeometry, SweepEntity, TopologySweep,
 };
@@ -284,6 +294,27 @@ impl PrimitiveCreation {
                     *slot = None;
                 }
             }
+            // not upstream (WR-401, #545, opt-in): the curve's analytic surface
+            if face.is_none() && a.kernel(brep)?.fixes.revolve_analytic_profile_faces {
+                if let Some(curve) = slot.as_ref() {
+                    let tolerance = a.brep(brep)?.tolerance();
+                    let analytic = ignored(revolved_analytic_surface(
+                        a.kernel(brep)?,
+                        curve,
+                        axis_base,
+                        axis,
+                        360.0,
+                        tolerance,
+                    ))?
+                    .flatten();
+                    if let Some(surface) = analytic {
+                        let domain = surface.natural_uv_domain();
+                        if ignored(a.surface_face(brep, surface, domain, &mut face))?.is_none() {
+                            face = None;
+                        }
+                    }
+                }
+            }
             if face.is_none() {
                 if let Some(curve) = slot.as_ref() {
                     let rev = ignored(SurfOfRevolution::create_canonical(
@@ -307,6 +338,12 @@ impl PrimitiveCreation {
             }
         }
         ignore_status(a.stitch_and_orient(brep))?;
+        // not upstream (WR-403, #478, opt-in): a closed shell inside another is its cavity
+        if a.kernel(brep)?.fixes.revolve_nested_shells_as_cavities {
+            a.with_brep_mut(brep, |k, b, _, env| {
+                crate::topology::brep::p6::nest_closed_shells_as_cavities(k, b, env)
+            })?;
+        }
         a.set_editing(brep, false)?;
         Ok(())
     }
@@ -400,5 +437,131 @@ impl PrimitiveCreation {
         })();
         a.kernel_mut(brep)?.context.set_doing_boolean(previous);
         result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::curve::curve::Curve;
+    use crate::kernel::Kernel;
+    use crate::math::{Point3, Vec3};
+    use crate::primitive::api_curves;
+    use crate::surface::surface::SurfaceKind;
+    use crate::sweep::api_brep::create_rotational_sweep;
+    use crate::topology::Brep;
+
+    fn segment(a: [f64; 3], b: [f64; 3]) -> Curve {
+        let [ax, ay, az] = a;
+        let [bx, by, bz] = b;
+        Curve::from(
+            api_curves::create_line_segment(Point3::new(ax, ay, az), Point3::new(bx, by, bz))
+                .expect("segment"),
+        )
+    }
+
+    /// The faces of `b` whose surface is a cylinder or cone.
+    fn cones(b: &Brep) -> usize {
+        b.faces()
+            .iter()
+            .filter(|(_, f)| {
+                f.surface
+                    .as_ref()
+                    .is_some_and(|s| matches!(s.kind(), SurfaceKind::Cone(_)))
+            })
+            .count()
+    }
+
+    /// A full turn of a rectangle off the axis (a tube) makes its two walls cylinders
+    /// with the opt-in; upstream makes surfaces of revolution.
+    #[test]
+    fn issue_545_revolved_profile_lines_are_cylinders() {
+        let profile = [
+            segment([1.0, 0.0, 0.0], [2.0, 0.0, 0.0]),
+            segment([2.0, 0.0, 0.0], [2.0, 0.0, 1.0]),
+            segment([2.0, 0.0, 1.0], [1.0, 0.0, 1.0]),
+            segment([1.0, 0.0, 1.0], [1.0, 0.0, 0.0]),
+        ];
+        let curves: Vec<Option<&Curve>> = profile.iter().map(Some).collect();
+        let (o, z) = (Point3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0));
+
+        let mut k = Kernel::default();
+        let stock = create_rotational_sweep(&mut k, &curves, o, z, 360.0, false).unwrap();
+        assert_eq!(cones(&stock), 0);
+
+        k.fixes.revolve_analytic_profile_faces = true;
+        let tube = create_rotational_sweep(&mut k, &curves, o, z, 360.0, false).unwrap();
+        assert_eq!(cones(&tube), 2);
+        assert_eq!(tube.faces().iter().count(), 4);
+        assert!(crate::topology::brep::p2::is_manifold_solid(&tube).unwrap());
+    }
+
+    /// A quarter turn of the same rectangle makes its walls cylinder quarters with the
+    /// opt-in (WR-401, the partial turn's edge sweep), and stays a closed solid.
+    #[test]
+    fn issue_545_partial_turn_lines_are_cylinders() {
+        use crate::geom::attribute::{AttributeStore, ObjectKey};
+        use crate::mass::integrator::properties::{brep_volume, PropertyAttributes};
+
+        let profile = [
+            segment([1.0, 0.0, 0.0], [2.0, 0.0, 0.0]),
+            segment([2.0, 0.0, 0.0], [2.0, 0.0, 1.0]),
+            segment([2.0, 0.0, 1.0], [1.0, 0.0, 1.0]),
+            segment([1.0, 0.0, 1.0], [1.0, 0.0, 0.0]),
+        ];
+        let curves: Vec<Option<&Curve>> = profile.iter().map(Some).collect();
+        let (o, z) = (Point3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0));
+
+        let live_faces = |b: &Brep| crate::topology::brep::p1::faces(b, None).unwrap().len();
+        let mut k = Kernel::default();
+        let stock = create_rotational_sweep(&mut k, &curves, o, z, 90.0, true).unwrap();
+        k.fixes.revolve_analytic_profile_faces = true;
+        let mut quarter = create_rotational_sweep(&mut k, &curves, o, z, 90.0, true).unwrap();
+        assert_eq!(cones(&quarter), 2);
+        // the same topology as upstream's surfaces of revolution
+        assert_eq!(live_faces(&quarter), live_faces(&stock));
+        assert!(crate::topology::brep::p2::is_manifold_solid(&quarter).unwrap());
+        let store = AttributeStore::default();
+        let key_of = |_| ObjectKey(0);
+        let attributes = PropertyAttributes {
+            store: &store,
+            key_of: &key_of,
+        };
+        let volume = brep_volume(&k, &mut quarter, 1e-6, &attributes).unwrap();
+        // a quarter of pi (2^2 - 1^2) by 1
+        let want = 0.75 * std::f64::consts::PI;
+        assert!((volume - want).abs() < 1e-4 * want, "volume {volume}, want {want}");
+    }
+
+    /// A full turn of a half annulus about its diameter is a hollow ball with the
+    /// opt-in; upstream makes the inner ball a second solid.
+    #[test]
+    fn issue_478_full_turn_nested_shell_is_a_cavity() {
+        use crate::geom::attribute::{AttributeStore, ObjectKey};
+        use crate::mass::integrator::properties::{brep_volume, PropertyAttributes};
+
+        let (o, x) = (Point3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0));
+        let arc = |r: f64| Curve::from(api_curves::create_arc(o, r, 0.0, 180.0).unwrap());
+        let profile = [
+            segment([18.5, 0.0, 0.0], [40.0, 0.0, 0.0]),
+            arc(40.0),
+            segment([-40.0, 0.0, 0.0], [-18.5, 0.0, 0.0]),
+            arc(18.5),
+        ];
+        let curves: Vec<Option<&Curve>> = profile.iter().map(Some).collect();
+
+        let mut k = Kernel::default();
+        k.fixes.revolve_nested_shells_as_cavities = true;
+        let mut ball = create_rotational_sweep(&mut k, &curves, o, x, 360.0, true).unwrap();
+        let store = AttributeStore::default();
+        let key_of = |_| ObjectKey(0);
+        let attributes = PropertyAttributes {
+            store: &store,
+            key_of: &key_of,
+        };
+        let volume = brep_volume(&k, &mut ball, 1e-6, &attributes).unwrap();
+        // 4/3 pi (40^3 - 18.5^3)
+        let want = 4.0 / 3.0 * std::f64::consts::PI * (40.0_f64.powi(3) - 18.5_f64.powi(3));
+        assert!((volume - want).abs() < 1e-3 * want, "volume {volume}, want {want}");
+        assert!(crate::topology::brep::p2::is_manifold_solid(&ball).unwrap());
     }
 }

@@ -157,14 +157,25 @@ pub(super) trait RecoveryOps {
     }
     fn topology_split(&mut self, c: &mut Recovery<'_>, geom: FilletGeomId) -> Result<FilletGeomId> {
         let solver_id = required(c.fillets.geom(geom)?.fillet_solver())?;
-        c.fillets.topology_split(
-            c.k,
-            geom,
-            FilletGeomType::Default,
-            solver_id,
-            c.solver,
-            c.target,
-        )
+        match c.ownership.split_corners() {
+            Some(corners) => c.fillets.topology_split_with(
+                c.k,
+                geom,
+                FilletGeomType::Default,
+                solver_id,
+                c.solver,
+                c.target,
+                corners,
+            ),
+            None => c.fillets.topology_split(
+                c.k,
+                geom,
+                FilletGeomType::Default,
+                solver_id,
+                c.solver,
+                c.target,
+            ),
+        }
     }
     fn rail_x_edge(
         &mut self,

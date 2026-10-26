@@ -177,9 +177,18 @@ fn eval_with_tangent(
     t: f64,
     orient: OrientType,
 ) -> Result<(Point3, Vec3, f64)> {
-    let der = trim.evaluate(k, t, 1, false, true)?;
-    let pt = der.first().copied().unwrap_or(Vec3::UNDEF);
-    let mut tan = der.get(1).copied().unwrap_or(Vec3::UNDEF);
+    // (the B-spline kinds evaluate into a stack array: no allocation per evaluation)
+    let mut fixed = [Vec3::UNDEF; 2];
+    let (pt, mut tan) = if trim.evaluate_into(t, 1, false, true, &mut fixed)? {
+        let [p, d] = fixed;
+        (p, d)
+    } else {
+        let der = trim.evaluate(k, t, 1, false, true)?;
+        (
+            der.first().copied().unwrap_or(Vec3::UNDEF),
+            der.get(1).copied().unwrap_or(Vec3::UNDEF),
+        )
+    };
     if orient == OrientType::Opposite {
         tan = -tan;
     }

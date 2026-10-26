@@ -614,6 +614,11 @@ pub struct FilletCorner {
     /// `m_vSurfaces`: the surfaces built for the corner (`SM_FILLETSURF_TYPE` is
     /// `SmSurface`: an end patch copied with `CopyAndAddAnalytics` can be analytic).
     pub surfaces: Vec<Surface>,
+    /// Not upstream: the fillet-B-rep face `MakeFaceBrep` made from each of `surfaces`,
+    /// as `(index into surfaces, face)` in the order made. Upstream's face holds the
+    /// corner's own surface (`m_vSurfaces[i]` is that face's `GetSurface()`); the port
+    /// hands the face a copy, so this names the face whose surface is `surfaces[i]`.
+    pub surface_faces: Vec<(usize, FaceId)>,
     /// `m_bBevel`.
     pub bevel: bool,
     /// `m_bBlending`.
@@ -790,6 +795,7 @@ impl FilletCorner {
             vertices: Vec::new(),
             edges: Vec::new(),
             surfaces: Vec::new(),
+            surface_faces: Vec::new(),
             bevel: false,
             blending: false,
             chamfer: false,

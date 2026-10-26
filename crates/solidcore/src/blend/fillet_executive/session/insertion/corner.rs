@@ -6,7 +6,7 @@ use super::FaceMarker;
 use crate::blend::fillet_corner::p1::CornerInsertionContext;
 use crate::blend::fillet_geom::p1::{FilletBrep, FilletCornerId};
 use crate::blend::fillet_geom::p4::IntersectionTopologyContext;
-use crate::error::{Result, SolidError};
+use crate::error::Result;
 use crate::surface::surface::Surface;
 use crate::topology::{edge, Brep, EdgeId, FaceId};
 
@@ -99,14 +99,19 @@ impl CornerInsertionContext for LiveGeometryInsertion<'_> {
     }
     fn register_blending_intersection(
         &mut self,
-        _target: &mut Brep,
-        _face: FaceId,
+        target: &mut Brep,
+        face: FaceId,
         _surface: &Surface,
+        surface_face: Option<FaceId>,
     ) -> Result<()> {
-        // UNPORTED(blend.fillet_executive_p1): actual retained corner-patch Surface identity for RegisterExistingSSI
-        Err(SolidError::unported(
-            "SmTopologyIntersector::RegisterExistingSSI (retained corner patch Surface)",
-            "blend.fillet_executive_p1",
-        ))
+        // upstream's pFBSurface is the surface of the fillet-B-rep face made from it: the
+        // registration names that face's surface
+        let Some(managed) = surface_face else {
+            // a patch surface no face was made from: the intersector never meets it, so
+            // the registration has no effect
+            return Ok(());
+        };
+        let binding = LiveGeometryInsertion::capture_managed_surface(self, managed)?;
+        LiveGeometryInsertion::register_bound_intersection(self, target, face, binding.as_ref())
     }
 }

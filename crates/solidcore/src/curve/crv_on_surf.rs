@@ -134,6 +134,7 @@ use crate::nurbs::b_spline_curve::{BSplineCurve, BoundingBoxRequest, BoundingBox
 use crate::nurbs::b_spline_curve_n_lib::TrimMode;
 use crate::nurbs::b_spline_surface_n_lib::p2::EvaluateFlags;
 use crate::nurbs::knots::Side;
+use crate::nurbs::math::MAX_DERIVATIVE;
 use crate::surface::surface::p2::Surface;
 use crate::topology::database_io::{DatabaseReader, FileType};
 
@@ -673,20 +674,42 @@ impl CrvOnSurf {
             non_zero_tangents: nz,
         };
 
-        // Surface eval
-        let mut srf = self
-            .surface
-            .evaluate(k, uv, n_eval, n_eval, flags(non_zero_tangents));
+        // Surface eval: the B-spline kinds into a stack matrix (the same values; no
+        // allocation per evaluation), the others through the Vec path
+        let mut fixed = [[Vec3::ZERO; MAX_DERIVATIVE + 1]; MAX_DERIVATIVE + 1];
+        let mut in_fixed = self.surface.evaluate_into(
+            uv,
+            n_eval,
+            n_eval,
+            flags(non_zero_tangents),
+            &mut fixed,
+        );
+        let srf = if matches!(in_fixed, Ok(false)) {
+            let mut srf = self
+                .surface
+                .evaluate(k, uv, n_eval, n_eval, flags(non_zero_tangents));
 
-        // If the surface can't handle this many derivatives (default bNonZeroTangents)
-        while let Err(e) = &srf {
-            if e.is_unported() || n_eval == 0 {
-                break;
+            // If the surface can't handle this many derivatives (default bNonZeroTangents)
+            while let Err(e) = &srf {
+                if e.is_unported() || n_eval == 0 {
+                    break;
+                }
+                n_eval -= 1;
+                srf = self.surface.evaluate(k, uv, n_eval, n_eval, flags(true));
             }
-            n_eval -= 1;
-            srf = self.surface.evaluate(k, uv, n_eval, n_eval, flags(true));
-        }
-        let srf = srf?;
+            Some(srf?)
+        } else {
+            // (the same retries on the stack matrix)
+            while let Err(e) = &in_fixed {
+                if e.is_unported() || n_eval == 0 {
+                    break;
+                }
+                n_eval -= 1;
+                in_fixed = self.surface.evaluate_into(uv, n_eval, n_eval, flags(true), &mut fixed);
+            }
+            in_fixed?;
+            None
+        };
 
         // The children only see orders <= 3. Check the requested output size after
         // their native error paths, but before any caller-sized arithmetic/storage.
@@ -699,12 +722,20 @@ impl CrvOnSurf {
                 reason: "requested derivative output length exceeds the shared bound",
             })?;
 
-        // For subscripting into the surface pt/deriv array
-        let ss = |u: usize, v: usize| {
-            srf.get(u)
+        // For subscripting into the surface pt/deriv array (the stack matrix holds
+        // `[0..=n_eval][0..=n_eval]`, the Vec path's shape)
+        let ss = |u: usize, v: usize| match &srf {
+            Some(srf) => srf
+                .get(u)
                 .and_then(|r| r.get(v))
                 .copied()
-                .unwrap_or(Vec3::UNDEF)
+                .unwrap_or(Vec3::UNDEF),
+            None if u <= n_eval && v <= n_eval => fixed
+                .get(u)
+                .and_then(|r| r.get(v))
+                .copied()
+                .unwrap_or(Vec3::UNDEF),
+            None => Vec3::UNDEF,
         };
 
         let mut out = vec![Vec3::UNDEF; output_len];

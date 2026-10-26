@@ -1,0 +1,11 @@
+#### WR-363. A box minus an exact rational-NURBS cylinder gives an invalid result
+- **Severity:** Wrong result
+- **Area:** Boolean
+- **Location:** not localised upstream.
+- **What happens:** the box (−14, 0, −14)–(14, 20, 14) minus a cylinder (base (0, 50, −60), axis Z, r 40, h 120) given as exact rational NURBS (two rational quadratic half-cylinder faces, 4 spans each) gives an invalid result. Edge and vertex tolerances reach 0.78 mm against a body tolerance of 0.022 (tests #59 and #82), and `ValidatePointers` fails. The same box minus SMLib's analytic cylinder is valid.
+- **Trigger:** issue #387 (SolidCraft's `kernel-smlib`; SolidCraft avoids it by importing extruded circles as analytic cylinders).
+- **How found:** issue #387.
+- **Confirmed:** from the issue; not reproduced on this harness's C++ reference.
+- **Rust port:** with the cylinder made NURBS by `SmBrep::TurnToNURBS` (`topology::brep::p3::turn_to_nurbs`), the cut is a manifold solid with the analytic volume (to 1e-5 relative), as is the analytic cut. No defect was reproduced. The NURBS form differs from the issue's flat-array import, so this is a guard, not proof that the issue's exact input is fine.
+- **Test:** `crates/solidcore/tests/issue_387_nurbs_cylinder_cut.rs`, `issue_387_box_minus_nurbs_cylinder_matches_the_analytic_cut`.
+- Fixes tangency-labs/solidcore#387 (Rust port).

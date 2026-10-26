@@ -5258,4 +5258,49 @@ mod tests {
             context()
         );
     }
+
+    /// Probe for the known mismatches gen0350 / gen0346 (run on demand with
+    /// `--ignored`, `PROBE_CASE=350` or `346`): runs both sides on every op prefix of
+    /// the generated case and prints, per prefix, the state lengths, the first
+    /// differing index and the values around it.
+    #[test]
+    #[ignore = "diagnostic probe, run on demand"]
+    fn known_mismatch_prefix_probe() {
+        let index: usize = std::env::var("PROBE_CASE")
+            .map_or(350, |s| s.parse().expect("PROBE_CASE index"));
+        let seed = CaseContext::seed_for("offset.offset_geometry_creation", index);
+        let generated = generate(&mut Rng::new(seed)).expect("generator");
+        eprintln!("gen{index:04} seed={seed} input={generated}");
+        let input: Inputs = serde_json::from_value(generated).expect("input");
+        for prefix_len in 1..=input.ops.len() {
+            let mut prefix = input.clone();
+            prefix.ops.truncate(prefix_len);
+            let cpp = run_cpp(&prefix);
+            let rust = run_rust(&prefix);
+            let (Ok(cpp), Ok(rust)) = (&cpp, &rust) else {
+                eprintln!("PREFIX {prefix_len}: cpp ok={} rust ok={}", cpp.is_ok(), rust.is_ok());
+                continue;
+            };
+            let c: &[f64] = cpp.values.get("state").map_or(&[], Vec::as_slice);
+            let r: &[f64] = rust.values.get("state").map_or(&[], Vec::as_slice);
+            let first = c
+                .iter()
+                .zip(r)
+                .position(|(a, b)| a.to_bits() != b.to_bits() && (a - b).abs() > 1e-9 * a.abs().max(b.abs()));
+            eprintln!(
+                "PREFIX {prefix_len}: lens cpp={} rust={} first_diff={first:?}",
+                c.len(),
+                r.len()
+            );
+            if let Some(i) = first {
+                let lo = i.saturating_sub(40);
+                eprintln!("  cpp[{lo}..]={:?}", c.get(lo..(i + 40).min(c.len())).unwrap_or(&[]));
+                eprintln!("  rust[{lo}..]={:?}", r.get(lo..(i + 40).min(r.len())).unwrap_or(&[]));
+            }
+            if prefix_len == input.ops.len() {
+                eprintln!("FULL cpp={c:?}");
+                eprintln!("FULL rust={r:?}");
+            }
+        }
+    }
 }

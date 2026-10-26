@@ -1057,6 +1057,31 @@ impl<A: Ord + Copy, B: Ord + Copy> Relation<A, B> {
             .unwrap_or_default()
     }
 
+    /// Every first related to `second`, sorted (`GetFirsts`).
+    #[must_use]
+    pub fn firsts(&self, second: B) -> Vec<A> {
+        self.second_to_first
+            .get(&second)
+            .map(|s| s.iter().copied().collect())
+            .unwrap_or_default()
+    }
+
+    /// Removes the pair `first`/`second` (`RemovePair`); a pair not related is a no-op.
+    pub fn remove_pair(&mut self, first: A, second: B) {
+        if let Some(set) = self.first_to_second.get_mut(&first) {
+            set.remove(&second);
+            if set.is_empty() {
+                self.first_to_second.remove(&first);
+            }
+        }
+        if let Some(set) = self.second_to_first.get_mut(&second) {
+            set.remove(&first);
+            if set.is_empty() {
+                self.second_to_first.remove(&second);
+            }
+        }
+    }
+
     /// Every first that is in a pair, sorted (`GetAllFirsts`).
     #[must_use]
     pub fn all_firsts(&self) -> Vec<A> {

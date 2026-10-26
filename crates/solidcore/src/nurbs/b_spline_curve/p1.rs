@@ -138,8 +138,8 @@ use crate::nurbs::iges::{iges_126_curve, Entity126};
 use crate::nurbs::knots::Side;
 use crate::nurbs::math::{CPoint, MatrixType, RealMatrix, NOW, NOZ};
 use crate::nurbs::nurbs_crv::{
-    allocate_nurb_curve, copy_nurb_curve, crv_derivs, crv_eval, crv_remove_knots, extract_frame,
-    fixup_knot_vector, get_knots, to_euclid,
+    allocate_nurb_curve, copy_nurb_curve, crv_derivs, crv_derivs_into, crv_eval, crv_remove_knots,
+    extract_frame, fixup_knot_vector, get_knots, to_euclid,
 };
 
 const OP_DATA: &str = "nurbs::b_spline_curve::p1::BSplineCurve::from_data";
@@ -1022,6 +1022,86 @@ impl BSplineCurve {
         Ok(pv)
     }
 
+    /// [`BSplineCurve::evaluate`] into the caller's `out[..=num_derivs]` (no allocation
+    /// on the main path): the same operations in the same order, so the same values bit
+    /// for bit; the zero-tangent repair's re-evaluation keeps the `Vec` path.
+    ///
+    /// # Errors
+    ///
+    /// As [`BSplineCurve::evaluate`]; `SM_ERR` when `out` is shorter than
+    /// `num_derivs + 1`.
+    pub(crate) fn evaluate_into(
+        &self,
+        t: f64,
+        num_derivs: usize,
+        from_left: bool,
+        non_zero_tangents: bool,
+        out: &mut [Vec3],
+    ) -> Result<()> {
+        // pass simple calls along to EvaluatePoint
+        if num_derivs == 0 {
+            let p = self.evaluate_point(t)?;
+            *out.first_mut().ok_or_else(|| SolidError::sm_err(OP_EVAL))? = p;
+            return Ok(());
+        }
+
+        // natural extent
+        let cur = self.nurb_ref()?;
+        let (u0, um) = cur.param_bounds();
+        let natural_interval = Extent1d::from_min_max(u0, um);
+        let mut t = t;
+
+        // when t is out-of-bounds and not allowed to evaluate out-of-bounds
+        if !natural_interval.contains_value(t, 0.0) && !self.is_out_of_bounds_enabled() {
+            t = natural_interval.clamp_value(t);
+        }
+
+        let side = if from_left { Side::Left } else { Side::Right };
+        // (the Vec path's `num_derivs + 1` entries, its length check included)
+        let pv = out
+            .get_mut(..=num_derivs)
+            .ok_or_else(|| SolidError::sm_err(OP_EVAL))?;
+        crv_derivs_into(cur, t, side, num_derivs, pv).map_err(SolidError::nl_ser(OP_EVAL))?;
+
+        // When asked, find a direction for zero-length first derivatives from the
+        // 2nd derivative value.
+        if non_zero_tangents {
+            let p0 = pv.first().copied().unwrap_or(Vec3::UNDEF);
+            let scaled_zero = EFF_ZERO * (1.0 + p0.max_dimension());
+            let new_len = 1.1 * scaled_zero;
+
+            let d1 = pv.get(1).copied().unwrap_or(Vec3::UNDEF);
+            if num_derivs >= 1 && d1.length_squared() < new_len * new_len {
+                if num_derivs < 2 {
+                    // recurse so the next section sets the 1st derivative; the call
+                    // takes the `SmBSplineCurve.h` default `bNonZeroTangents = FALSE`,
+                    // so it returns the exact (zero) first derivative
+                    let vals = self
+                        .evaluate(t, 2, from_left, false)
+                        .unwrap_or_else(|_| vec![Vec3::UNDEF; 3]);
+                    if let (Some(slot), Some(&v)) = (pv.get_mut(1), vals.get(1)) {
+                        *slot = v;
+                    }
+                } else {
+                    let d2 = pv.get(2).copied().unwrap_or(Vec3::UNDEF);
+                    let len = d2.length();
+                    if len > new_len {
+                        let mut d1 = (new_len / len) * d2;
+                        // at the 'top' of the domain the degenerate derivative is
+                        // shrinking, so it points against the 2nd derivative
+                        if t > self.natural_interval().mid() {
+                            d1 *= -1.0;
+                        }
+                        if let Some(slot) = pv.get_mut(1) {
+                            *slot = d1;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Tessellates the curve over `interval` (`Tessellate`): bisection with the chord
     /// height and angle tolerances, and a maximum segment length of the approximate
     /// length over `min_segments` when `min_segments > 1`.
@@ -1822,6 +1902,60 @@ mod tests {
         ];
         let u = vec![0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0];
         BSplineCurve::from_nurb(Curve::new(pw, 3, u).unwrap(), 3, false)
+    }
+
+    /// evaluate_into gives the Vec path's values bit for bit: degrees 1-5, rational and
+    /// not, derivative counts 0-3, both sides, with and without the zero-tangent repair,
+    /// on a curve whose first two control points coincide (a zero first derivative at
+    /// the start, so the repair's recursive and second-derivative branches run).
+    #[test]
+    fn evaluate_into_is_bit_identical_to_the_vec_path() {
+        let bits = |v: &[Vec3]| -> Vec<u64> {
+            v.iter().flat_map(|p| [p.x, p.y, p.z]).map(f64::to_bits).collect()
+        };
+        for p in 1..=5usize {
+            for rational in [false, true] {
+                for degenerate in [false, true] {
+                    let n = p + 3;
+                    let pw: Vec<CPoint> = (0..n)
+                        .map(|i| {
+                            let j = if degenerate && i == 1 { 0 } else { i };
+                            let (x, y, z) = (j as f64, ((j * 7) % 5) as f64 * 0.4, (j % 3) as f64);
+                            let w = if rational { 0.5 + (i % 3) as f64 * 0.75 } else { NOW };
+                            if rational {
+                                CPoint::new(x * w, y * w, z * w, w)
+                            } else {
+                                CPoint::new(x, y, z, w)
+                            }
+                        })
+                        .collect();
+                    let mut u = vec![0.0; p + 1];
+                    for k in 1..n - p {
+                        u.push(k as f64 / (n - p) as f64);
+                    }
+                    u.extend(vec![1.0; p + 1]);
+                    let c = BSplineCurve::from_nurb(Curve::new(pw, p, u).unwrap(), p as u64, false);
+                    let combos = [0.0, 0.13, 0.5, 0.77, 1.0, 1.2].into_iter().flat_map(|t| {
+                        (0..=3usize).flat_map(move |nd| {
+                            [(true, false), (false, false), (true, true)]
+                                .map(|(left, nzt)| (t, nd, left, nzt))
+                        })
+                    });
+                    for (t, nd, left, nzt) in combos {
+                        let vec = c.evaluate(t, nd, left, nzt);
+                        let mut out = [Vec3::new(9.0, 9.0, 9.0); 4];
+                        let into = c.evaluate_into(t, nd, left, nzt, &mut out);
+                        match (&vec, &into) {
+                            (Ok(v), Ok(())) => {
+                                assert_eq!(bits(v), bits(&out[..=nd]), "p {p} t {t} nd {nd}");
+                            }
+                            (Err(a), Err(b)) => assert_eq!(format!("{a:?}"), format!("{b:?}")),
+                            _ => panic!("p {p} t {t} nd {nd}: {vec:?} vs {into:?}"),
+                        }
+                    }
+                }
+            }
+        }
     }
 
     #[test]

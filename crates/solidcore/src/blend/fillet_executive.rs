@@ -9,3 +9,5 @@ pub mod p2;
 pub mod p3;
 pub mod session;
 pub mod topology_changes;
+
+pub use session::finish::fillet_edges;

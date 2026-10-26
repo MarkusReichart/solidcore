@@ -354,7 +354,8 @@ struct CurveLists {
 struct TopologyIntersectorRef;
 
 fn executive_topology_intersector(solver: &FilletSolver) -> Result<TopologyIntersectorRef> {
-    // UNPORTED(blend.fillet_executive_p1): SmFilletExecutive::GetTopologyIntersector
+    // UNPORTED(blend.fillet_executive_p1): SmFilletExecutive::GetTopologyIntersector (the
+    // indexed entry has no executive; the live session's context provides it)
     unported_on(
         solver.executive,
         "SmFilletExecutive::GetTopologyIntersector",
@@ -364,7 +365,8 @@ fn executive_topology_intersector(solver: &FilletSolver) -> Result<TopologyInter
 
 /// `pFilExec->m_pAttributeE->GetUsers(sAllEdges)` (unit `blend.fillet_executive_p1`).
 fn executive_attribute_e_users(solver: &FilletSolver) -> Result<Vec<EdgeId>> {
-    // UNPORTED(blend.fillet_executive_p1): SmFilletExecutive::m_pAttributeE->GetUsers
+    // UNPORTED(blend.fillet_executive_p1): SmFilletExecutive::m_pAttributeE->GetUsers (the
+    // indexed entry has no executive; the live session's context provides it)
     unported_on(
         solver.executive,
         "SmFilletExecutive::m_pAttributeE",
@@ -390,6 +392,7 @@ fn merge_curve_on_surfaces(
     other_edge: EdgeId,
 ) -> Result<(bool, Vec<EdgeId>)> {
     // UNPORTED(blend.fillet_executive_p1): SmFilletExecutive::GetTopologyIntersector()->MergeCurveOnSurfaces
+    // (the indexed entry has no executive; the live session's context provides it)
     unported_on(
         (ti, target, surface, tol, curve, uv_curve, other_edge),
         "SmTopologyIntersector::MergeCurveOnSurfaces",
@@ -407,6 +410,7 @@ fn register_existing_ssi(
     fillet_surface: Option<&Surface>,
 ) -> Result<()> {
     // UNPORTED(blend.fillet_executive_p1): SmFilletExecutive::GetTopologyIntersector()->RegisterExistingSSI
+    // (the indexed entry has no executive; the live session's context provides it)
     unported_on(
         (ti, face_surface, fillet_surface),
         "SmTopologyIntersector::RegisterExistingSSI",
@@ -417,7 +421,8 @@ fn register_existing_ssi(
 /// `pFilExec->UpdateTopologyChanges(&sFaceAttr, pBaseFace)` with the face's marker
 /// attribute `attr` (unit `blend.fillet_executive_p1`).
 fn update_topology_changes(solver: &FilletSolver, attr: u32, face: FaceId) -> Result<()> {
-    // UNPORTED(blend.fillet_executive_p1): SmFilletExecutive::UpdateTopologyChanges
+    // UNPORTED(blend.fillet_executive_p1): SmFilletExecutive::UpdateTopologyChanges (the
+    // indexed entry has no executive; the live session's context provides it)
     unported_on(
         (solver.executive, attr, face),
         "SmFilletExecutive::UpdateTopologyChanges",

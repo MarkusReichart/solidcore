@@ -1825,6 +1825,72 @@ impl BSplineSurface {
         Ok(sd)
     }
 
+    /// [`BSplineSurface::evaluate_simple`] into the caller's fixed matrix (no allocation
+    /// on the NURB path): fills `sd[..=highest_u_deriv][..=highest_v_deriv]`, the same
+    /// values bit for bit. The power-basis form evaluates as `evaluate_simple` and copies.
+    ///
+    /// # Errors
+    ///
+    /// As [`BSplineSurface::evaluate_simple`]; `InvalidInput` for an order above
+    /// `NL_MAXDER` that the power-basis form would evaluate (the matrix has no room).
+    pub(crate) fn evaluate_simple_into(
+        &self,
+        uv: Point2,
+        highest_u_deriv: usize,
+        highest_v_deriv: usize,
+        u_from_left: bool,
+        v_from_left: bool,
+        only_upper_half: bool,
+        sd: &mut crate::nurbs::srf_nurb::DerivativeMatrix,
+    ) -> Result<()> {
+        const OP: &str = OP_EVAL_SIMPLE;
+        if self.form == BSplineSurfaceForm::Polynomial {
+            let r = self.evaluate_simple(
+                uv,
+                highest_u_deriv,
+                highest_v_deriv,
+                u_from_left,
+                v_from_left,
+                only_upper_half,
+            )?;
+            for (row, src) in sd.iter_mut().zip(&r) {
+                for (x, v) in row.iter_mut().zip(src) {
+                    *x = *v;
+                }
+            }
+            if r.len() > sd.len() || r.iter().any(|row| row.len() > sd.len()) {
+                return Err(invalid(OP, "derivative order above NL_MAXDER"));
+            }
+            return Ok(());
+        }
+        // check input
+        if highest_u_deriv > MAX_DEGREE || highest_v_deriv > MAX_DEGREE {
+            return Err(invalid(OP, "derivative order above NL_MAXDEG"));
+        }
+
+        let mut s_uv = uv;
+        let natural_uv_domain = self.natural_uv_domain();
+        if !natural_uv_domain.contains_point(s_uv, 0.0) {
+            s_uv = natural_uv_domain.clamp_point(s_uv);
+        }
+
+        let uflg = if u_from_left { Side::Left } else { Side::Right };
+        let vflg = if v_from_left { Side::Left } else { Side::Right };
+
+        let sur = surface_nurb(self, OP)?;
+        sur.derivs_into(
+            s_uv.x,
+            s_uv.y,
+            uflg,
+            vflg,
+            only_upper_half,
+            highest_u_deriv,
+            highest_v_deriv,
+            sd,
+        )
+        .map_err(SolidError::nl_ser(OP))
+    }
+
     /// The point at `uv` (`EvaluatePoint`): `N_SrfEvalPt` from the left at knots, or the
     /// power-basis evaluation for [`BSplineSurfaceForm::Polynomial`]. `uv` is not
     /// clamped (upstream's clamping is disabled on purpose).

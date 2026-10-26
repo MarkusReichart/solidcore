@@ -300,9 +300,8 @@ fn run_rust(input: &RealSolid) -> SolidResult<Vec<f64>> {
     let mut geometry = Vec::new();
     crate::util::primitive::append(&k, &body, &mut geometry)?;
     section(&mut values, &geometry);
-    // Unreachable while apply is unported. Before connecting the real API,
-    // replace this draft with its actual post-cleanup attribute store and
-    // entity identities; a fresh constructor alone does not justify emptiness.
+    // The session destroys its merge tags before returning, and SmApiFilletEdges
+    // leaves no attributes on the result: the mass properties read an empty store.
     let store = solidcore::geom::attribute::AttributeStore::default();
     let attributes = solidcore::mass::integrator::properties::PropertyAttributes {
         store: &store,
@@ -331,13 +330,22 @@ fn run_rust(input: &RealSolid) -> SolidResult<Vec<f64>> {
     }
     Ok(values)
 }
-fn apply(_: &mut Kernel, _: &mut Brep, _: &[EdgeId], _: &RealSolid) -> SolidResult<()> {
-    // Replaced with the actual session API once the session worker's commit is
-    // available. The harness never owns an alternate executive implementation.
-    Err(SolidError::Unported {
-        upstream: "SmApiFilletEdges",
-        unit: "blend.fillet_executive_p1",
-    })
+/// `SmApiFilletEdges` through the library's session entry point.
+fn apply(
+    k: &mut Kernel,
+    body: &mut Brep,
+    edges: &[EdgeId],
+    input: &RealSolid,
+) -> SolidResult<()> {
+    solidcore::blend::fillet_executive::fillet_edges(
+        k,
+        body,
+        edges,
+        input.radius,
+        input.xsect,
+        input.continuity,
+        input.thumbweight,
+    )
 }
 pub(super) fn rust(input: &RealSolid) -> Result<Output, HarnessError> {
     ffi::validate_real_solid(&input.wire()).map_err(|e| HarnessError::new(e.to_string()))?;

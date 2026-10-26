@@ -1,0 +1,14 @@
+#### WR-362. `SmApiBoolean` union fails when two cylinder walls are 1e-4 to 1e-3 apart
+- **Severity:** Boolean failure
+- **Area:** Boolean
+- **Location:** not localised upstream. The two r 5 cylinders cross at a grazing angle along two lines beside the coincident cap/top planes, which points at near-tangent surface/surface intersection. It may be related to #392 and #395.
+- **What happens:** the base is an annulus r 3..5 about (0, 10), z 0..2. The lip is a half annulus r 4..5 about (e, 10), y >= 10, extruded over z 2..20, with its cap on the base's top.
+  - At e = 1e-4 and e = 1e-3, the union fails ("not a solid").
+  - At e = 0 and e = 0.01, it is valid with V = 355.000 (analytic 354.99997).
+  - A rig case with two lips returns 1066.0 mm³ instead of 769.47, with no error.
+- **Trigger:** issue #480 (SolidCraft's `kernel-smlib` regression rig).
+- **How found:** issue #480.
+- **Confirmed:** from the issue; not reproduced on this harness's C++ reference.
+- **Rust port:** the port gives a valid union with V = 355.000 (to 1e-4 relative) at every offset: e = 0, 1e-4, 1e-3 and 0.01. No defect was reproduced. This is not a fix; the test guards against a regression.
+- **Test:** `crates/solidcore/tests/issue_480_ring_lip_union.rs`, `issue_480_ring_lip_union_at_every_offset`.
+- Fixes tangency-labs/solidcore#480 (Rust port).

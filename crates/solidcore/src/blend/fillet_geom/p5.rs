@@ -77,8 +77,9 @@
 //!   (SmFilletGeom.cpp:10580-10645); [`Curve::drop_point`] and the solve here each build
 //!   their own. The results are bit-identical in every difftest case; a future
 //!   cache-dependent disagreement should look here first.
-//! - **Unported callees.** `SmFilletExecutive::GetPseudoBrep`
-//!   (`blend.fillet_executive_p1`); the corner members above. `FindEdgeTangentAtPoint`
+//! - **Executive.** `SmFilletExecutive::GetPseudoBrep` is the [`FilletBrep`] the
+//!   geometries live in. **Unported callees:** the corner members above.
+//!   `FindEdgeTangentAtPoint`
 //!   and `SmFilletGeom::Copy` are part 6's (`blend.fillet_geom_p6`). Each stub replaces only
 //!   its call.
 //! - **User pointers.** `MakeRailEdgeuse` stores the two faces' surface pointers in the
@@ -378,17 +379,6 @@ fn fillet_edge_update_split_face(
     corners: &[FilletCorner],
 ) -> Result<()> {
     ignore_non_unported(fb.update_edge_split_face(k, e, orig_face, new_face, target, corners))
-}
-
-/// `pFilletSolver->m_pExecutive->GetPseudoBrep()` (unit `blend.fillet_executive_p1`):
-/// the executive's pseudo B-rep, which is the [`FilletBrep`] the geometries live in.
-fn executive_pseudo_brep(solver: &FilletSolver) -> Result<()> {
-    // UNPORTED(blend.fillet_executive_p1): SmFilletExecutive::GetPseudoBrep
-    unported_on(
-        solver.executive,
-        "SmFilletExecutive::GetPseudoBrep",
-        "blend.fillet_executive_p1",
-    )
 }
 
 /// Actual solver records and extended surfaces used by a corner edge calculation.
@@ -1258,8 +1248,7 @@ impl FilletBrep {
     /// # Errors
     ///
     /// `SM_ERR_NULL_POINTER` for a source without solver or a solver without executive
-    /// (upstream dereferences them); [`SolidError::Unported`] for the executive's
-    /// pseudo B-rep (`blend.fillet_executive_p1`).
+    /// (upstream dereferences them); [`SolidError::Unported`] from the copy's callees.
     pub fn copy_fillet_geom(
         &mut self,
         k: &Kernel,
@@ -1281,8 +1270,8 @@ impl FilletBrep {
         geom.solver = solver_id;
         let g = self.add_geom(geom);
 
-        // Create Rails
-        executive_pseudo_brep(solver)?;
+        // Create Rails (in GetFilletExecutive()->GetPseudoBrep(), the executive's pseudo
+        // B-rep: this one, which the geometries live in)
         for i in 0..2 {
             ignore_non_unported(self.make_rail_edge(k, g, i))?;
         }

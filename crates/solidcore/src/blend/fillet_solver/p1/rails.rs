@@ -14,6 +14,7 @@
 use crate::blend::fillet_geom::p1::{
     CliffHandle, FilStatus, FilletBrep, FilletEdgeType, FilletGeomId, FilletVertex,
 };
+use crate::blend::fillet_geom::p3::SplitCorners;
 use crate::curve::curve::{p2::OwnerChange, Curve};
 use crate::error::{ignored, Result, SolidError};
 use crate::geom::{global_solver::SolverOperation, object::ObjectRef};
@@ -29,6 +30,13 @@ pub trait RailOwnership {
     fn edge_owner(&self, edge: EdgeId) -> Result<(ObjectRef, Option<ObjectRef>)>;
     /// Deliver the notification produced by `Curve::set_owner`.
     fn owner_changed(&mut self, change: OwnerChange) -> Result<()>;
+    /// The executive's corners a geometry split during rollover recovery reads and adds
+    /// its fillet vertices to (`SmFilletGeom::TopologySplit`); `None` (the default): the
+    /// caller lends none, and such a split is
+    /// [`SolidError::Unported`](crate::error::SolidError::Unported).
+    fn split_corners(&mut self) -> Option<&mut dyn SplitCorners> {
+        None
+    }
 }
 pub(crate) struct SupportIntersection<'a> {
     pub start: VertexId,

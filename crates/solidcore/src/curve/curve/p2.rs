@@ -188,7 +188,8 @@ use crate::geom::geom_utility::p1::{
     line_line_closest_point, point_project_to_plane, segment_point_angle_deg_to_perp,
 };
 use crate::geom::geom_utility::p2::{
-    evaluate_curve_continuity, frenet_from_derivatives, ContinuityType, CurveEval,
+    evaluate_curve_continuity_with, frenet_from_derivatives, ContinuityOptions, ContinuityType,
+    CurveEval,
 };
 use crate::geom::global_solver::{
     resolve_object_zone_tol_3d, Branch, GlobalSolve, GlobalSolver, ObjectZoneTol,
@@ -1274,6 +1275,35 @@ impl Curve {
         }
     }
 
+    /// [`Curve::evaluate`] into the caller's `out[..=num_derivs]` for the kinds whose
+    /// `Evaluate` is their B-spline's (B-spline, hyperbola, ellipse/circle, parabola; no
+    /// allocation on the main path): the same values bit for bit, and `true`. For the
+    /// other kinds it writes nothing and returns `false` (the caller uses
+    /// [`Curve::evaluate`]).
+    ///
+    /// # Errors
+    ///
+    /// Those of [`BSplineCurve::evaluate`]; `SM_ERR` when `out` is shorter than
+    /// `num_derivs + 1`.
+    pub(crate) fn evaluate_into(
+        &self,
+        t: f64,
+        num_derivs: usize,
+        from_left: bool,
+        non_zero_tangents: bool,
+        out: &mut [Vec3],
+    ) -> Result<bool> {
+        let base = match &self.kind {
+            CurveKind::BSpline(c) => c,
+            CurveKind::Hyperbola(c) => c.base(),
+            CurveKind::Ellipse(c) => c.base(),
+            CurveKind::Parabola(c) => c.base(),
+            _ => return Ok(false),
+        };
+        base.evaluate_into(t, num_derivs, from_left, non_zero_tangents, out)?;
+        Ok(true)
+    }
+
     /// The point at `t` (`EvaluatePoint`).
     ///
     /// # Errors
@@ -2176,7 +2206,7 @@ pub struct CurveContinuity {
 ///
 /// # Errors
 ///
-/// Those of the evaluators and of [`evaluate_curve_continuity`].
+/// Those of the evaluators and of [`evaluate_curve_continuity_with`].
 pub fn evaluate_continuity<A, B>(
     k: &Kernel,
     this: &A,
@@ -2207,7 +2237,14 @@ where
         second: at(&right, 2),
         third: Some(at(&right, 3)),
     };
-    let continuity = evaluate_curve_continuity(&eval_left, &eval_right, continuity_angle_tol)?;
+    let continuity = evaluate_curve_continuity_with(
+        &eval_left,
+        &eval_right,
+        continuity_angle_tol,
+        &ContinuityOptions {
+            geometric_g2: k.fixes.geometric_g2_continuity,
+        },
+    )?;
 
     // set outputs
     Ok(CurveContinuity {

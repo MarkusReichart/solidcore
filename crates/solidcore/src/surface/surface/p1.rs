@@ -559,6 +559,33 @@ impl StepSurface {
         param: SurfParamType,
         ivl: Option<&Extent1d>,
     ) -> Result<(Vec<f64>, Vec<usize>)> {
+        self.knots_of(param, ivl, None)
+    }
+
+    /// [`StepSurface::knots`] whose multiplicity reads the base's `GetDegree` with its
+    /// NURB made ([`Surface::degree_with_nurb`]): upstream's
+    /// `m_pSurface->GetDegree` makes a lazy base's NURB first.
+    ///
+    /// # Errors
+    ///
+    /// Those of [`StepSurface::knots`]; [`SolidError::Unported`] from the make.
+    pub fn knots_with_nurb(
+        &self,
+        k: &Kernel,
+        param: SurfParamType,
+        ivl: Option<&Extent1d>,
+    ) -> Result<(Vec<f64>, Vec<usize>)> {
+        self.knots_of(param, ivl, Some(k))
+    }
+
+    /// The body of [`StepSurface::knots`]; with a kernel the base's degree is read with
+    /// its NURB made.
+    fn knots_of(
+        &self,
+        param: SurfParamType,
+        ivl: Option<&Extent1d>,
+        k: Option<&Kernel>,
+    ) -> Result<(Vec<f64>, Vec<usize>)> {
         let base = self.base()?;
         let uv_domain = base.step_uv_domain();
         let mut knots = Vec::with_capacity(2);
@@ -586,7 +613,11 @@ impl StepSurface {
         }
 
         // when asked - set multiplicities
-        let num_knots = base.degree(param) + 1;
+        let degree = match k {
+            Some(k) => base.degree_with_nurb(k, param)?,
+            None => base.degree(param),
+        };
+        let num_knots = degree + 1;
         let mults = vec![num_knots; knots.len()];
         Ok((knots, mults))
     }
@@ -878,7 +909,10 @@ pub fn cache_tolerances(k: &Kernel, surface: &Surface) -> Result<CacheTolerances
     let mut angle_tol_rad = 20.0 * PI / 180.0; // Angle tolerance of 20 degrees
 
     // Loosen tolerances on analytic surfaces - they don't need as much subdivision.
-    if surface.degree(SurfParamType::U) <= 2 && surface.degree(SurfParamType::V) <= 2 {
+    // (GetDegree makes a missing NURB: a lazy extrusion's or cone's 0 is not its degree)
+    if surface.degree_with_nurb(k, SurfParamType::U)? <= 2
+        && surface.degree_with_nurb(k, SurfParamType::V)? <= 2
+    {
         chord_height_tol = size / 15.0;
         angle_tol_rad *= 2.0;
     }
@@ -1616,6 +1650,51 @@ impl Surface {
                 )
             }
         }
+    }
+
+    /// [`Surface::evaluate_simple`] into the caller's fixed matrix, for the kinds that
+    /// evaluate through their B-spline (no allocation): fills
+    /// `sd[..=highest_u_deriv][..=highest_v_deriv]` with the same values bit for bit
+    /// and returns `true`. For the other kinds, and an analytic kind whose NURB is not
+    /// made yet, it writes nothing and returns `false` (the caller uses
+    /// [`Surface::evaluate_simple`], which makes it).
+    ///
+    /// # Errors
+    ///
+    /// Those of the evaluation.
+    pub(crate) fn evaluate_simple_into(
+        &self,
+        uv: Point2,
+        highest_u_deriv: usize,
+        highest_v_deriv: usize,
+        flags: EvaluateFlags,
+        sd: &mut crate::nurbs::srf_nurb::DerivativeMatrix,
+    ) -> Result<bool> {
+        let base = match self.kind() {
+            SurfaceKind::BSpline(s) => s,
+            // inherited from SmBSplineSurface
+            SurfaceKind::Cone(s) => s.rev().base(),
+            SurfaceKind::SurfOfRevolution(s) => s.base(),
+            SurfaceKind::SurfOfExtrusion(s) => s.base(),
+            SurfaceKind::Sphere(s) => s.base().base(),
+            SurfaceKind::Torus(s) => s.base().base(),
+            _ => return Ok(false),
+        };
+        // an analytic kind without its NURB yet: `evaluate_simple` makes one first
+        if base.gw_nurb().is_none() {
+            return Ok(false);
+        }
+        self.check_evaluation_copy_depth(0)?;
+        base.evaluate_simple_into(
+            uv,
+            highest_u_deriv,
+            highest_v_deriv,
+            flags.u_side == Side::Left,
+            flags.v_side == Side::Left,
+            flags.only_upper_half,
+            sd,
+        )?;
+        Ok(true)
     }
 
     /// The UV direction that the tangent plane maps onto `vec` (its projection) at
@@ -3091,54 +3170,36 @@ pub(crate) fn convert_domain_from_nurbs_to_step_with(
 }
 
 /// Whether a step from `prev_uv` to `curr_uv` crossed a seam or a pole
-/// (`sm_CrossedSeamOrPole`): never on planes and bilinear B-splines; else a step
+/// (`sm_CrossedSeamOrPole`): never on planes and bilinear B-splines (the B-spline kinds'
+/// `GetDegree`, which makes a missing NURB: [`Surface::degree_with_nurb`]); else a step
 /// longer than 0.4 of the domain side in `u` or in `v`.
-#[must_use]
+///
+/// # Errors
+///
+/// [`SolidError::Unported`] from making a missing NURB.
 pub fn crossed_seam_or_pole(
+    k: &Kernel,
     surface: &Surface,
     prev_uv: Point2,
     curr_uv: Point2,
     domain: &Extent2d,
-) -> bool {
+) -> Result<bool> {
     const MAX_STEP_RATIO: f64 = 0.4;
 
     // First special cases: SmPlane or bilinear.
     match surface.kind() {
-        SurfaceKind::Plane(_) => return false,
-        SurfaceKind::BSpline(b) => {
-            if b.degree(SurfParamType::U) == 1 && b.degree(SurfParamType::V) == 1 {
-                return false;
-            }
-        }
-        // an SmSurfOfRevolution is an SmBSplineSurface
-        SurfaceKind::Cone(s) => {
-            let b = s.rev().base();
-            if b.degree(SurfParamType::U) == 1 && b.degree(SurfParamType::V) == 1 {
-                return false;
-            }
-        }
-        SurfaceKind::SurfOfRevolution(s) => {
-            let b = s.base();
-            if b.degree(SurfParamType::U) == 1 && b.degree(SurfParamType::V) == 1 {
-                return false;
-            }
-        }
-        SurfaceKind::SurfOfExtrusion(s) => {
-            let b = s.base();
-            if b.degree(SurfParamType::U) == 1 && b.degree(SurfParamType::V) == 1 {
-                return false;
-            }
-        }
-        SurfaceKind::Sphere(s) => {
-            let b = s.base().base();
-            if b.degree(SurfParamType::U) == 1 && b.degree(SurfParamType::V) == 1 {
-                return false;
-            }
-        }
-        SurfaceKind::Torus(s) => {
-            let b = s.base().base();
-            if b.degree(SurfParamType::U) == 1 && b.degree(SurfParamType::V) == 1 {
-                return false;
+        SurfaceKind::Plane(_) => return Ok(false),
+        // (SM_CAST_PTR(SmBSplineSurface): the B-spline and the kinds derived from it)
+        SurfaceKind::BSpline(_)
+        | SurfaceKind::Cone(_)
+        | SurfaceKind::SurfOfRevolution(_)
+        | SurfaceKind::SurfOfExtrusion(_)
+        | SurfaceKind::Sphere(_)
+        | SurfaceKind::Torus(_) => {
+            if surface.degree_with_nurb(k, SurfParamType::U)? == 1
+                && surface.degree_with_nurb(k, SurfParamType::V)? == 1
+            {
+                return Ok(false);
             }
         }
         SurfaceKind::CurveBounded(_)
@@ -3153,7 +3214,7 @@ pub fn crossed_seam_or_pole(
     // Check u and v separately.
     let dom_size_u = domain.u_interval().length();
     let dom_size_v = domain.v_interval().length();
-    step.x.abs() > MAX_STEP_RATIO * dom_size_u || step.y.abs() > MAX_STEP_RATIO * dom_size_v
+    Ok(step.x.abs() > MAX_STEP_RATIO * dom_size_u || step.y.abs() > MAX_STEP_RATIO * dom_size_v)
 }
 
 /// `sm_GetSurfaceToEvaluate`: the original surface of the cache owning `node`'s tree
@@ -4243,11 +4304,13 @@ mod tests {
         let d = s.natural_uv_domain();
         // bilinear: never a seam
         assert!(!crossed_seam_or_pole(
+            &Kernel::default(),
             &s,
             Point2::new(0.0, 0.0),
             Point2::new(1.0, 1.0),
             &d
-        ));
+        )
+        .unwrap());
     }
 
     #[test]

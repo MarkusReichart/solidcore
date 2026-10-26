@@ -14,7 +14,8 @@
 //! | [`FilletExecutive::collect_tangent_edge_sequence`] | `SmFilletExecutive::CollectTangentEdgeSequence` |
 //! | [`TemporaryRadiusChange::new`], [`TemporaryRadiusChange::revert`], [`with_temporary_radius_change`] | `SmTemporaryRadiusChange` (constructor, destructor) |
 //! | [`TemporaryRadiusChange::set_up`] | `SmTemporaryRadiusChange::SetUp` |
-//! | `revert_change` (private) | `SmTemporaryRadiusChange::Revert` |
+//! | [`law_can_hold_end_radius`], [`side_edge_end`], [`hold_end_radius`], [`HeldEndRadius`] | `SmTemporaryRadiusChange::SetUp` on the solver itself (shared with the live `CalcRailIntEdgeuse` of `blend.fillet_geom_p2`) |
+//! | `revert_change` (private), [`HeldEndRadius::revert`] | `SmTemporaryRadiusChange::Revert` |
 //! | [`FilletLaw::linear`] | `SmLinearFilletLaw::SmLinearFilletLaw` |
 //! | [`FilletLaw::bspline_elliptical`] | `SmBSplineFilletLaw::SmBSplineFilletLaw` (elliptical blend) |
 //!
@@ -53,7 +54,15 @@
 //!   the port propagates the error.
 //! - The upstream debug drawing (`SM_GFX_CODE`) is omitted.
 //! - Calls into units that are not ported return [`SolidError::Unported`]:
-//!   `LoadFilletSolver` and `CreateSmoothEdgeSequence` (`blend.fillet_executive_p1`), and the adapter defaults of [`ExecutiveAccess`].
+//!   `LoadFilletSolver` (`blend.fillet_executive_p1`), and the adapter defaults of [`ExecutiveAccess`].
+//! - **`CreateSmoothEdgeSequence`** ([`create_smooth_edge_sequence`]) edits the target
+//!   edges and the solvers through [`SmoothSequenceAccess`]; the `SM_CAST_PTR` tests of
+//!   the curve-based and variable-radius solvers are the access's. A curve that is not
+//!   a B-spline (upstream hands `NULL` to `CreateByJoining`) and a failed evaluation
+//!   (whose output upstream reads uninitialised) are [`SolidError::InvalidInput`].
+//!   [`FilletExecutive::process_smooth_edge_sequences_with`] has no edge access and
+//!   stops before it; [`FilletExecutive::process_smooth_edge_sequences_with_access`]
+//!   runs it.
 
 use crate::blend::fillet_executive::p1::SolverLoadingAccess;
 use crate::blend::fillet_executive::p3::{
@@ -63,6 +72,7 @@ use crate::blend::fillet_geom::p1::{FilStatus, FilletEdgeType, FilletErrorType};
 use crate::blend::fillet_solver::p1::FilletSurfaceGenerator;
 use crate::blend::fillet_standard_solver::p1::{
     BoundaryTrimmingType, FilletLaw, FilletLawKind, FilletSolverType, FilletSurfaceGeneratorType,
+    VariableRadiusFs,
 };
 use crate::curve::curve::p8::CurveIntersectOptions;
 use crate::curve::curve::Curve;
@@ -77,7 +87,9 @@ use crate::math::{EFF_ZERO, PI};
 use crate::nurbs::b_spline_curve::p1::BSplineCurve;
 use crate::nurbs::crv_fit::p1::ParamMethod;
 use crate::surface::offset_surface::{OffsetSurface, SS_UNKNOWN};
+use crate::nurbs::b_spline_curve_n_lib::TrimMode;
 use crate::surface::surface::Surface;
+use crate::topology::{Brep, EdgeId};
 
 /// Actual retained objects used by the native fillet-edge mapping algorithm.
 pub trait EdgeMapAccess<O: ClassObject + SolutionObject + Ord> {
@@ -387,20 +399,249 @@ pub enum SolverSpec<'a, O> {
     },
 }
 
-// ---- unported executive members (blend.fillet_executive_p1) --------------------------------
+// ---- CollectTangentEdgeSequence access ----------------------------------------------------
 
-/// `SmFilletExecutive::CreateSmoothEdgeSequence(rSmoothSequence)` (unit
-/// `blend.fillet_executive_p1`).
-fn create_smooth_edge_sequence<O>(
-    executive: &mut FilletExecutive<O>,
+/// The queries `SmFilletExecutive::CollectTangentEdgeSequence` makes of the solvers,
+/// corners and target edges ([`FilletExecutive::collect_tangent_edge_sequence_with`]).
+pub trait TangentSequenceAccess<O> {
+    /// `SmFilletSolver::GetEdgeuse(0)->GetEdge()`.
+    ///
+    /// # Errors
+    /// An unresolved solver or a solver without edge.
+    fn tangent_solver_edge(&self, solver: O) -> Result<O>;
+    /// `SmEdge::GetEdgeuses()`.
+    ///
+    /// # Errors
+    /// An unresolved edge.
+    fn tangent_edge_edgeuses(&self, edge: O) -> Result<Vec<O>>;
+    /// `SmFilletSolver::GetFilletCorner(lIndex)`: `None` for a vertex without corner.
+    ///
+    /// # Errors
+    /// An unresolved solver.
+    fn tangent_solver_corner(&self, solver: O, index: usize) -> Result<Option<O>>;
+    /// `SmFilletSolver::GetOtherFilletCorner(pCorner)`: `None` when `corner` is not one
+    /// of the solver's.
+    ///
+    /// # Errors
+    /// An unresolved solver.
+    fn tangent_solver_other_corner(&self, solver: O, corner: O) -> Result<Option<O>>;
+    /// `SmFilletCorner::GetTangentFilletSolver(pFS)` (virtual).
+    ///
+    /// # Errors
+    /// An unresolved corner or solver, and the continuity test's.
+    fn tangent_corner_tangent_solver(&self, corner: O, solver: O) -> Result<Option<O>>;
+}
+
+/// [`TangentSequenceAccess`] over an [`ExecutiveAccess`] adapter.
+struct ExecutiveTangentAccess<'a, A: ?Sized>(&'a A);
+
+impl<O, A> TangentSequenceAccess<O> for ExecutiveTangentAccess<'_, A>
+where
+    O: ClassObject + SolutionObject + Ord,
+    A: ExecutiveAccess<O> + ?Sized,
+{
+    fn tangent_solver_edge(&self, solver: O) -> Result<O> {
+        self.0.solver_edge(solver)
+    }
+    fn tangent_edge_edgeuses(&self, edge: O) -> Result<Vec<O>> {
+        self.0.edge_edgeuses(edge)
+    }
+    fn tangent_solver_corner(&self, solver: O, index: usize) -> Result<Option<O>> {
+        self.0.solver_corner(solver, index)
+    }
+    fn tangent_solver_other_corner(&self, solver: O, corner: O) -> Result<Option<O>> {
+        self.0.solver_other_corner(solver, corner)
+    }
+    fn tangent_corner_tangent_solver(&self, corner: O, solver: O) -> Result<Option<O>> {
+        self.0.corner_tangent_solver(corner, solver)
+    }
+}
+
+// ---- CreateSmoothEdgeSequence -----------------------------------------------------------
+
+/// The objects `SmFilletExecutive::CreateSmoothEdgeSequence` edits: the filleted edges
+/// of a sequence of solvers in the target B-rep, and the members of the curve-based and
+/// variable-radius solvers that follow those edges' curves.
+pub trait SmoothSequenceAccess<O> {
+    /// `pFS->GetEdgeuse(0)->GetEdge()`: the filleted edge of `solver`.
+    ///
+    /// # Errors
+    /// An unresolved solver, or a solver without edge use or edge.
+    fn smooth_edge(&self, solver: O) -> Result<EdgeId>;
+
+    /// The target B-rep holding the filleted edges.
+    fn smooth_target(&mut self) -> &mut Brep;
+
+    /// `pE->SetCurve(pNewCurve, TRUE)`: `edge`'s curve becomes `curve`, its old curve
+    /// deleted.
+    ///
+    /// # Errors
+    /// Those of the edge's curve replacement.
+    fn smooth_set_edge_curve(&mut self, k: &Kernel, edge: EdgeId, curve: Curve) -> Result<()>;
+
+    /// `SM_CAST_PTR(SmCurveBasedFS, pFS)`: when `solver` is curve based and its
+    /// original curve is `edge`'s current curve, `SetOriginalCurve(curve)`; nothing for
+    /// other solvers.
+    ///
+    /// # Errors
+    /// An unresolved solver.
+    fn smooth_replace_original_curve(
+        &mut self,
+        solver: O,
+        edge: EdgeId,
+        curve: &Curve,
+    ) -> Result<()>;
+
+    /// `SM_CAST_PTR(SmVariableRadiusFS, pFS)`: for a variable-radius solver,
+    /// `SetFilletLawInterval(interval)`; nothing for other solvers.
+    ///
+    /// # Errors
+    /// An unresolved solver.
+    fn smooth_set_law_interval(&mut self, solver: O, interval: Extent1d) -> Result<()>;
+}
+
+/// `SM_CAST_PTR(SmBSplineCurve, pCurve)`: the B-spline part of the kinds derived from
+/// `SmBSplineCurve`, `None` (upstream `NULL`) for the others.
+const fn bspline_curve_cast(curve: &Curve) -> Option<&BSplineCurve> {
+    use crate::curve::curve::CurveKind;
+    match curve.kind() {
+        CurveKind::BSpline(b) => Some(b),
+        CurveKind::Line(l) => Some(l.base()),
+        CurveKind::Ellipse(e) => Some(e.base()),
+        CurveKind::Hyperbola(h) => Some(h.base()),
+        CurveKind::Parabola(p) => Some(p.base()),
+        CurveKind::Hermite(_)
+        | CurveKind::Projected(_)
+        | CurveKind::Iso(_)
+        | CurveKind::Offset(_)
+        | CurveKind::Conic(_)
+        | CurveKind::CrvInVolume(_)
+        | CurveKind::CrvOnSurf(_)
+        | CurveKind::Composite(_) => None,
+    }
+}
+
+/// `SmFilletExecutive::CreateSmoothEdgeSequence(rSmoothSequence)`: the filleted edges
+/// of a sequence of smoothly meeting solvers (at least two) are oriented along the
+/// sequence (`SmEdge::OrientEdgeSequence`), each edge's curve is trimmed to its
+/// interval and, after the first, reparameterised to follow on from its predecessor
+/// with matching derivative lengths, and their curves are joined into one
+/// (`SmBSplineCurve::CreateByJoining`), which (a copy after the first) becomes every
+/// edge's curve. A curve-based solver whose original curve was its edge's takes the
+/// new curve; a variable-radius solver's law interval becomes its edge's interval.
+///
+/// # Errors
+///
+/// `SM_ERR_NULL_POINTER` when the join makes no curve; [`SolidError::InvalidInput`]
+/// where upstream dereferences `NULL` (an edge without curve, a curve that is not a
+/// B-spline handed to the join) or reads an evaluation it ignored the failure of;
+/// those of `OrientEdgeSequence` and the access. The trims and reparameterisations
+/// ignore their statuses, as upstream.
+pub fn create_smooth_edge_sequence<O: Copy>(
+    k: &Kernel,
+    access: &mut impl SmoothSequenceAccess<O>,
     sequence: &[O],
 ) -> Result<()> {
-    let _ = (executive, sequence);
-    // UNPORTED(blend.fillet_executive_p1): SmFilletExecutive::CreateSmoothEdgeSequence
-    Err(SolidError::unported(
-        "SmFilletExecutive::CreateSmoothEdgeSequence",
-        "blend.fillet_executive_p1",
-    ))
+    const OP: &str = "blend::fillet_executive::p2::create_smooth_edge_sequence";
+    let no_curve = || SolidError::invalid_input(OP, "edge without curve (NULL dereferenced)");
+    if sequence.len() < 2 {
+        return Ok(());
+    }
+
+    // Work with SmEdges ... mainly so we can use SmEdge::OrientEdgeSequence().
+    let mut edges = Vec::new();
+    for &solver in sequence {
+        edges.push(access.smooth_edge(solver)?);
+    }
+
+    // Make sure that the edges are all oriented in the direction of the sequence.
+    // This calls ReverseOrientation() as necessary.
+    crate::topology::edge::orient_edge_sequence(k, access.smooth_target(), &edges)?;
+
+    let mut prev_ivl = Extent1d::default();
+    let mut prev_edge: Option<EdgeId> = None;
+    let mut bs_curves: Vec<BSplineCurve> = Vec::new();
+    for &edge in &edges {
+        let target = access.smooth_target();
+        let mut edge_ivl = crate::topology::edge::interval(target, edge)?;
+
+        // Make the parameterizations consecutive, and match the Edge's curve.
+        {
+            let curve = target.edge_mut(edge)?.curve.as_mut().ok_or_else(no_curve)?;
+            ignored(curve.trim(k, &mut edge_ivl, TrimMode::Notify))?;
+        }
+
+        if let Some(prev_edge) = prev_edge {
+            // Make the curves meet with true C1 continuity.
+            let prev_param1 = prev_ivl.max();
+            let curr_param0 = edge_ivl.min();
+            let pt_der_prev = target
+                .edge(prev_edge)?
+                .curve
+                .as_ref()
+                .ok_or_else(no_curve)?
+                .evaluate(k, prev_param1, 1, false, true)?;
+            let pt_der_curr = target
+                .edge(edge)?
+                .curve
+                .as_ref()
+                .ok_or_else(no_curve)?
+                .evaluate(k, curr_param0, 1, false, true)?;
+            let (Some(der_prev), Some(der_curr)) = (pt_der_prev.get(1), pt_der_curr.get(1)) else {
+                return Err(SolidError::invalid_input(OP, "short curve evaluation"));
+            };
+            let prev_len = der_prev.length();
+            let curr_len = der_curr.length();
+
+            // Keep the Min of the current interval the same, scale its Max by the
+            // deriv length ratio.
+            let scale = curr_len / prev_len;
+            let scaled_end = edge_ivl.min() + scale * edge_ivl.length();
+            ignored(edge_ivl.set_min_max(edge_ivl.min(), scaled_end))?;
+
+            // Domains are the right lengths, make sure they're consecutive.
+            if !crate::geom::tol::are_same(edge_ivl.min(), prev_ivl.max()) {
+                edge_ivl.translate(prev_ivl.max() - edge_ivl.min());
+            }
+
+            {
+                let curve = target.edge_mut(edge)?.curve.as_mut().ok_or_else(no_curve)?;
+                ignored(curve.edit_parameterization(k, &edge_ivl))?;
+            }
+            crate::topology::edge::set_interval(target, edge, &edge_ivl)?;
+        }
+
+        // Also collect the Curves.
+        let curve = target.edge(edge)?.curve.as_ref().ok_or_else(no_curve)?;
+        let bsc = bspline_curve_cast(curve).ok_or_else(|| {
+            SolidError::invalid_input(OP, "CreateByJoining of a NULL (not B-spline) curve")
+        })?;
+        bs_curves.push(bsc.clone());
+
+        prev_ivl = edge_ivl;
+        prev_edge = Some(edge);
+    }
+
+    // Join all of the curves, in order.
+    let comp_curve = ignored(BSplineCurve::create_by_joining(&mut bs_curves, None))?
+        .ok_or_else(|| SolidError::null_pointer(OP))?;
+    let comp_curve = Curve::from(comp_curve);
+
+    // Set the Joined curve as each Edge's curve.
+    for (&edge, &solver) in edges.iter().zip(sequence) {
+        // the first edge takes the joined curve, the others a copy of it
+        let new_curve = comp_curve.clone();
+
+        // A curve-based solver's original curve is probably the edge's: replace it.
+        access.smooth_replace_original_curve(solver, edge, &new_curve)?;
+
+        // A variable-radius solver's law interval should be the edge's domain.
+        let interval = crate::topology::edge::interval(access.smooth_target(), edge)?;
+        access.smooth_set_law_interval(solver, interval)?;
+
+        access.smooth_set_edge_curve(k, edge, new_curve)?;
+    }
+    Ok(())
 }
 
 // ---- SetFilletParameters -------------------------------------------------------------------
@@ -1028,13 +1269,15 @@ impl<O: ClassObject + SolutionObject + Ord> FilletExecutive<O> {
         })
     }
 
-    /// Run `ProcessSmoothEdgeSequences` with the caller's live tangent collector.
+    /// Run `ProcessSmoothEdgeSequences` with the caller's live tangent collector and
+    /// no edge access: a sequence of two or more solvers cannot be joined
+    /// ([`Self::process_smooth_edge_sequences_with_access`] can).
     ///
     /// Zero or one retained solver needs no collection. Larger lists use the
     /// collector in native order, followed by `CreateSmoothEdgeSequence`.
     ///
     /// # Errors
-    /// The collector's errors or missing `CreateSmoothEdgeSequence` implementation.
+    /// The collector's errors; [`SolidError::Unported`] for a sequence to join.
     pub fn process_smooth_edge_sequences_with(
         &mut self,
         k: &mut Kernel,
@@ -1048,7 +1291,39 @@ impl<O: ClassObject + SolutionObject + Ord> FilletExecutive<O> {
         // Each pass removes at least one solver from the list.
         while solvers.len() > 1 {
             collect(self, &mut solvers, &mut sequence)?;
-            create_smooth_edge_sequence(self, &sequence)?;
+            if sequence.len() >= 2 {
+                // UNPORTED(blend.fillet_executive_p2): live edge access for CreateSmoothEdgeSequence (use process_smooth_edge_sequences_with_access).
+                return Err(SolidError::unported(
+                    "SmFilletExecutive::CreateSmoothEdgeSequence (no edge access)",
+                    "blend.fillet_executive_p2",
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// `ProcessSmoothEdgeSequences` over a live `access`: each sequence collected
+    /// ([`Self::collect_tangent_edge_sequence_with`]) is joined
+    /// ([`create_smooth_edge_sequence`]), until at most one solver is left.
+    ///
+    /// # Errors
+    /// Those of the collection and of [`create_smooth_edge_sequence`].
+    pub fn process_smooth_edge_sequences_with_access<A>(
+        &self,
+        k: &Kernel,
+        access: &mut A,
+    ) -> Result<()>
+    where
+        A: SmoothSequenceAccess<O> + TangentSequenceAccess<O>,
+    {
+        // Copy the FilletSolver pointers into a separate array.
+        let mut solvers: Vec<Option<O>> = self.solvers.iter().copied().map(Some).collect();
+        let mut sequence = Vec::new();
+
+        // Each pass removes at least one solver from the list.
+        while solvers.len() > 1 {
+            self.collect_tangent_edge_sequence_with(&*access, &mut solvers, &mut sequence)?;
+            create_smooth_edge_sequence(k, access, &sequence)?;
         }
         Ok(())
     }
@@ -1075,6 +1350,23 @@ impl<O: ClassObject + SolutionObject + Ord> FilletExecutive<O> {
     where
         A: ExecutiveAccess<O> + ?Sized,
     {
+        self.collect_tangent_edge_sequence_with(&ExecutiveTangentAccess(access), solvers, sequence)
+    }
+
+    /// [`Self::collect_tangent_edge_sequence`] over the narrower
+    /// [`TangentSequenceAccess`] (the live session's).
+    ///
+    /// # Errors
+    /// As [`Self::collect_tangent_edge_sequence`].
+    pub fn collect_tangent_edge_sequence_with<A>(
+        &self,
+        access: &A,
+        solvers: &mut Vec<Option<O>>,
+        sequence: &mut Vec<O>,
+    ) -> Result<()>
+    where
+        A: TangentSequenceAccess<O> + ?Sized,
+    {
         sequence.clear();
 
         if solvers.len() < 2 {
@@ -1086,7 +1378,7 @@ impl<O: ClassObject + SolutionObject + Ord> FilletExecutive<O> {
         for list in &self.law_sequence_edges {
             for fs in solvers.iter() {
                 let fs = fs.ok_or_else(|| null!("null fillet solver"))?;
-                let this_edge = access.solver_edge(fs)?;
+                let this_edge = access.tangent_solver_edge(fs)?;
                 if list.contains(&this_edge) {
                     start_edge = list.first().copied(); // First in list.
                     break;
@@ -1114,11 +1406,11 @@ impl<O: ClassObject + SolutionObject + Ord> FilletExecutive<O> {
             // Traverse backwards, unless the start edge is given.
             if start_edge.is_none() {
                 let corner0 = access
-                    .solver_corner(fs, 0)?
+                    .tangent_solver_corner(fs, 0)?
                     .ok_or_else(|| null!("solver without corner"))?;
 
                 let mut curr_fs = fs;
-                let mut prev_fs = access.corner_tangent_solver(corner0, fs)?;
+                let mut prev_fs = access.tangent_corner_tangent_solver(corner0, fs)?;
 
                 if prev_fs == Some(curr_fs) {
                     continue; // Single closed loop.
@@ -1146,24 +1438,27 @@ impl<O: ClassObject + SolutionObject + Ord> FilletExecutive<O> {
                     }
 
                     let prev_corner = access
-                        .solver_other_corner(prev, curr_corner)?
+                        .tangent_solver_other_corner(prev, curr_corner)?
                         .ok_or_else(|| null!("solver without other corner"))?;
                     curr_fs = prev;
-                    prev_fs = access.corner_tangent_solver(prev_corner, curr_fs)?;
+                    prev_fs = access.tangent_corner_tangent_solver(prev_corner, curr_fs)?;
                     curr_corner = prev_corner;
                 }
             }
 
             // Traverse forwards.
             if let Some(edge) = start_edge {
-                fs = self
-                    .fillet_solver_of_edge(access, edge)?
+                // GetFilletSolverOfEdge
+                fs = access
+                    .tangent_edge_edgeuses(edge)?
+                    .into_iter()
+                    .find_map(|eu| self.fillet_solver_of_edgeuse(eu))
                     .ok_or_else(|| null!("no solver of edge"))?;
             }
 
-            let corner0 = access.solver_corner(fs, 0)?;
+            let corner0 = access.tangent_solver_corner(fs, 0)?;
             let corner1 = access
-                .solver_corner(fs, 1)?
+                .tangent_solver_corner(fs, 1)?
                 .ok_or_else(|| null!("solver without end corner"))?;
 
             if Some(corner1) == corner0 {
@@ -1171,7 +1466,7 @@ impl<O: ClassObject + SolutionObject + Ord> FilletExecutive<O> {
             }
 
             let curr_fs = fs;
-            let mut next_fs = access.corner_tangent_solver(corner1, fs)?;
+            let mut next_fs = access.tangent_corner_tangent_solver(corner1, fs)?;
             if next_fs.is_some() && sequence.is_empty() {
                 sequence.push(fs);
             }
@@ -1201,10 +1496,10 @@ impl<O: ClassObject + SolutionObject + Ord> FilletExecutive<O> {
                 }
 
                 let next_corner = access
-                    .solver_other_corner(next, curr_corner)?
+                    .tangent_solver_other_corner(next, curr_corner)?
                     .ok_or_else(|| null!("solver without other corner"))?;
                 let curr_fs = next;
-                next_fs = access.corner_tangent_solver(next_corner, curr_fs)?;
+                next_fs = access.tangent_corner_tangent_solver(next_corner, curr_fs)?;
                 curr_corner = next_corner;
             }
 
@@ -1429,18 +1724,191 @@ where
 
 // ---- SmTemporaryRadiusChange --------------------------------------------------------------
 
-/// `SmTemporaryRadiusChange`: while it lives, a variable-radius solver's linear or
-/// B-spline law is constant at its value at the end where the side edge meets the
-/// filleted edge, so that intersecting the rail with the side edge sees the end
-/// radius. [`TemporaryRadiusChange::revert`] puts the law back.
+/// The law change of an `SmTemporaryRadiusChange` (`m_pSavedBSp`, `m_dStartRad`,
+/// `m_dEndRad`): what [`hold_end_radius`] swapped out of a variable-radius solver's
+/// law, for [`HeldEndRadius::revert`] to put back.
 #[derive(Debug, Clone)]
-pub struct TemporaryRadiusChange<O> {
+pub struct HeldEndRadius {
     /// `m_pSavedBSp`: the B-spline law's curve, while a constant one is swapped in.
     saved_bsp: Option<BSplineCurve>,
     /// `m_dStartRad`: the linear law's start radius, while it is constant.
     start_rad: f64,
     /// `m_dEndRad`: the linear law's end radius, while it is constant.
     end_rad: f64,
+}
+
+impl Default for HeldEndRadius {
+    /// No change (`m_pSavedBSp = NULL`, both radii `-1`).
+    fn default() -> Self {
+        Self {
+            saved_bsp: None,
+            start_rad: -1.0,
+            end_rad: -1.0,
+        }
+    }
+}
+
+impl HeldEndRadius {
+    /// Whether the law was changed.
+    #[must_use]
+    pub fn is_held(&self) -> bool {
+        self.saved_bsp.is_some() || (self.start_rad > -EFF_ZERO && self.end_rad > -EFF_ZERO)
+    }
+
+    /// `Revert` on the solver's law: swaps the saved B-spline law curve back in (and
+    /// drops the constant one and any extended law), or restores the linear law's radii
+    /// when both were recorded (`> -SM_EFF_ZERO`); otherwise nothing changed. A law of
+    /// another kind than the one changed is left alone.
+    pub fn revert(&mut self, vrfs: &mut VariableRadiusFs) {
+        if let Some(saved) = self.saved_bsp.take() {
+            let FilletLawKind::BSpline {
+                law_curve,
+                extended_law,
+            } = &mut vrfs.law.kind
+            else {
+                return;
+            };
+            *law_curve = saved;
+            *extended_law = None;
+        } else if self.start_rad > -EFF_ZERO && self.end_rad > -EFF_ZERO {
+            // 0.0 is ok...
+            let FilletLawKind::Linear {
+                start_radius,
+                end_radius,
+            } = &mut vrfs.law.kind
+            else {
+                return;
+            };
+            *start_radius = self.start_rad;
+            *end_radius = self.end_rad;
+        }
+    }
+}
+
+/// The first tests of `SmTemporaryRadiusChange::SetUp`: a variable-radius solver whose
+/// offset radii can change, with a linear or B-spline law.
+///
+/// # Errors
+///
+/// Those of [`VariableRadiusFs::offset_radii_can_change`].
+pub fn law_can_hold_end_radius(vrfs: &VariableRadiusFs) -> Result<bool> {
+    if !vrfs.offset_radii_can_change()? {
+        return Ok(false);
+    }
+    // Do SmBSplineFilletLaw and SmLinearFilletLaw.
+    Ok(matches!(
+        vrfs.law.kind,
+        FilletLawKind::BSpline { .. } | FilletLawKind::Linear { .. }
+    ))
+}
+
+/// `SetUp`'s end test (an `SmBoolean` that may stay `UNSURE`): `1` when the side edge
+/// meets the start vertex of the filleted edge, `0` its other vertex (which wins when it
+/// meets both), [`UNSURE`](crate::topology::brep_data::UNSURE) when it meets neither;
+/// `1` for a closed edge.
+#[must_use]
+pub fn side_edge_end<V: PartialEq>(edge_v1: V, edge_v2: V, side_v1: V, side_v2: V) -> i32 {
+    let mut at_start = crate::topology::brep_data::UNSURE;
+    if edge_v1 == edge_v2 {
+        // Shouldn't matter: the fillet is closed.
+        at_start = 1;
+    } else {
+        // non-closed edge
+        if edge_v1 == side_v1 || edge_v1 == side_v2 {
+            at_start = 1;
+        }
+        if edge_v2 == side_v1 || edge_v2 == side_v2 {
+            at_start = 0;
+        }
+    }
+    at_start
+}
+
+/// The rest of `SmTemporaryRadiusChange::SetUp`, for a law that passed
+/// [`law_can_hold_end_radius`]: at the end `at_start` of [`side_edge_end`] (flipped for
+/// a reversed law), when the law's edge map ends there and the law interval has a
+/// range, makes the law constant at its radius there.
+///
+/// # Errors
+///
+/// Those of the law evaluation (`SmFilletLaw::Evaluate`) and the constant law curve;
+/// the law is unchanged then.
+pub fn hold_end_radius(vrfs: &mut VariableRadiusFs, at_start: i32) -> Result<HeldEndRadius> {
+    let mut held = HeldEndRadius::default();
+    let is_bspline = matches!(vrfs.law.kind, FilletLawKind::BSpline { .. });
+    let mut at_start = at_start;
+    if vrfs.fillet_law_orientation() {
+        at_start = i32::from(at_start == 0);
+    }
+
+    // Don't do anything if this is an interior location.  [B570]
+    let edge_map = vrfs.law.edge_map;
+    let law_t = if at_start != 0 {
+        edge_map.min()
+    } else {
+        edge_map.max()
+    };
+    let unit_ivl = Extent1d::from_min_max(0.0, 1.0);
+    if !unit_ivl.is_value_on_boundary(law_t, EFF_ZERO).0 {
+        return Ok(held);
+    }
+
+    // Evaluate the radius at the proper end.
+    let edge_ivl = vrfs.fillet_law_interval();
+
+    // Don't do anything if this has no range
+    if edge_ivl.length() <= 0.0 {
+        return Ok(held);
+    }
+
+    let edge_t = if at_start != 0 {
+        edge_ivl.min()
+    } else {
+        edge_ivl.max()
+    };
+
+    // No reversal: already checked.
+    let [end_rad, _, _] = law_evaluate(&mut vrfs.law, edge_t, &edge_ivl, false)?;
+
+    if is_bspline {
+        // Create a law curve that's constant at that value, on [0, 1].
+        let mut const_bsp = BSplineCurve::create_line_segment(
+            3,
+            Point3::new(end_rad, 1.0, 0.0),
+            Point3::new(end_rad, 2.0, 0.0),
+        )?;
+        ignored(const_bsp.edit_parameterization(&unit_ivl))?;
+
+        if let FilletLawKind::BSpline {
+            law_curve,
+            extended_law,
+        } = &mut vrfs.law.kind
+        {
+            // Swap the new radius function info in; drop the old extension.
+            held.saved_bsp = Some(core::mem::replace(law_curve, const_bsp));
+            *extended_law = None;
+        }
+    } else if let FilletLawKind::Linear {
+        start_radius,
+        end_radius,
+    } = &mut vrfs.law.kind
+    {
+        held.start_rad = *start_radius;
+        held.end_rad = *end_radius;
+        *start_radius = end_rad;
+        *end_radius = end_rad;
+    }
+    Ok(held)
+}
+
+/// `SmTemporaryRadiusChange`: while it lives, a variable-radius solver's linear or
+/// B-spline law is constant at its value at the end where the side edge meets the
+/// filleted edge, so that intersecting the rail with the side edge sees the end
+/// radius. [`TemporaryRadiusChange::revert`] puts the law back.
+#[derive(Debug, Clone)]
+pub struct TemporaryRadiusChange<O> {
+    /// `m_pSavedBSp`, `m_dStartRad`, `m_dEndRad`: the law change.
+    held: HeldEndRadius,
     /// `m_pSideEU`: the edge use of the other filleted edge.
     side_eu: O,
     /// `m_pFS`: this fillet solver.
@@ -1461,9 +1929,7 @@ impl<O: ClassObject + SolutionObject + Ord> TemporaryRadiusChange<O> {
         A: ExecutiveAccess<O> + ?Sized,
     {
         let mut change = Self {
-            saved_bsp: None,
-            start_rad: 0.0,
-            end_rad: 0.0,
+            held: HeldEndRadius::default(),
             side_eu,
             fs,
             rail_idx: rail_index,
@@ -1473,9 +1939,9 @@ impl<O: ClassObject + SolutionObject + Ord> TemporaryRadiusChange<O> {
     }
 
     /// `SetUp`: for a variable-radius solver whose offset radii can change and whose
-    /// law is linear or B-spline, finds the end of the edge the side edge meets (the
-    /// start for a closed edge; flipped for a reversed law) and, when the law's edge
-    /// map ends there, makes the law constant at its radius there.
+    /// law is linear or B-spline ([`law_can_hold_end_radius`]), finds the end of the
+    /// edge the side edge meets ([`side_edge_end`]) and holds the radius there
+    /// ([`hold_end_radius`]).
     ///
     /// # Errors
     ///
@@ -1486,29 +1952,16 @@ impl<O: ClassObject + SolutionObject + Ord> TemporaryRadiusChange<O> {
         A: ExecutiveAccess<O> + ?Sized,
     {
         // Indicate no change, to start.
-        self.saved_bsp = None;
-        self.start_rad = -1.0;
-        self.end_rad = -1.0;
+        self.held = HeldEndRadius::default();
 
         let Some(vrfs) = access.variable_radius_solver(self.fs)? else {
             return Ok(());
         };
-        if !vrfs.offset_radii_can_change()? {
+        if !law_can_hold_end_radius(vrfs)? {
             return Ok(());
         }
-        let law = vrfs.fillet_law();
 
-        // Do SmBSplineFilletLaw and SmLinearFilletLaw.
-        let is_bspline = matches!(law.kind, FilletLawKind::BSpline { .. });
-        if !is_bspline && !matches!(law.kind, FilletLawKind::Linear { .. }) {
-            return Ok(());
-        }
-        let law_orientation = vrfs.fillet_law_orientation();
-        let edge_map = law.edge_map;
-        let edge_ivl = vrfs.fillet_law_interval();
-
-        // Find which end (an SmBoolean that may stay UNSURE).
-        let mut at_start = crate::topology::brep_data::UNSURE;
+        // Find which end.
         let eu = access
             .solver_edgeuse(self.fs, self.rail_idx)?
             .ok_or_else(|| null!("no rail edge use"))?;
@@ -1521,95 +1974,16 @@ impl<O: ClassObject + SolutionObject + Ord> TemporaryRadiusChange<O> {
             .edgeuse_edge(self.side_eu)?
             .ok_or_else(|| null!("side edge use without edge"))?;
         let (side_v1, side_v2) = access.edge_vertices(side_edge)?;
+        let at_start = side_edge_end(edge_v1, edge_v2, side_v1, side_v2);
 
-        if edge_v1 == edge_v2 {
-            // Shouldn't matter: the fillet is closed.
-            at_start = 1;
-        } else {
-            // non-closed edge
-            if edge_v1 == side_v1 || edge_v1 == side_v2 {
-                at_start = 1;
-            }
-            if edge_v2 == side_v1 || edge_v2 == side_v2 {
-                at_start = 0;
-            }
-        }
-
-        if law_orientation {
-            at_start = i32::from(at_start == 0);
-        }
-
-        // Don't do anything if this is an interior location.  [B570]
-        let law_t = if at_start != 0 {
-            edge_map.min()
-        } else {
-            edge_map.max()
-        };
-        let unit_ivl = Extent1d::from_min_max(0.0, 1.0);
-        if !unit_ivl.is_value_on_boundary(law_t, EFF_ZERO).0 {
-            return Ok(());
-        }
-
-        // Don't do anything if this has no range
-        if edge_ivl.length() <= 0.0 {
-            return Ok(());
-        }
-
-        let edge_t = if at_start != 0 {
-            edge_ivl.min()
-        } else {
-            edge_ivl.max()
-        };
-
-        // Evaluate the radius at the proper end (no reversal: already checked).
         let vrfs = access
             .variable_radius_solver_mut(self.fs)?
             .ok_or_else(|| null!("solver is no longer variable-radius"))?;
-        let values = law_evaluate(&mut vrfs.law, edge_t, &edge_ivl, false)?;
-        let [end_rad, _, _] = values;
-
-        if is_bspline {
-            // Create a law curve that's constant at that value, on [0, 1].
-            let mut const_bsp = BSplineCurve::create_line_segment(
-                3,
-                Point3::new(end_rad, 1.0, 0.0),
-                Point3::new(end_rad, 2.0, 0.0),
-            )?;
-            ignored(const_bsp.edit_parameterization(&unit_ivl))?;
-
-            let vrfs = access
-                .variable_radius_solver_mut(self.fs)?
-                .ok_or_else(|| null!("solver is no longer variable-radius"))?;
-            if let FilletLawKind::BSpline {
-                law_curve,
-                extended_law,
-            } = &mut vrfs.law.kind
-            {
-                // Swap the new radius function info in; drop the old extension.
-                self.saved_bsp = Some(core::mem::replace(law_curve, const_bsp));
-                *extended_law = None;
-            }
-        } else {
-            let vrfs = access
-                .variable_radius_solver_mut(self.fs)?
-                .ok_or_else(|| null!("solver is no longer variable-radius"))?;
-            if let FilletLawKind::Linear {
-                start_radius,
-                end_radius,
-            } = &mut vrfs.law.kind
-            {
-                self.start_rad = *start_radius;
-                self.end_rad = *end_radius;
-                *start_radius = end_rad;
-                *end_radius = end_rad;
-            }
-        }
+        self.held = hold_end_radius(vrfs, at_start)?;
         Ok(())
     }
 
-    /// The destructor (`Revert`): swaps the saved B-spline law curve back in (and
-    /// drops the constant one and any extended law), or restores the linear law's
-    /// radii when both were recorded (`> -SM_EFF_ZERO`); otherwise nothing changed.
+    /// The destructor (`Revert`, [`HeldEndRadius::revert`]).
     ///
     /// # Errors
     ///
@@ -1625,30 +1999,8 @@ impl<O: ClassObject + SolutionObject + Ord> TemporaryRadiusChange<O> {
     where
         A: ExecutiveAccess<O> + ?Sized,
     {
-        let Some(vrfs) = access.variable_radius_solver_mut(self.fs)? else {
-            return Ok(());
-        };
-        if let Some(saved) = self.saved_bsp.take() {
-            let FilletLawKind::BSpline {
-                law_curve,
-                extended_law,
-            } = &mut vrfs.law.kind
-            else {
-                return Ok(());
-            };
-            *law_curve = saved;
-            *extended_law = None;
-        } else if self.start_rad > -EFF_ZERO && self.end_rad > -EFF_ZERO {
-            // 0.0 is ok...
-            let FilletLawKind::Linear {
-                start_radius,
-                end_radius,
-            } = &mut vrfs.law.kind
-            else {
-                return Ok(());
-            };
-            *start_radius = self.start_rad;
-            *end_radius = self.end_rad;
+        if let Some(vrfs) = access.variable_radius_solver_mut(self.fs)? {
+            self.held.revert(vrfs);
         }
         Ok(())
     }
@@ -1684,6 +2036,165 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `SmTemporaryRadiusChange::SetUp` on a linear law holds the radius of the end the
+    /// side edge meets (flipped for a reversed law); `Revert` restores both radii.
+    #[test]
+    fn temporary_radius_change_holds_linear_end_radius() {
+        let mut cb = crate::blend::fillet_standard_solver::p1::CurveBasedFs::new(1e-6, 0.5, 0.03);
+        cb.solver
+            .set_fillet_surface_generator(Some(FilletSurfaceGenerator::Circular(
+                crate::blend::fillet_standard_solver::p1::CircularCrossSectionFsg::default(),
+            )));
+        let mut fs = VariableRadiusFs {
+            curve_based: cb,
+            law: FilletLaw::new(FilletLawKind::Linear {
+                start_radius: 1.0,
+                end_radius: 2.0,
+            }),
+            law_orientation: false,
+            law_interval: Extent1d::from_min_max(0.0, 1.0),
+        };
+        let radii = |fs: &VariableRadiusFs| match fs.law.kind {
+            FilletLawKind::Linear {
+                start_radius,
+                end_radius,
+            } => (start_radius, end_radius),
+            _ => unreachable!(),
+        };
+        assert!(law_can_hold_end_radius(&fs).unwrap());
+        assert_eq!(side_edge_end(1, 2, 2, 3), 0);
+        assert_eq!(side_edge_end(1, 2, 0, 1), 1);
+        assert_eq!(side_edge_end(1, 1, 0, 3), 1);
+        assert_eq!(side_edge_end(1, 2, 3, 4), crate::topology::brep_data::UNSURE);
+
+        let mut held = hold_end_radius(&mut fs, 0).unwrap();
+        assert!(held.is_held());
+        assert_eq!(radii(&fs), (2.0, 2.0));
+        held.revert(&mut fs);
+        assert_eq!(radii(&fs), (1.0, 2.0));
+
+        fs.law_orientation = true;
+        let mut held = hold_end_radius(&mut fs, 0).unwrap();
+        assert_eq!(radii(&fs), (1.0, 1.0));
+        held.revert(&mut fs);
+        assert_eq!(radii(&fs), (1.0, 2.0));
+
+        // no range: unchanged
+        fs.law_interval = Extent1d::from_min_max(0.5, 0.5);
+        let held = hold_end_radius(&mut fs, 1).unwrap();
+        assert!(!held.is_held());
+        assert_eq!(radii(&fs), (1.0, 2.0));
+    }
+
+    /// A target B-rep whose solvers `0..n` fillet edges `edges[i]`; the access records
+    /// the solver calls.
+    struct Sequence {
+        brep: Brep,
+        edges: Vec<EdgeId>,
+        originals: Vec<usize>,
+        law_intervals: Vec<(usize, Extent1d)>,
+    }
+
+    impl SmoothSequenceAccess<usize> for Sequence {
+        fn smooth_edge(&self, solver: usize) -> Result<EdgeId> {
+            Ok(self.edges[solver])
+        }
+        fn smooth_target(&mut self) -> &mut Brep {
+            &mut self.brep
+        }
+        fn smooth_set_edge_curve(
+            &mut self,
+            _: &Kernel,
+            edge: EdgeId,
+            curve: Curve,
+        ) -> Result<()> {
+            self.brep.edge_mut(edge)?.curve = Some(curve);
+            Ok(())
+        }
+        fn smooth_replace_original_curve(
+            &mut self,
+            solver: usize,
+            _: EdgeId,
+            _: &Curve,
+        ) -> Result<()> {
+            self.originals.push(solver);
+            Ok(())
+        }
+        fn smooth_set_law_interval(&mut self, solver: usize, interval: Extent1d) -> Result<()> {
+            self.law_intervals.push((solver, interval));
+            Ok(())
+        }
+    }
+
+    /// `CreateSmoothEdgeSequence` (was `UNPORTED(blend.fillet_executive_p1)`): two
+    /// collinear wire edges, the second twice as fast, get one joined curve; the second
+    /// edge's domain follows on from the first's, scaled to match the derivatives.
+    #[test]
+    fn smooth_edge_sequence_joins_the_edges_curves() {
+        use crate::nurbs::b_spline_surface_n_lib::p2::OrientType;
+        use crate::topology::brep::p2::ArenaNotifyState;
+        let mut k = Kernel::default();
+        let mut brep = Brep::new_with_infinite_region().unwrap();
+        let points = [
+            Point3::ZERO,
+            Point3::new(1.0, 0.0, 0.0),
+            Point3::new(3.0, 0.0, 0.0),
+        ];
+        // shell vertices of the infinite region (MakeWireEdge needs its ends in a shell)
+        let mut vertices = Vec::new();
+        for p in points {
+            let (_, v) =
+                crate::topology::brep::p2::make_shell_vertex_topology(&mut brep, None).unwrap();
+            brep.vertex_mut(v).unwrap().point = p;
+            vertices.push(v);
+        }
+        let mut edges = Vec::new();
+        for (i, pair) in points.windows(2).enumerate() {
+            let line = BSplineCurve::create_line_segment(3, pair[0], pair[1]).unwrap();
+            let interval = line.natural_interval();
+            let mut state = ArenaNotifyState::new(&brep);
+            let mut env = state.env(None);
+            let edge = crate::topology::brep::p3::make_wire_edge(
+                &mut k,
+                &mut brep,
+                &mut env,
+                None,
+                vertices[i],
+                vertices[i + 1],
+                Curve::from(line),
+                &interval,
+                OrientType::Same,
+            )
+            .unwrap();
+            edges.push(edge);
+        }
+        let mut access = Sequence {
+            brep,
+            edges: edges.clone(),
+            originals: Vec::new(),
+            law_intervals: Vec::new(),
+        };
+
+        create_smooth_edge_sequence(&mut k, &mut access, &[0, 1]).unwrap();
+
+        let first = crate::topology::edge::interval(&access.brep, edges[0]).unwrap();
+        let second = crate::topology::edge::interval(&access.brep, edges[1]).unwrap();
+        assert_eq!((first.min(), first.max()), (0.0, 1.0));
+        assert!((second.min() - 1.0).abs() < 1e-12 && (second.max() - 3.0).abs() < 1e-12);
+        for &e in &edges {
+            let curve = access.brep.edge(e).unwrap().curve.as_ref().unwrap();
+            let ivl = curve.natural_interval();
+            assert!(ivl.min().abs() < 1e-12 && (ivl.max() - 3.0).abs() < 1e-12);
+            let p = curve.evaluate_point(&k, 2.0).unwrap();
+            assert!((p - Point3::new(2.0, 0.0, 0.0)).length() < 1e-12);
+        }
+        assert_eq!(access.originals, [0, 1]);
+        assert_eq!(access.law_intervals, [(0, first), (1, second)]);
+
+        // a single solver is no sequence
+        create_smooth_edge_sequence(&mut k, &mut access, &[0]).unwrap();
+    }
 
     #[test]
     fn linear_law_edge_map_defaults() {

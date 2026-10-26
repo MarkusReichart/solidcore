@@ -23,6 +23,7 @@ use std::process::ExitCode;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
+use solidcore::blend::fillet_executive;
 use solidcore::boolean::api_brep as boolean;
 use solidcore::curve::curve::Curve;
 use solidcore::geom::attribute::{AttributeStore, ObjectKey};
@@ -41,7 +42,7 @@ use solidcore::topology::brep::p3;
 use solidcore::topology::proto_topology::p1::api_transform::{
     api_rotate, api_translate, TransformObject,
 };
-use solidcore::topology::Brep;
+use solidcore::topology::{Brep, EdgeId};
 use solidcore::SolidError;
 
 use crate::ssi::glob_match;
@@ -53,6 +54,10 @@ use crate::HarnessError;
 /// engines measure the same B-rep of #3396's stack `0.157` over its closed form, at
 /// `1e-8` `0.0008`.
 pub const VOLUME_ACCURACY: f64 = 1e-8;
+
+/// How near a fillet step's point must be to an edge curve (times `1 + |point|`) for the
+/// point to name that edge.
+const FILLET_EDGE_TOL: f64 = 1e-6;
 
 /// The body a case's expectations are checked on.
 pub const RESULT: &str = "result";
@@ -726,6 +731,45 @@ fn solid(e: &SolidError) -> Run {
     }
 }
 
+/// The edge of `body` each fillet point lies on: the one edge whose curve, over the
+/// edge's interval, passes within [`FILLET_EDGE_TOL`] (relative to the point's size) of
+/// the point. A point on no edge, or near two (a vertex), is an error: an edge is
+/// never picked arbitrarily.
+fn fillet_edge_ids(k: &Kernel, body: &Brep, points: &[P3]) -> Result<Vec<EdgeId>, Run> {
+    use solidcore::geom::global_solver::SolverOperation;
+    use solidcore::topology::edge;
+    let all = solidcore::topology::brep::p1::edges(body, None).map_err(|e| solid(&e))?;
+    let mut ids = Vec::with_capacity(points.len());
+    for &p in points {
+        let point = p3(p);
+        let tol = FILLET_EDGE_TOL * (1.0 + point.length());
+        let mut found = Vec::new();
+        for &e in &all {
+            let Some(curve) = edge::curve(body, e).map_err(|e| solid(&e))? else {
+                continue;
+            };
+            let ivl = edge::interval(body, e).map_err(|e| solid(&e))?;
+            let dropped = curve
+                .drop_point(k, &ivl, point, None, tol, None, SolverOperation::Minimize)
+                .map_err(|e| solid(&e))?;
+            if dropped.success && dropped.distance <= tol {
+                found.push(e);
+            }
+        }
+        match found.as_slice() {
+            [e] => ids.push(*e),
+            [] => return Err(Run::Error(format!("fillet point {p:?} is on no edge"))),
+            _ => {
+                return Err(Run::Error(format!(
+                    "fillet point {p:?} is on {} edges",
+                    found.len()
+                )))
+            }
+        }
+    }
+    Ok(ids)
+}
+
 fn take(bodies: &BTreeMap<String, Brep>, id: &str) -> Result<Brep, Run> {
     bodies
         .get(id)
@@ -1003,12 +1047,19 @@ fn step_rust(k: &mut Kernel, bodies: &mut BTreeMap<String, Brep>, step: &Step) -
                     .into(),
             }))
         }
-        // No Rust `SmApiFilletEdges` yet: it belongs to `blend.fillet_executive_p1`.
-        Step::Fillet { .. } => {
-            return Err(Run::Deferred(Deferral {
-                blocked_by: "blend.fillet_executive_p1".into(),
-                symbol: "SmApiFilletEdges".into(),
-            }))
+        // `SmApiFilletEdges(body, edges, radius, 1, 1, 1.0)`: circular section (any code
+        // but 0 and 2), continuity 1, thumbweight 1, as SolidCraft's fillet calls it.
+        Step::Fillet {
+            body: b,
+            edges,
+            radius,
+            ..
+        } => {
+            let mut body = take(bodies, b)?;
+            let ids = fillet_edge_ids(k, &body, edges)?;
+            fillet_executive::fillet_edges(k, &mut body, &ids, *radius, 1, 1, 1.0)
+                .map_err(|e| solid(&e))?;
+            body
         }
         // SM_API offsets or shells whole bodies only (SmApiOffsetBrepFull,
         // SmApiShellBrepFull); nothing offsets selected faces.

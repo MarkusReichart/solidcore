@@ -72,7 +72,9 @@
 //! - **Edit notifications.** [`fix_uv_trim_curves_notified`] notifies its two
 //!   `EditEndPoint`s (`SM_NO_PRE_EDIT` / `SM_NO_POST_EDIT`, caller and first data
 //!   object the UV trim curve under its kernel-issued identity) through the caller's
-//!   [`NotifyEnv`]; [`fix_uv_trim_curves`] has none and notifies nobody. Upstream
+//!   [`NotifyEnv`]; with the stretch enabled, so do its `Trim`s and
+//!   `EditParameterization`s that change a curve's interval (sent after the edit);
+//!   [`fix_uv_trim_curves`] has none and notifies nobody. Upstream
 //!   callbacks read the curve's owner (the edge use holding it) and that edge use's
 //!   edge through the pointers; here they are reported first
 //!   ([`object::report_owner_link`]). `SmCurve::Notify`'s object cache drop has no
@@ -145,6 +147,7 @@ use crate::nurbs::b_spline_curve_n_lib::TrimMode;
 use crate::nurbs::b_spline_surface::p1::SurfParamType;
 use crate::nurbs::b_spline_surface_n_lib::p2::{EvaluateFlags, OrientType};
 use crate::nurbs::knots::Side;
+use crate::nurbs::math::MAX_DERIVATIVE;
 use crate::query::face::p2::{
     curve_on_classify_cached, curve_on_classify_mut, CurveOnClassifyBrep, CurveOnClassifyCache,
     CurveOnClassifyObjects, FaceBrep,
@@ -1842,10 +1845,24 @@ impl<'a> OdeIsoCurveLength<'a> {
             let uv = Point2::new(self.u_iso_value, t);
 
             if self.face_thickness < EFF_ZERO {
-                let r = self
+                // (the B-spline kinds evaluate into a stack matrix: no allocation per
+                // integration step, the same values)
+                let mut sd = [[Vec3::ZERO; MAX_DERIVATIVE + 1]; MAX_DERIVATIVE + 1];
+                if self
                     .surface
-                    .evaluate_simple(self.kernel, uv, 1, 1, simple_flags())?;
-                copy_block(&mut pv, &r);
+                    .evaluate_simple_into(uv, 1, 1, simple_flags(), &mut sd)?
+                {
+                    for (row, src) in pv.iter_mut().zip(&sd) {
+                        for (slot, v) in row.iter_mut().zip(src) {
+                            *slot = *v;
+                        }
+                    }
+                } else {
+                    let r = self
+                        .surface
+                        .evaluate_simple(self.kernel, uv, 1, 1, simple_flags())?;
+                    copy_block(&mut pv, &r);
+                }
             } else if i == 0 {
                 let r = offset_evaluate_simple(
                     self.kernel,
@@ -2596,6 +2613,62 @@ fn notified_end_point_edit(
     notify(env, NotifyOperation::PostEdit)
 }
 
+/// `edit` (a `Trim` or `EditParameterization`) of the UV trim curve `holder` holds,
+/// notified as [`notified_end_point_edit`] when it changes the curve's natural
+/// interval: both edits return before their `SM_NO_PRE_EDIT` when there is no work
+/// (an interval already contained or already equal) and otherwise always change it.
+/// The two notifications are sent after the edit; a callback receives only the
+/// identities, so it cannot observe the order. An edit that fails notifies nothing
+/// (upstream may have sent its `SM_NO_PRE_EDIT`).
+///
+/// # Errors
+///
+/// Those of `edit`, of the attribute handlers ([`a_object::notify`]); `InvalidInput`
+/// for an exhausted identity domain.
+fn notified_interval_edit(
+    k: &Kernel,
+    b: &mut Brep,
+    env: Option<&mut NotifyEnv<'_>>,
+    holder: EdgeuseId,
+    edit: impl FnOnce(&Kernel, &mut Curve) -> Result<()>,
+) -> Result<()> {
+    let Some(env) = env.filter(|e| e.context.is_some()) else {
+        return edit(k, held_curve_mut(b, holder)?);
+    };
+    let before = held_curve(b, holder)?.natural_interval();
+    edit(k, held_curve_mut(b, holder)?)?;
+    if held_curve(b, holder)?.natural_interval() == before {
+        return Ok(());
+    }
+    let holder_ref = (env.key_of)(EntityRef::Edgeuse(holder));
+    let edge_ref = eu1::edge(b, holder)?.map(|e| (env.key_of)(EntityRef::Edge(e)));
+    let this = {
+        let curve = held_curve_mut(b, holder)?;
+        let Some(ctx) = env.context.as_deref_mut() else {
+            return Err(null("Trim: no context"));
+        };
+        ObjectRef {
+            type_code: curve.type_code(),
+            key: ctx.geometry_key(curve.notify_identity_slot())?,
+        }
+    };
+    // (the links a callback reads through GetOwner() / GetEdge())
+    object::report_owner_link(env.context.as_deref_mut(), this.key, Some(holder_ref));
+    object::report_owner_link(env.context.as_deref_mut(), holder_ref.key, edge_ref);
+    for operation in [NotifyOperation::PreEdit, NotifyOperation::PostEdit] {
+        a_object::notify(
+            env.attributes,
+            env.context.as_deref_mut(),
+            operation,
+            this,
+            Some(this),
+            None,
+            None,
+        )?;
+    }
+    Ok(())
+}
+
 /// `SmBSplineCurve::EditEndPoint(point, bEditStart, pdWeight)` of a UV trim curve.
 fn edit_end_point(
     curve: &mut Curve,
@@ -2657,9 +2730,11 @@ pub fn fix_uv_trim_curves(
     )
 }
 
-/// [`fix_uv_trim_curves`] whose end point edits notify through `env`: each
+/// [`fix_uv_trim_curves`] whose curve edits notify through `env`: each
 /// `EditEndPoint` sends `SM_NO_PRE_EDIT` and `SM_NO_POST_EDIT` with the edited UV trim
-/// curve as caller and first data object ([`notified_end_point_edit`]). Without `env`
+/// curve as caller and first data object ([`notified_end_point_edit`]), and so does
+/// each `Trim` and `EditParameterization` of the opt-in stretch that changes the
+/// curve's interval ([`notified_interval_edit`]). Without `env`
 /// (or without its context) the edits notify nobody.
 ///
 /// # Errors
@@ -2784,9 +2859,12 @@ pub fn fix_uv_trim_curves_notified(
                     let _ = trim_ivl.set_min_max(curr_ivl.min(), t_curr_new);
                 }
                 if !are_same(trim_ivl.min(), trim_ivl.max()) {
-                    let c = held_curve_mut(b, curr_holder)?;
-                    c.trim(k, &mut trim_ivl, TrimMode::Notify)?;
-                    c.edit_parameterization(k, &curr_ivl)?;
+                    notified_interval_edit(k, b, env.as_deref_mut(), curr_holder, |k, c| {
+                        c.trim(k, &mut trim_ivl, TrimMode::Notify)
+                    })?;
+                    notified_interval_edit(k, b, env.as_deref_mut(), curr_holder, |k, c| {
+                        c.edit_parameterization(k, &curr_ivl)
+                    })?;
                 }
             }
         }
@@ -2800,9 +2878,12 @@ pub fn fix_uv_trim_curves_notified(
                     let _ = trim_ivl.set_min_max(t_prev_new, prev_ivl.max());
                 }
                 if !are_same(trim_ivl.min(), trim_ivl.max()) {
-                    let c = held_curve_mut(b, prev_holder)?;
-                    c.trim(k, &mut trim_ivl, TrimMode::Notify)?;
-                    c.edit_parameterization(k, &prev_ivl)?;
+                    notified_interval_edit(k, b, env.as_deref_mut(), prev_holder, |k, c| {
+                        c.trim(k, &mut trim_ivl, TrimMode::Notify)
+                    })?;
+                    notified_interval_edit(k, b, env.as_deref_mut(), prev_holder, |k, c| {
+                        c.edit_parameterization(k, &prev_ivl)
+                    })?;
                 }
             }
         }

@@ -117,7 +117,7 @@ use crate::blend::fillet_geom::p1::{
     FilletBrep, FilletGeom, FilletGeomId, FilletGeomType, FilletSolverId, FilletVertexType,
 };
 use crate::blend::fillet_standard_solver::p1::{
-    BlendCurveCrossSectionFsg, CircularCrossSectionFsg, LinearCrossSectionFsg,
+    BlendCurveCrossSectionFsg, CircularCrossSectionFsg, LinearCrossSectionFsg, VariableRadiusFs,
 };
 use crate::curve::curve::{Curve, CurveKind};
 use crate::curve::iso_curve::IsoCurve;
@@ -290,6 +290,22 @@ impl FilletSurfaceGenerator {
             Self::Linear => FilletSurfaceGeneratorType::Linear,
             Self::Circular(_) => FilletSurfaceGeneratorType::Circular,
             Self::BlendCurve(_) => FilletSurfaceGeneratorType::BlendCurve,
+        }
+    }
+
+    /// Not upstream (the SolidCraft fork's `MeetsItsFacesTangentially`,
+    /// tangency-labs/solidcore#879): whether each cross section is tangent, at its ends
+    /// on the rails, to the faces the fillet rolls on. The base generator and any custom
+    /// one: not known, `false`; the linear section cuts across both faces, `false`; the
+    /// circular section's arc about the ball's centre is square at each rail to the
+    /// face normal there (the complement arc too), `true` unless mirrored about the
+    /// rails' chord; the blend curve takes its end tangents from that arc, `true`.
+    #[must_use]
+    pub const fn meets_its_faces_tangentially(&self) -> bool {
+        match self {
+            Self::Base | Self::EiffelTower | Self::Linear => false,
+            Self::Circular(g) => !g.mirror,
+            Self::BlendCurve(_) => true,
         }
     }
 
@@ -713,22 +729,23 @@ impl FilletSolver {
         self.surface_extension_factor = factor;
     }
 
-    /// `GetSelfIntersectionHandler`: the executive's handler.
+    /// `GetSelfIntersectionHandler`: the executive's handler, read only by
+    /// `SmFilletIntersector::FlushCurve`, which acts on a smoothing handler alone
+    /// (`GetAlgorithmType() == SM_HA_SMOOTHING`). `Ok(())` is "no smoothing handler":
+    /// the executive's default (`NULL`) and SM_API's `SmMakeSurfaceBlendSIH`
+    /// (`SM_HA_BLENDING`) both skip that step, and the port holds no
+    /// `SmMakeCurveBlendSIH` (its `SmoothOutIntersection` is unported, see
+    /// `plan/findings.md` "fillet_solver_p1: SmoothOutIntersection").
     ///
     /// # Errors
     ///
     /// [`SolidError::InvalidInput`] without an executive (upstream dereferences
-    /// `NULL`); [`SolidError::Unported`] otherwise (the executive's data, unit
-    /// `blend.fillet_executive_p1`).
+    /// `NULL`).
     pub fn self_intersection_handler(&self) -> Result<()> {
         if self.executive.is_none() {
             return Err(invalid("no fillet executive"));
         }
-        // UNPORTED(blend.fillet_executive_p1): SmFilletExecutive::m_pSelfIntersectionHandler (member read)
-        Err(SolidError::unported(
-            "SmFilletExecutive::m_pSelfIntersectionHandler",
-            "blend.fillet_executive_p1",
-        ))
+        Ok(())
     }
 
     /// `GetSurface(lRailIndex)`: the fillet geometry's surface when one is set for the
@@ -1081,12 +1098,12 @@ impl FilletSolver {
         let linear_extension_factor = 50.0;
         if bool_status(surface.is_periodic(k, domain, SurfParamType::U))? {
             size.x *= periodic_extension_factor;
-        } else if CBI_LINEAR > 0 && surface.degree(SurfParamType::U) == 1 {
+        } else if CBI_LINEAR > 0 && surface.degree_with_nurb(k, SurfParamType::U)? == 1 {
             size.x *= linear_extension_factor;
         }
         if bool_status(surface.is_periodic(k, domain, SurfParamType::V))? {
             size.y *= periodic_extension_factor;
-        } else if CBI_LINEAR > 0 && surface.degree(SurfParamType::V) == 1 {
+        } else if CBI_LINEAR > 0 && surface.degree_with_nurb(k, SurfParamType::V)? == 1 {
             size.y *= linear_extension_factor;
         }
 
@@ -1798,6 +1815,12 @@ pub trait FilletSolverOps: AsFilletSolverOps {
     /// unit.
     fn solver_type(&self) -> Result<FilletSolverType> {
         Ok(FilletSolverType::Unknown)
+    }
+
+    /// `SM_CAST_PTR(SmVariableRadiusFS, pFS)`: the solver's variable-radius data, `None`
+    /// for any other solver class (read and changed by `SmTemporaryRadiusChange`).
+    fn variable_radius_mut(&mut self) -> Option<&mut VariableRadiusFs> {
+        None
     }
 
     /// `((SmConstantDistanceFS*)this)->GetDistance()`: the rail distance of a

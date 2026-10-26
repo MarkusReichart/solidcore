@@ -81,9 +81,18 @@
 //!   of the solver's law (`SmFilletIntersector::EvaluateLawPoint` does not read it).
 //!   `SetExtensionFlags` through the `FilletSolverOps` hook (which has no kernel) is
 //!   [`SolidError::InvalidInput`]; call [`VariableRadiusFs::set_extension_flags`].
-//! - **Unported callees.** `SmFilletSolver::StepSolve` (`blend.fillet_solver_p3`)
-//!   returns [`SolidError::Unported`] at the call site: `CalcFilletGeom` stops at
-//!   `StepSolve` (the rest of it is ported but unreachable).
+//! - **Virtuals of `SmConstantDistanceFS`.** `impl FilletSolverOps for
+//!   ConstantDistanceFs` adapts the class's `LoadInitialValues` to the trait: its in/out
+//!   `rlSurface2Index` is `lSurface1Index + 2` on input, as every upstream caller passes
+//!   it with `rbDoSurf2Calcs = 0`.
+//! - **Virtuals of `SmSurfaceSurfaceFS`.** `impl FilletSolverOps for SurfaceSurfaceFs`
+//!   gives `StepSolve` the class's own `SetupOffsetExtension`, `GetSolverType`,
+//!   `GetType` / `IsKindOf` and the inherited `SmConstantRadiusFS` overrides
+//!   (`GetJacobianSize`, `SetupOffsetValues`, `OffsetRadiiCanChange`, `LoadJacobian`,
+//!   `LoadInitialValues`); `PointOnPlaneSolve` is the base `SmFilletSolver`'s (the class
+//!   derives from `SmConstantRadiusFS`, not the assisted solver). `CalcFilletGeom` now
+//!   steps (`blend.fillet_solver_p3`'s `StepSolve`) and stops at `GetPseudoBrep`
+//!   (`blend.fillet_executive_p1`).
 //! - **Arguments.** Out-params become return values (`rbFoundSolution` /
 //!   `rTsectPnt`: `Some` point when found). `SmContext` arguments are dropped or become
 //!   the [`Kernel`]. The generators' `CreateSurface` take the solver's tolerance and
@@ -106,12 +115,14 @@ use crate::blend::fillet_intersector::FilletIntersector;
 use crate::blend::fillet_solver::p1::{
     FilletSolver, FilletSolverOps, FilletSphereSolveEnfo, OffsetSurfaceSlot,
 };
+use crate::blend::fillet_solver::p3::StepSolveOutcome;
 use crate::blend::fillet_solver::p4::IntersectorSolver;
 use crate::blend::fillet_standard_solver::p1::SolverRails;
 use crate::blend::fillet_standard_solver::p1::{
     constant_radius_is_kind_of, BlendCurveCrossSectionFsg, BoundaryTrimmingType,
     CircularCrossSectionFsg, ConstantDistanceFs, ConstantRadiusFs, CurveBasedFs,
-    DistanceInitialValues, FilletLaw, FilletSolverType, JacobianSurfaces, RailSurface,
+    DistanceInitialValues, FilletLaw, FilletSolverType, InitialSurface, JacobianSurfaces,
+    RailSurface,
     SurfaceSurfaceFs, VariableRadiusFs, CONSTANT_RADIUS_ASSISTED_FS_TYPE, CURVE_BASED_FS_TYPE,
 };
 use crate::curve::curve::p1::GlobalPointSolveOptions;
@@ -352,10 +363,17 @@ pub trait ConstantRadiusOps {
         self.constant_radius_mut().set_offset_by_radius(rail)
     }
 
-    /// Resolve the selected geometry's tangent-rollover guess at its native branch.
-    /// Context-free callers have no selected geometry.
-    fn check_tangent_rollover_guess_context(&self) -> Result<()> {
-        Ok(())
+    /// `LoadInitialValues`' tangent-rollover guess: when the solver's
+    /// `GetFilletGeomForSurfaces()` is a `SM_FG_TANGENT_ROLLOVER` geometry, the other
+    /// surface's UV (`UVPos(1 - rail_index)`) of the first defined `SM_FV_RAIL_X_EDGEUSE`
+    /// fillet vertex use on rail `rail_index`. Context-free callers have no selected
+    /// geometry (`None`).
+    ///
+    /// # Errors
+    ///
+    /// Those of the context's lookup.
+    fn tangent_rollover_guess(&self, _rail_index: usize) -> Result<Option<Point2>> {
+        Ok(None)
     }
 
     /// `SetupOffsetExtension(pSurf, rDomain)` of the solver's class.
@@ -509,165 +527,145 @@ fn cr_initial_body<S: ConstantRadiusOps + ?Sized>(
     );
     let pnt = offset_evaluate_point(k, surface1, uv)?;
 
-    solver.check_tangent_rollover_guess_context()?;
+    // In the tangent-rollover case, the proper uv guess points are set in the TsectPnts
+    // of the FilletVertexuses.  They might be on the other side of a seam.
+    let rollover = solver.tangent_rollover_guess(1 - other_rail)?;
     let mut srf2_guess_uv = Point3::UNDEF;
-    let mut found_uv = false;
+    if let Some(uv) = rollover {
+        srf2_guess_uv.x = uv.x;
+        srf2_guess_uv.y = uv.y;
+    } else {
+        let mut found_uv = false;
 
-    // If we have edgeuses - use them.
-    // If not - drop the GuessPoint to the other surface.
+        // If we have edgeuses - use them.
+        // If not - drop the GuessPoint to the other surface.
 
-    // But first: if we are rolling on a different face (e.g., doing a rollover),
-    // then this is the wrong Edgeuse, and we don't have an appropriate one to use.
-    let need_brep = || SolidError::invalid_input(OP, "edge uses without their B-rep");
-    if let Some(eu) = other_eu {
-        let b = brep.ok_or_else(need_brep)?;
-        if let Some(f) = edgeuse::face(b, eu)? {
-            let same = b.face(f)?.surface.is_some() && base2_id == SurfaceId::Face(f);
-            if !same {
-                other_eu = None;
+        // But first: if we are rolling on a different face (e.g., doing a rollover),
+        // then this is the wrong Edgeuse, and we don't have an appropriate one to use.
+        let need_brep = || SolidError::invalid_input(OP, "edge uses without their B-rep");
+        if let Some(eu) = other_eu {
+            let b = brep.ok_or_else(need_brep)?;
+            if let Some(f) = edgeuse::face(b, eu)? {
+                let same = b.face(f)?.surface.is_some() && base2_id == SurfaceId::Face(f);
+                if !same {
+                    other_eu = None;
+                }
             }
         }
-    }
 
-    let trimmed_eu = match other_eu {
-        Some(eu) => {
-            let b = brep.ok_or_else(need_brep)?;
-            edgeuse::uv_trim_curve(b, eu)?.0.map(|_| (b, eu))
-        }
-        None => None,
-    };
-    if let Some((b, eu)) = trimmed_eu {
-        // Drop pt to the filleted edge, in 3D
-        let edge_id = edgeuse::edge(b, eu)?
-            .ok_or_else(|| SolidError::invalid_input(OP, "edge use without edge"))?;
-        let e = b.edge(edge_id)?;
-        let curve = e
-            .curve
-            .as_ref()
-            .ok_or_else(|| SolidError::invalid_input(OP, "edge without curve"))?;
-        let ivl = e.interval;
-        let sols = curve.global_point_solve(
-            k,
-            &ivl,
-            SolverOperation::Minimize,
-            pnt,
-            fs.solver.approx_tol_3d,
-            SolutionRequested::Single,
-            &GlobalPointSolveOptions::<ObjectHandle>::default(),
-        )?;
-        if sols.len() != 1 {
-            return Err(SolidError::sm_err(OP));
-        }
-
-        // get OtherFilletEdge Parameter
-        let mut fillet_edge_t = sols
-            .get(0)
-            .ok_or_else(|| SolidError::sm_err(OP))?
-            .start
-            .param(0)?;
-
-        // If the curve is closed, and the solution is within tol of an
-        // end point, snap the solution to whichever end (start or finish)
-        // such that the direction that moves towards the interior of the curve
-        // also moves generally towards the interior of the surface.
-        if curve.is_closed(k, &ivl, 0.0)? {
-            let p3 = curve.evaluate_point(k, fillet_edge_t)?;
-            let inward = offset_compute_inward_vector(k, surface1, uv)?;
-            let snap_tol = 0.001 * curve.approximate_length(k, &ivl, 9, false)?.0;
-            let dropped = curve.drop_point(
+        let trimmed_eu = match other_eu {
+            Some(eu) => {
+                let b = brep.ok_or_else(need_brep)?;
+                edgeuse::uv_trim_curve(b, eu)?.0.map(|_| (b, eu))
+            }
+            None => None,
+        };
+        if let Some((b, eu)) = trimmed_eu {
+            // Drop pt to the filleted edge, in 3D
+            let edge_id = edgeuse::edge(b, eu)?
+                .ok_or_else(|| SolidError::invalid_input(OP, "edge use without edge"))?;
+            let e = b.edge(edge_id)?;
+            let curve = e
+                .curve
+                .as_ref()
+                .ok_or_else(|| SolidError::invalid_input(OP, "edge without curve"))?;
+            let ivl = e.interval;
+            let sols = curve.global_point_solve(
                 k,
                 &ivl,
-                p3,
-                Some(inward),
-                snap_tol,
-                None,
                 SolverOperation::Minimize,
+                pnt,
+                fs.solver.approx_tol_3d,
+                SolutionRequested::Single,
+                &GlobalPointSolveOptions::<ObjectHandle>::default(),
             )?;
-            if dropped.success {
-                fillet_edge_t = dropped.parameter;
+            if sols.len() != 1 {
+                return Err(SolidError::sm_err(OP));
+            }
+
+            // get OtherFilletEdge Parameter
+            let mut fillet_edge_t = sols
+                .get(0)
+                .ok_or_else(|| SolidError::sm_err(OP))?
+                .start
+                .param(0)?;
+
+            // If the curve is closed, and the solution is within tol of an
+            // end point, snap the solution to whichever end (start or finish)
+            // such that the direction that moves towards the interior of the curve
+            // also moves generally towards the interior of the surface.
+            if curve.is_closed(k, &ivl, 0.0)? {
+                let p3 = curve.evaluate_point(k, fillet_edge_t)?;
+                let inward = offset_compute_inward_vector(k, surface1, uv)?;
+                let snap_tol = 0.001 * curve.approximate_length(k, &ivl, 9, false)?.0;
+                let dropped = curve.drop_point(
+                    k,
+                    &ivl,
+                    p3,
+                    Some(inward),
+                    snap_tol,
+                    None,
+                    SolverOperation::Minimize,
+                )?;
+                if dropped.success {
+                    fillet_edge_t = dropped.parameter;
+                }
+            }
+
+            let (uv_curve, _) = edgeuse::uv_trim_curve(b, eu)?;
+            let uv_curve =
+                uv_curve.ok_or_else(|| SolidError::invalid_input(OP, "edge use without UV curve"))?;
+            srf2_guess_uv = uv_curve.evaluate_point(k, fillet_edge_t)?;
+            found_uv = true;
+        }
+
+        // If we found a uv, check that it's good enough.
+        // Check how it looks on the other base surface.
+        // If we are near a singularity then use global point solve.
+        if found_uv {
+            // Check parametric degeneracies:
+            // (1) 1st derivs lining up,
+            let uv_pnt = Point2::new(srf2_guess_uv.x, srf2_guess_uv.y);
+            let flags = EvaluateFlags {
+                u_side: Side::Left,
+                v_side: Side::Left,
+                only_upper_half: true,
+                non_zero_tangents: true,
+            };
+            let mat = base2.evaluate(k, uv_pnt, 1, 1, flags)?;
+            let du = mat
+                .get(1)
+                .and_then(|r| r.first())
+                .copied()
+                .ok_or_else(|| SolidError::sm_err(OP))?;
+            let dv = mat
+                .first()
+                .and_then(|r| r.get(1))
+                .copied()
+                .ok_or_else(|| SolidError::sm_err(OP))?;
+            let mut deg = du.angle_between(dv)?;
+            deg *= 180.0 / PI;
+            // (not a range test: a NaN angle keeps the guess, as upstream)
+            #[allow(clippy::manual_range_contains)]
+            if deg < 30.0 || deg > 150.0 {
+                found_uv = false;
+            }
+
+            // (2) one deriv going to zero.
+            if du.max_dimension() > 10000.0 * dv.max_dimension()
+                || dv.max_dimension() > 10000.0 * du.max_dimension()
+            {
+                found_uv = false;
             }
         }
 
-        let (uv_curve, _) = edgeuse::uv_trim_curve(b, eu)?;
-        let uv_curve =
-            uv_curve.ok_or_else(|| SolidError::invalid_input(OP, "edge use without UV curve"))?;
-        srf2_guess_uv = uv_curve.evaluate_point(k, fillet_edge_t)?;
-        found_uv = true;
-    }
-
-    // If we found a uv, check that it's good enough.
-    // Check how it looks on the other base surface.
-    // If we are near a singularity then use global point solve.
-    if found_uv {
-        // Check parametric degeneracies:
-        // (1) 1st derivs lining up,
-        let uv_pnt = Point2::new(srf2_guess_uv.x, srf2_guess_uv.y);
-        let flags = EvaluateFlags {
-            u_side: Side::Left,
-            v_side: Side::Left,
-            only_upper_half: true,
-            non_zero_tangents: true,
-        };
-        let mat = base2.evaluate(k, uv_pnt, 1, 1, flags)?;
-        let du = mat
-            .get(1)
-            .and_then(|r| r.first())
-            .copied()
-            .ok_or_else(|| SolidError::sm_err(OP))?;
-        let dv = mat
-            .first()
-            .and_then(|r| r.get(1))
-            .copied()
-            .ok_or_else(|| SolidError::sm_err(OP))?;
-        let mut deg = du.angle_between(dv)?;
-        deg *= 180.0 / PI;
-        // (not a range test: a NaN angle keeps the guess, as upstream)
-        #[allow(clippy::manual_range_contains)]
-        if deg < 30.0 || deg > 150.0 {
-            found_uv = false;
-        }
-
-        // (2) one deriv going to zero.
-        if du.max_dimension() > 10000.0 * dv.max_dimension()
-            || dv.max_dimension() > 10000.0 * du.max_dimension()
-        {
-            found_uv = false;
-        }
-    }
-
-    // If we didn't get a good enough uv on surface2, try a global solve
-    if !found_uv {
-        let sols =
-            surface_global_point_solve(k, base2, &base2.natural_uv_domain(), pnt, EFF_ZERO_SQ)?;
-        if sols.len() != 1 {
-            return Err(SolidError::sm_err(OP));
-        }
-        let s = sols
-            .first()
-            .copied()
-            .ok_or_else(|| SolidError::sm_err(OP))?;
-        srf2_guess_uv.x = s.x;
-        srf2_guess_uv.y = s.y;
-    }
-
-    // Before we add the rGuessT values, drop point to other offset surface
-    // to get a better guess
-    let uv_guess = Point2::new(srf2_guess_uv.x, srf2_guess_uv.y);
-    let mut domain = base2.natural_uv_domain();
-    solver.setup_offset_extension(k, base2, &mut domain)?; // expands sDomain
-
-    if let Some((sol_uv, dist)) = offset_local_point_solve(k, surface2, &domain, pnt, uv_guess)? {
-        // when local solve worked: save solution
-        let [r0, r1] = fs.fillet_radii;
-        if dist < (r0.abs() + r1.abs()) {
-            srf2_guess_uv.x = sol_uv.x;
-            srf2_guess_uv.y = sol_uv.y;
-        }
-    } else {
-        // use global solve
-        let sols =
-            surface_global_point_solve(k, base2, &base2.natural_uv_domain(), pnt, EFF_ZERO_SQ)?;
-        if sols.len() == 1 {
+        // If we didn't get a good enough uv on surface2, try a global solve
+        if !found_uv {
+            let sols =
+                surface_global_point_solve(k, base2, &base2.natural_uv_domain(), pnt, EFF_ZERO_SQ)?;
+            if sols.len() != 1 {
+                return Err(SolidError::sm_err(OP));
+            }
             let s = sols
                 .first()
                 .copied()
@@ -675,7 +673,34 @@ fn cr_initial_body<S: ConstantRadiusOps + ?Sized>(
             srf2_guess_uv.x = s.x;
             srf2_guess_uv.y = s.y;
         }
-    }
+
+        // Before we add the rGuessT values, drop point to other offset surface
+        // to get a better guess
+        let uv_guess = Point2::new(srf2_guess_uv.x, srf2_guess_uv.y);
+        let mut domain = base2.natural_uv_domain();
+        solver.setup_offset_extension(k, base2, &mut domain)?; // expands sDomain
+
+        if let Some((sol_uv, dist)) = offset_local_point_solve(k, surface2, &domain, pnt, uv_guess)? {
+            // when local solve worked: save solution
+            let [r0, r1] = fs.fillet_radii;
+            if dist < (r0.abs() + r1.abs()) {
+                srf2_guess_uv.x = sol_uv.x;
+                srf2_guess_uv.y = sol_uv.y;
+            }
+        } else {
+            // use global solve
+            let sols =
+                surface_global_point_solve(k, base2, &base2.natural_uv_domain(), pnt, EFF_ZERO_SQ)?;
+            if sols.len() == 1 {
+                let s = sols
+                    .first()
+                    .copied()
+                    .ok_or_else(|| SolidError::sm_err(OP))?;
+                srf2_guess_uv.x = s.x;
+                srf2_guess_uv.y = s.y;
+            }
+        }
+    } // end if not bFoundSrf2UVGuess
 
     // Start setting the return values:
     // the next two entries in rIntervals and rPeriodicities.
@@ -2055,6 +2080,11 @@ impl FilletSolverOps for VariableRadiusFs {
         &mut self.curve_based.solver
     }
 
+    /// The variable-radius solver itself (`SM_CAST_PTR(SmVariableRadiusFS, pFS)`).
+    fn variable_radius_mut(&mut self) -> Option<&mut VariableRadiusFs> {
+        Some(self)
+    }
+
     /// `SmVariableRadiusFS::GetJacobianSize`: 5.
     fn jacobian_size(&self) -> Result<usize> {
         Ok(VariableRadiusFs::jacobian_size(self))
@@ -2380,9 +2410,7 @@ impl SurfaceSurfaceFs {
         }
 
         let mut step = 0.0001;
-        // (StepSolve is unported: everything below is unreachable until it lands; it
-        // is kept as the faithful port of the rest of the function)
-        let mut stepped = step_solve(self, &curr, &mut step, &domain1, &domain2)?;
+        let mut stepped = step_solve(self, k, &curr, &mut step, &domain1, &domain2)?;
         if !stepped.found_good_point {
             for _ii in 0..3 {
                 let p4 = offset_evaluate_point(
@@ -2414,7 +2442,7 @@ impl SurfaceSurfaceFs {
                     *curr.uv_pos_mut(SrfIndex::Second) = uv;
                 }
             }
-            stepped = step_solve(self, &curr, &mut step, &domain1, &domain2)?;
+            stepped = step_solve(self, k, &curr, &mut step, &domain1, &domain2)?;
             if !stepped.found_good_point {
                 return Ok(());
             }
@@ -2463,24 +2491,327 @@ struct StepResult {
     next: TsectPnt,
 }
 
-/// `StepSolve(sCurrPnt, dStep, sDomain1, sDomain2, bFoundGoodPoint, bClipped,
-/// bHitBoundary, sNextPnt)` (`dStep` in/out: `double& rdStep`).
+/// `SER(StepSolve(sCurrPnt, dStep, sDomain1, sDomain2, bFoundGoodPoint, bClipped,
+/// bHitBoundary, sNextPnt))` (`dStep` in/out: `double& rdStep`) on the solver's own
+/// virtuals; `sNextPnt` starts as `SmTsectPnt()`. No B-rep: `CalcFilletGeom` has no
+/// edge uses to pass to `LoadInitialValues`.
 ///
 /// # Errors
 ///
-/// [`SolidError::Unported`] (`SmFilletSolver::StepSolve`, unit `blend.fillet_solver_p3`).
+/// Those of [`FilletSolver::step_solve`].
 fn step_solve(
-    _solver: &mut SurfaceSurfaceFs,
-    _curr: &TsectPnt,
-    _step: &mut f64,
-    _domain1: &Extent2d,
-    _domain2: &Extent2d,
+    solver: &mut SurfaceSurfaceFs,
+    k: &Kernel,
+    curr: &TsectPnt,
+    step: &mut f64,
+    domain1: &Extent2d,
+    domain2: &Extent2d,
 ) -> Result<StepResult> {
-    // UNPORTED(blend.fillet_solver_p3): SmFilletSolver::StepSolve -- justified: plan/findings.md blend.fillet_standard_solver_p2 (StepSolve)
-    Err(SolidError::unported(
-        "SmFilletSolver::StepSolve",
-        "blend.fillet_solver_p3",
-    ))
+    let mut next = TsectPnt::new();
+    let mut out = StepSolveOutcome::default();
+    FilletSolver::step_solve(
+        solver, k, None, curr, step, domain1, domain2, &mut next, &mut out,
+    )?;
+    Ok(StepResult {
+        found_good_point: out.found_good_point,
+        next,
+    })
+}
+
+/// The virtuals of `SmConstantDistanceFS` (`SmFilletStandardSolver.h:195-232`): its
+/// `CanMakeAnalytic`, `GetJacobianSize`, `GetSolverType`, `LoadJacobian`,
+/// `LoadInitialValues`, `SetupOffsetValues` and `SM_COMMON` type; the rest are the base
+/// `SmFilletSolver`'s. `GetDistance` is [`FilletSolverOps::constant_distance`].
+///
+/// `LoadInitialValues`' `rlSurface2Index` is in/out for this class (read when
+/// `rbDoSurf2Calcs` is 0, to place the distance after it); the trait carries no input
+/// value, so it is `surface1_index + 2`, which every upstream caller passing
+/// `rbDoSurf2Calcs = 0` passes (`lSurf1Index = 0`, `lSurf2Index = 2`:
+/// `SmFilletSolver.cpp:2970-2972`, `:5445-5447`). The caller's copy of its rail surface
+/// is `crSrf1Offset` ([`InitialSurface::Other`]).
+impl FilletSolverOps for ConstantDistanceFs {
+    fn solver(&self) -> &FilletSolver {
+        &self.solver
+    }
+
+    fn solver_mut(&mut self) -> &mut FilletSolver {
+        &mut self.solver
+    }
+
+    /// `RailEdgeuseIntersect` with `geometry` set for the surfaces: upstream's
+    /// `GetSurface(i)` is then `SmFilletGeom::GetOffsetSurface(i)`, the geometry's offset
+    /// surface or, where it has none, the solver's own. Every surface access of this
+    /// class goes through `GetSurface`, so for the call the geometry's offsets take the
+    /// solver's slots (keeping the slots' identities) with no geometry set, and go back
+    /// to the geometry afterwards, with whatever the call wrote to them, on success and
+    /// on error.
+    #[allow(clippy::too_many_arguments)]
+    fn rail_edgeuse_intersect_on_geometry(
+        &mut self,
+        k: &Kernel,
+        geometry: &mut crate::blend::fillet_geom::p1::FilletGeom,
+        target: &mut Brep,
+        rail_index: usize,
+        edgeuse: EdgeuseId,
+        guess: f64,
+        tsect: &mut TsectPnt,
+    ) -> Result<Option<f64>> {
+        const OP: &str = "blend::fillet_standard_solver::p2::ConstantDistanceFs";
+        // (solver slot, geometry offset moved into it) per rail
+        let mut moved: [Option<Option<OffsetSurfaceSlot>>; 2] = [None, None];
+        for (rail, entry) in moved.iter_mut().enumerate() {
+            let own = geometry
+                .off_surfs
+                .get_mut(rail)
+                .ok_or_else(|| SolidError::invalid_input(OP, "rail index past 1"))?;
+            if let Some(surface) = own.take() {
+                let slot = self
+                    .solver
+                    .surfaces
+                    .get_mut(rail)
+                    .ok_or_else(|| SolidError::invalid_input(OP, "rail index past 1"))?;
+                let key = slot.as_ref().map_or(0, |s| s.key);
+                let saved = slot.replace(OffsetSurfaceSlot { key, surface });
+                *entry = Some(saved);
+            }
+        }
+        let saved_fg = self.solver.fillet_geom_for_surfaces();
+        self.solver.set_fillet_geom_for_surfaces(None);
+        let result = FilletSolver::rail_edgeuse_intersect(
+            self, k, target, rail_index, edgeuse, guess, tsect,
+        );
+        self.solver.set_fillet_geom_for_surfaces(saved_fg);
+        for (rail, entry) in moved.into_iter().enumerate() {
+            let Some(saved) = entry else {
+                continue;
+            };
+            let slot = self
+                .solver
+                .surfaces
+                .get_mut(rail)
+                .ok_or_else(|| SolidError::invalid_input(OP, "rail index past 1"))?;
+            let used = std::mem::replace(slot, saved);
+            if let Some(own) = geometry.off_surfs.get_mut(rail) {
+                *own = used.map(|slot| slot.surface);
+            }
+        }
+        result
+    }
+
+    /// `SmConstantDistanceFS::GetJacobianSize`: 5.
+    fn jacobian_size(&self) -> Result<usize> {
+        Ok(ConstantDistanceFs::jacobian_size(self))
+    }
+
+    /// `SmConstantDistanceFS::SetupOffsetValues`.
+    fn setup_offset_values(
+        &mut self,
+        tsect: &TsectPnt,
+        offset_dist: Option<&mut f64>,
+    ) -> Result<()> {
+        let d = ConstantDistanceFs::setup_offset_values(self, tsect)?;
+        if let Some(out) = offset_dist {
+            *out = d;
+        }
+        Ok(())
+    }
+
+    /// `SmConstantDistanceFS::CanMakeAnalytic`: `TRUE`.
+    fn can_make_analytic(&self) -> Result<bool> {
+        Ok(ConstantDistanceFs::can_make_analytic(self))
+    }
+
+    /// `SmConstantDistanceFS::LoadJacobian` (the surface offsets are only read).
+    fn load_jacobian(
+        &mut self,
+        k: &Kernel,
+        num_equations: &mut usize,
+        num_parameters: &mut usize,
+        load: &mut JacobianLoad<'_>,
+        f: &mut [f64],
+        jacobian: Option<&mut Matrix>,
+    ) -> Result<bool> {
+        ConstantDistanceFs::load_jacobian(
+            self,
+            k,
+            num_equations,
+            num_parameters,
+            load.rail_index,
+            [load.surface1, load.surface2],
+            [load.surf1_offset, load.surf2_offset],
+            load.x,
+            f,
+            jacobian,
+        )
+    }
+
+    /// `SmConstantDistanceFS::LoadInitialValues` (see the impl's note on
+    /// `rlSurface2Index`).
+    fn load_initial_values(
+        &mut self,
+        k: &Kernel,
+        brep: Option<&Brep>,
+        do_surf2_calcs: bool,
+        rail_index: usize,
+        surface1: &mut OffsetSurface,
+        surface1_index: usize,
+        intervals: &mut ExtentNd,
+        periodicities: &mut Vec<bool>,
+        guess_t: &mut Vec<f64>,
+    ) -> Result<Option<InitialValues>> {
+        let surface2_index = surface1_index.checked_add(2).ok_or_else(|| {
+            SolidError::invalid_input(
+                "blend::fillet_standard_solver::p2::ConstantDistanceFs",
+                "surface index overflow",
+            )
+        })?;
+        let loaded = ConstantDistanceFs::load_initial_values(
+            self,
+            k,
+            brep,
+            do_surf2_calcs,
+            rail_index,
+            InitialSurface::Other(surface1),
+            surface1_index,
+            surface2_index,
+            intervals,
+            periodicities,
+            guess_t,
+        )?;
+        Ok(loaded.surface2_rail.map(|surface2_rail| InitialValues {
+            surface2_rail,
+            surface2_index: loaded.surface2_index,
+        }))
+    }
+
+    /// `SmConstantDistanceFS::GetType` (`SM_COMMON`).
+    fn type_code(&self) -> Result<i64> {
+        Ok(Self::TYPE)
+    }
+
+    /// `SmConstantDistanceFS::IsKindOf`.
+    fn is_kind_of(&self, t: i64) -> Result<bool> {
+        Ok(ConstantDistanceFs::is_kind_of(self, t))
+    }
+
+    /// `SmConstantDistanceFS::GetSolverType`: `SM_FS_CONST_DIST`.
+    fn solver_type(&self) -> Result<FilletSolverType> {
+        Ok(ConstantDistanceFs::solver_type(self))
+    }
+
+    /// `SmConstantDistanceFS::GetDistance`.
+    fn constant_distance(&self) -> Result<f64> {
+        Ok(self.distance())
+    }
+}
+
+/// The virtuals of `SmSurfaceSurfaceFS` (see the module's Deviations).
+impl FilletSolverOps for SurfaceSurfaceFs {
+    fn solver(&self) -> &FilletSolver {
+        &self.base.solver
+    }
+
+    fn solver_mut(&mut self) -> &mut FilletSolver {
+        &mut self.base.solver
+    }
+
+    /// `SmConstantRadiusFS::GetJacobianSize`.
+    fn jacobian_size(&self) -> Result<usize> {
+        FilletSolverOps::jacobian_size(&self.base)
+    }
+
+    /// `SmConstantRadiusFS::SetupOffsetValues`.
+    fn setup_offset_values(
+        &mut self,
+        tsect: &TsectPnt,
+        offset_dist: Option<&mut f64>,
+    ) -> Result<()> {
+        FilletSolverOps::setup_offset_values(&mut self.base, tsect, offset_dist)
+    }
+
+    /// `SmConstantRadiusFS::OffsetRadiiCanChange`.
+    fn offset_radii_can_change(&self) -> Result<bool> {
+        FilletSolverOps::offset_radii_can_change(&self.base)
+    }
+
+    /// `SmSurfaceSurfaceFS::SetupOffsetExtension`.
+    fn setup_offset_extension(
+        &self,
+        k: &Kernel,
+        surface: &Surface,
+        domain: &mut Extent2d,
+    ) -> Result<()> {
+        SurfaceSurfaceFs::setup_offset_extension(self, k, surface, domain)
+    }
+
+    /// `SmConstantRadiusFS::LoadJacobian` on this class (its `SetupOffsetExtension`).
+    fn load_jacobian(
+        &mut self,
+        k: &Kernel,
+        num_equations: &mut usize,
+        num_parameters: &mut usize,
+        load: &mut JacobianLoad<'_>,
+        f: &mut [f64],
+        jacobian: Option<&mut Matrix>,
+    ) -> Result<bool> {
+        let mut offsets = [load.surf1_offset, load.surf2_offset];
+        let found = crate::blend::fillet_standard_solver::p1::constant_radius_load_jacobian(
+            self,
+            k,
+            num_equations,
+            num_parameters,
+            load.rail_index,
+            [load.surface1, load.surface2],
+            &mut offsets,
+            load.x,
+            f,
+            jacobian,
+        );
+        [load.surf1_offset, load.surf2_offset] = offsets;
+        found
+    }
+
+    /// `SmConstantRadiusFS::LoadInitialValues` ([`SurfaceSurfaceFs::load_initial_values`]).
+    fn load_initial_values(
+        &mut self,
+        k: &Kernel,
+        brep: Option<&Brep>,
+        do_surf2_calcs: bool,
+        rail_index: usize,
+        surface1: &mut OffsetSurface,
+        surface1_index: usize,
+        intervals: &mut ExtentNd,
+        periodicities: &mut Vec<bool>,
+        guess_t: &mut Vec<f64>,
+    ) -> Result<Option<InitialValues>> {
+        SurfaceSurfaceFs::load_initial_values(
+            self,
+            k,
+            brep,
+            do_surf2_calcs,
+            rail_index,
+            surface1,
+            surface1_index,
+            intervals,
+            periodicities,
+            guess_t,
+        )
+    }
+
+    /// `SmSurfaceSurfaceFS::GetType` (`SM_COMMON`).
+    fn type_code(&self) -> Result<i64> {
+        Ok(Self::TYPE)
+    }
+
+    /// `SmSurfaceSurfaceFS::IsKindOf`.
+    fn is_kind_of(&self, t: i64) -> Result<bool> {
+        Ok(SurfaceSurfaceFs::is_kind_of(self, t))
+    }
+
+    /// `SmSurfaceSurfaceFS::GetSolverType`: `SM_FS_SURF_SURF`.
+    fn solver_type(&self) -> Result<FilletSolverType> {
+        Ok(FilletSolverType::SurfSurf)
+    }
 }
 
 #[cfg(test)]

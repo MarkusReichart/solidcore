@@ -4,7 +4,7 @@ use super::{
     box_access, constant_radius_from_edgeuse, edge, error_output, executive, ffi, flag, harness,
     missing, missing_error, status_of, Access, BoxIn, ConstantRadiusAssistedFs, Deserialize,
     EdgeId, Extent1d, FilletExecutive, FilletSolverId, Handle, HarnessError, Kernel, Op, Output,
-    Point3, Serialize, SolidResult,
+    Point3, RunnerSolver, Serialize, SolidResult,
 };
 use solidcore::blend::fillet_executive::p3::VertexEntry;
 
@@ -319,7 +319,7 @@ pub(crate) fn loader_rust(i: &LoaderScript) -> Result<Output, HarnessError> {
                 .solver
                 .set_fillet_geom_for_surfaces(solver.solver.fillet_geoms.first().copied());
         }
-        access.solvers.push(solver);
+        access.solvers.push(RunnerSolver::ConstantRadius(Box::new(solver)));
     }
     let mut executive = executive(Some(Handle::Brep(0)));
     executive.pseudo_brep = Some(Handle::Pseudo);
@@ -369,7 +369,8 @@ pub(crate) fn loader_rust(i: &LoaderScript) -> Result<Output, HarnessError> {
             }
             loader_snapshot(&access, &executive, &mut out)?;
             for solver in &access.solvers {
-                let back_pointer_set = solver.solver.fillet_executive().is_some();
+                let base = solver.base();
+                let back_pointer_set = base.fillet_executive().is_some();
                 out.push(flag(back_pointer_set));
                 let same_pseudo = if back_pointer_set {
                     let pseudo = executive.pseudo_brep.ok_or_else(missing_error)?;
@@ -378,8 +379,8 @@ pub(crate) fn loader_rust(i: &LoaderScript) -> Result<Output, HarnessError> {
                     false
                 };
                 out.push(flag(same_pseudo));
-                out.push(solver.solver.g1_knots.len() as f64);
-                out.extend(&solver.solver.g1_knots);
+                out.push(base.g1_knots.len() as f64);
+                out.extend(&base.g1_knots);
             }
         }
         Ok(out)

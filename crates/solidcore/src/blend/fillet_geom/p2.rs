@@ -73,9 +73,16 @@
 //!   (one object upstream, which Rust cannot lend twice) the second runs on a copy and
 //!   its changes are dropped (`plan/findings.md`, "`blend.fillet_solver_p2`: back-edges
 //!   into the solver from `blend.fillet_geom`").
-//! - **Unported callees.** `SmTemporaryRadiusChange` (`blend.fillet_executive_p2`)
-//!   for a solver (its set-up is a no-op for a `NULL` solver). Each stub replaces only
-//!   its call; the code behind it is ported.
+//! - **Temporary radius change.** `SmTemporaryRadiusChange` around each
+//!   `RailEdgeuseIntersect` is `rail_edgeuse_intersect_holding_radius`: the set-up and
+//!   revert of `blend.fillet_executive_p2` ([`hold_end_radius`], [`HeldEndRadius::revert`])
+//!   on the solver's [`FilletSolverOps::variable_radius_mut`]; the revert runs after the
+//!   intersection, also when it fails (the destructor).
+//! - **Retry radius (opt-in, WR-300).** With `Kernel::fixes.fillet_retry_radius_as_first`
+//!   set, `CalcRailIntEdgeuse`'s retry with a doubled extension holds the radius only at
+//!   a corner calculated as constant radius, as its first search does (upstream holds
+//!   it everywhere, so a variable round's rail end is found at a radius its law does not
+//!   have there). Off by default: the C++ comparison is unchanged.
 //! - **Record writes.** `SetPoint` on a fillet vertex and `SetCurve` on a fillet edge
 //!   apply the `SM_NO_CHANGE_GEOMETRY` resets directly (as `_p1` and `_p4` do: the
 //!   pseudo B-rep has no notification environment); `SetOwner` of the new curve is
@@ -87,7 +94,11 @@ use std::borrow::Cow;
 
 use crate::blend::fillet_corner::p3::FilletCorner;
 use crate::blend::fillet_custom_solver::ConstantRadiusAssistedFs;
+use crate::blend::fillet_executive::p2::{
+    hold_end_radius, law_can_hold_end_radius, side_edge_end, HeldEndRadius,
+};
 use crate::blend::fillet_solver::p1::{FilletSolver, FilletSolverOps, FilletSurfaceGeneratorType};
+use crate::blend::fillet_standard_solver::p1::VariableRadiusFs;
 use crate::curve::curve::p3::PointSolveOptions;
 use crate::curve::curve::{Curve, CurveKind};
 use crate::error::{EntityRef, Result, SolidError};
@@ -136,11 +147,6 @@ const OP_DESTROY: &str = "blend::fillet_geom::p2::FilletBrep::destroy_geom";
 
 /// The "nothing found" index of `sm_SrfSrfIntersection`'s curve selection.
 const NO_CURVE: usize = 9999;
-
-/// A call into a unit that is not ported yet; `_args` are upstream's arguments.
-fn unported_on<A, T>(_args: A, upstream: &'static str, unit: &'static str) -> Result<T> {
-    Err(SolidError::unported(upstream, unit))
-}
 
 /// `SER(..)` of a call whose failure upstream ignores: [`SolidError::Unported`]
 /// propagates, any other error becomes `None`.
@@ -526,25 +532,97 @@ fn rail_edgeuse_intersect(
     fb.rail_edgeuse_intersect_with_geometry(k, g, fs, target, rail_index, side_eu, guess, tsect)
 }
 
-/// `SmTemporaryRadiusChange(pFS, lRailIndex, pSideEU)` (unit
-/// `blend.fillet_executive_p2`): its set-up returns at once for a `NULL` solver (not an
-/// `SmVariableRadiusFS`); for a solver it is unported.
+/// `SmTemporaryRadiusChange(pFS, lRailIndex, pSideEU)`'s constructor (unit
+/// `blend.fillet_executive_p2`): its set-up is a no-op for a `NULL` solver or one that
+/// is not an `SmVariableRadiusFS`; otherwise it makes the linear or B-spline law
+/// constant at the end of the filleted edge where `side_eu` meets it. The constructor
+/// ignores the set-up's status; the law is unchanged after a failure.
 fn temporary_radius_change(
-    fs: Option<&FilletSolver>,
+    fs: Option<&mut (dyn FilletSolverOps + '_)>,
+    target: &Brep,
     rail_index: usize,
     side_eu: EdgeuseId,
-) -> Result<()> {
-    match fs {
-        None => Ok(()),
-        Some(fs) => {
-            // UNPORTED(blend.fillet_executive_p2): SmTemporaryRadiusChange::SetUp
-            unported_on(
-                (fs, rail_index, side_eu),
-                "SmTemporaryRadiusChange::SetUp",
-                "blend.fillet_executive_p2",
-            )
+) -> Result<HeldEndRadius> {
+    let Some(vrfs) = fs.and_then(|fs| fs.variable_radius_mut()) else {
+        return Ok(HeldEndRadius::default());
+    };
+    match temporary_radius_set_up(vrfs, target, rail_index, side_eu) {
+        Err(e) if e.is_unported() => Err(e),
+        Ok(held) => Ok(held),
+        Err(_) => Ok(HeldEndRadius::default()),
+    }
+}
+
+/// `SmTemporaryRadiusChange::SetUp` on a variable-radius solver: the end of the solver's
+/// rail edge (an edge of `target`) that `side_eu`'s edge meets.
+fn temporary_radius_set_up(
+    vrfs: &mut VariableRadiusFs,
+    target: &Brep,
+    rail_index: usize,
+    side_eu: EdgeuseId,
+) -> Result<HeldEndRadius> {
+    if !law_can_hold_end_radius(vrfs)? {
+        return Ok(HeldEndRadius::default());
+    }
+    // Find which end.
+    let eu = vrfs
+        .curve_based
+        .solver
+        .edgeuse(rail_index)?
+        .ok_or_else(|| SolidError::null_pointer(OP_RAIL_EU))?;
+    let e = target
+        .edgeuse(eu)?
+        .edge
+        .ok_or_else(|| SolidError::null_pointer(OP_RAIL_EU))?;
+    let edge_v1 = edge::start_vertex(target, e)?;
+    let edge_v2 = edge::other_vertex(target, e, edge_v1)?;
+    let side_edge = target
+        .edgeuse(side_eu)?
+        .edge
+        .ok_or_else(|| SolidError::null_pointer(OP_RAIL_EU))?;
+    let side_v1 = edge::start_vertex(target, side_edge)?;
+    let side_v2 = edge::other_vertex(target, side_edge, side_v1)?;
+    hold_end_radius(vrfs, side_edge_end(edge_v1, edge_v2, side_v1, side_v2))
+}
+
+/// One `RailEdgeuseIntersect` in the scope of an `SmTemporaryRadiusChange` of geometry
+/// `g`'s solver when `hold` (else of a `NULL` solver): the destructor reverts the
+/// change after the intersection, also when it fails.
+#[allow(clippy::too_many_arguments)]
+fn rail_edgeuse_intersect_holding_radius(
+    fb: &mut FilletBrep,
+    k: &Kernel,
+    g: FilletGeomId,
+    solvers: &mut RailSolvers<'_>,
+    target: &mut Brep,
+    rail_index: usize,
+    side_eu: EdgeuseId,
+    guess: f64,
+    tsect: &mut TsectPnt,
+    hold: bool,
+) -> Result<Option<f64>> {
+    let mut held = if hold {
+        let si = RailSolvers::geom_solver(fb, g)?;
+        temporary_radius_change(Some(solvers.solver_ops_mut(si)?), target, rail_index, side_eu)?
+    } else {
+        HeldEndRadius::default()
+    };
+    let r = rail_edgeuse_intersect(fb, k, g, solvers, target, rail_index, side_eu, guess, tsect);
+    if held.is_held() {
+        let si = RailSolvers::geom_solver(fb, g)?;
+        if let Some(vrfs) = solvers.solver_ops_mut(si)?.variable_radius_mut() {
+            held.revert(vrfs);
         }
     }
+    r
+}
+
+/// Whether `CalcRailIntEdgeuse`'s retry with a doubled extension holds the radius
+/// constant (passes its solver to `SmTemporaryRadiusChange`): always upstream; with
+/// `Kernel::fixes.fillet_retry_radius_as_first` (WR-300) only where the first search does,
+/// at a corner calculated as constant radius.
+fn retry_holds_radius(k: &Kernel, calc_as_const_rad: bool) -> bool {
+    !k.fixes.fillet_retry_radius_as_first || calc_as_const_rad
 }
 
 // ---- sm_SrfSrfIntersection --------------------------------------------------------------
@@ -1150,8 +1228,7 @@ impl FilletBrep {
     /// `SM_ERR` without a fillet geometry and, for a blending corner, when no
     /// intersection is found; those of the evaluations and solves;
     /// those of [`CornerLookup::corner`] (`corners` resolves the vertex's corner);
-    /// [`SolidError::Unported`] for the temporary radius change of a solver
-    /// (`blend.fillet_executive_p2`) and those of `SmFilletSolver::RailEdgeuseIntersect`.
+    /// those of `SmFilletSolver::RailEdgeuseIntersect`.
     pub fn calc_rail_int_edgeuse(
         &mut self,
         k: &Kernel,
@@ -1331,17 +1408,11 @@ impl FilletBrep {
             let mut edgeuse_parameter = 0.0;
             for &guess in &guess_edge_parameters {
                 // Temporarily change this to a constant-radius function.
-                let fs_for_change = if corners.corner(corner)?.is_calc_as_const_rad() {
-                    let si = RailSolvers::geom_solver(self, g1)?;
-                    Some(solvers.solver(si)?)
-                } else {
-                    None
-                };
-                temporary_radius_change(fs_for_change, rail_index, side_eu1)?;
+                let hold = corners.corner(corner)?.is_calc_as_const_rad();
 
                 // rTsectPnt1 is the vertex use's own point: written in place also on a
                 // failure
-                let r = rail_edgeuse_intersect(
+                let r = rail_edgeuse_intersect_holding_radius(
                     self,
                     k,
                     g1,
@@ -1351,6 +1422,7 @@ impl FilletBrep {
                     side_eu1,
                     guess,
                     &mut tsect1,
+                    hold,
                 );
                 if r.is_err() {
                     self.fillet_vertexuse_mut(vu1)?.set_tsect_pnt(&tsect1);
@@ -1369,9 +1441,9 @@ impl FilletBrep {
                 let ext_factor = fs.extension_factor();
                 fs.set_extension_factor(2.0 * ext_factor);
 
+                let held = retry_holds_radius(k, corners.corner(corner)?.is_calc_as_const_rad());
                 for &guess in &guess_edge_parameters {
-                    temporary_radius_change(Some(solvers.solver(si)?), rail_index, side_eu1)?;
-                    let r = rail_edgeuse_intersect(
+                    let r = rail_edgeuse_intersect_holding_radius(
                         self,
                         k,
                         g1,
@@ -1381,6 +1453,7 @@ impl FilletBrep {
                         side_eu1,
                         guess,
                         &mut tsect1,
+                        held,
                     );
                     if r.is_err() {
                         self.fillet_vertexuse_mut(vu1)?.set_tsect_pnt(&tsect1);
@@ -1491,9 +1564,7 @@ impl FilletBrep {
             let mut edgeuse_parameter2 = 0.0;
             for &guess in &guess_edge_parameters {
                 // Temporarily change this to a constant-radius function.
-                let si = RailSolvers::geom_solver(self, g2)?;
-                temporary_radius_change(Some(solvers.solver(si)?), other_rail_index, side_eu2)?;
-                let r = rail_edgeuse_intersect(
+                let r = rail_edgeuse_intersect_holding_radius(
                     self,
                     k,
                     g2,
@@ -1503,6 +1574,7 @@ impl FilletBrep {
                     side_eu2,
                     guess,
                     &mut tsect2,
+                    true,
                 );
                 if r.is_err() {
                     self.fillet_vertexuse_mut(vu2)?.set_tsect_pnt(&tsect2);
@@ -2384,6 +2456,29 @@ mod tests {
             Err(SolidError::InvalidInput { .. })
         ));
         assert_eq!(derived.0.extension_factor(), 4.5);
+    }
+
+    /// tangency-labs/solidcore#1023: the retry rail search of a variable round holds
+    /// the radius only where the first search does (opt-in, WR-300). Held, the set-up
+    /// of `SmTemporaryRadiusChange` runs on the solver (a no-op for a base solver, which
+    /// is not variable radius); released, it is skipped.
+    #[test]
+    fn issue_1023_retry_holds_radius_only_as_first() {
+        let mut k = Kernel::default();
+        assert!(retry_holds_radius(&k, false));
+        assert!(retry_holds_radius(&k, true));
+        k.fixes.fillet_retry_radius_as_first = true;
+        assert!(!retry_holds_radius(&k, false));
+        assert!(retry_holds_radius(&k, true));
+        // A base solver is not an SmVariableRadiusFS: the set-up changes nothing.
+        let mut solver = FilletSolver::new(1e-5, 1e-3, 0.01);
+        let target = Brep::new();
+        for const_rad in [false, true] {
+            let fs = retry_holds_radius(&k, const_rad)
+                .then_some(&mut solver as &mut dyn FilletSolverOps);
+            let held = temporary_radius_change(fs, &target, 0, EdgeuseId::from_index(0)).unwrap();
+            assert!(!held.is_held());
+        }
     }
 
     #[test]

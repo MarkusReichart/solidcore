@@ -1,0 +1,11 @@
+#### WR-364. An island inside a void fails the shell-nesting check after a cut
+- **Severity:** Wrong result
+- **Area:** Boolean
+- **Location:** not localised upstream (region/shell nesting after `SmApiBoolean`).
+- **What happens:** a 20 cube is joined with a hollow cube (a 50 cube minus a 40 cube, so the 20 cube sits inside the cavity), and the result is cut by a 10 cube. The result fails SMLib's own check, SmBrep test #12, "Inner shell is not geometrically inside its containing outerShell". Both operands are valid.
+- **Trigger:** issue #388 (SolidCraft's kernel tests `body::lump_tests::nested_*`). The issue does not place the 10 cube.
+- **How found:** issue #388.
+- **Confirmed:** from the issue; not reproduced on this harness's C++ reference.
+- **Rust port:** with the 10 cube overlapping the island's corner (10..20 against the island's 15..35), the result is a manifold solid with V = 50³ − 40³ + 20³ − 5³. No defect was reproduced. Other placements of the cutter are untested.
+- **Test:** `crates/solidcore/tests/issue_388_island_in_void.rs`, `issue_388_island_in_a_void_stays_valid`.
+- Fixes tangency-labs/solidcore#388 (Rust port).

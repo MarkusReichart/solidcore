@@ -74,6 +74,8 @@
 //!   (UB-120) cannot be passed.
 //! - **`CheckLoop`** takes the surface separately, as upstream; `CheckFace` passes a
 //!   copy of the face's surface (the edge use UV extremes need the B-rep mutably).
+//!   Not upstream (WR-381, opt-in `Kernel::fixes.check_loop_vertex_tolerance`): the gap at a
+//!   vertex is measured against at least that vertex's tolerance.
 //! - **Callees.** `SmBrep::MakeFaceWithCurves` (`topology.brep_p7`) and
 //!   `SmBrep::MakeFacesWithCurves` (`topology.brep_p8`) call their ports. Unported callees
 //!   return [`SolidError::Unported`]: `SmFace::FlipFaceOrientation` and `SmFace::SplitAtSeam` (`topology.face_p1`),
@@ -2042,6 +2044,31 @@ fn edge_zone_tol(k: &Kernel, b: &Brep, e: Option<EdgeId>) -> Result<f64> {
     })
 }
 
+/// The tolerance `CheckLoop` measures the 3D gap between the end of edge use `prev`
+/// and the start of `cur` against: the edges' intersection tolerance
+/// (`SmTol::GetXSectTol3d(edge, edge)`), or with the opt-in
+/// `Kernel::fixes.check_loop_vertex_tolerance` (not upstream, WR-381,
+/// tangency-labs/solidcore#476) at least the zone tolerance of the vertex where they
+/// meet (`cur`'s start vertex), as SMLib's tolerance model allows.
+fn loop_gap_tolerance(k: &Kernel, b: &Brep, cur: EdgeuseId, prev: EdgeuseId) -> Result<f64> {
+    let mut xsect = tol::xsect_tol_3d_from_zones(
+        k,
+        edge_zone_tol(k, b, eu1::edge(b, cur)?)?,
+        edge_zone_tol(k, b, eu1::edge(b, prev)?)?,
+    );
+    if k.fixes.check_loop_vertex_tolerance {
+        if let Some(vu) = eu1::vertexuse(b, cur)? {
+            if let Some(v) = vu1::vertex(b, vu)? {
+                let vertex_tol = tol::zone_tol3d(k, crate::topology::vertex::tolerance(b, v)?);
+                if vertex_tol > xsect {
+                    xsect = vertex_tol;
+                }
+            }
+        }
+    }
+    Ok(xsect)
+}
+
 /// `CheckLoop`: for each pair of consecutive edge uses of the loop whose UV ends differ
 /// (by more than `1e-10`), the surface points must be within the edges' intersection
 /// tolerance (else closure 3, signalled only) and the UV jump must stay under a tenth of
@@ -2082,11 +2109,7 @@ pub fn check_loop(
             let end_start_dist = previous_end_3d.distance(current_start_3d);
 
             // check the Edge/Edge xsect distance
-            let xsect = tol::xsect_tol_3d_from_zones(
-                k,
-                edge_zone_tol(k, b, eu1::edge(b, cur)?)?,
-                edge_zone_tol(k, b, eu1::edge(b, prev)?)?,
-            );
+            let xsect = loop_gap_tolerance(k, b, cur, prev)?;
             report(
                 &mut alist,
                 lp,
@@ -2435,5 +2458,40 @@ mod tests {
         let r = order_curves_into_loops(&k, &cs, 1e-6);
         // a single open line: its loop normal does not unitize
         assert!(r.is_err() || r.unwrap().status().is_err());
+    }
+
+    /// tangency-labs/solidcore#476 (WR-381): `CheckLoop` measures the gap where two
+    /// edges meet against their intersection tolerance only; the opt-in also allows the
+    /// tolerance of the vertex they meet at.
+    #[test]
+    fn issue_476_check_loop_vertex_tolerance() {
+        let mut k = Kernel::default();
+        let mut b = crate::primitive::api_primitives::create_box(
+            &mut k,
+            Point3::new(0.0, 0.0, 0.0),
+            10.0,
+            10.0,
+            10.0,
+        )
+        .unwrap();
+        let f = *b.face_list().first().unwrap();
+        let l = *fp2::loops(&b, f, false, None).unwrap().first().unwrap();
+        let eus = loop_edgeuses(&b, l).unwrap();
+        let (prev, cur) = (eus[0], eus[1]);
+        for eu in [prev, cur] {
+            let e = eu1::edge(&b, eu).unwrap().unwrap();
+            b.edge_mut(e).unwrap().tolerance = 5.8e-6;
+        }
+        let v = vu1::vertex(&b, eu1::vertexuse(&b, cur).unwrap().unwrap())
+            .unwrap()
+            .unwrap();
+        b.vertex_mut(v).unwrap().tolerance = 2.6e-5;
+
+        let edges_only = tol::xsect_tol_3d_from_zones(&k, 5.8e-6, 5.8e-6);
+        assert_eq!(loop_gap_tolerance(&k, &b, cur, prev).unwrap(), edges_only);
+        // a 1.3e-5 gap fails upstream's test and passes the opt-in's
+        assert!(1.3e-5 > edges_only);
+        k.fixes.check_loop_vertex_tolerance = true;
+        assert_eq!(loop_gap_tolerance(&k, &b, cur, prev).unwrap(), 2.6e-5);
     }
 }

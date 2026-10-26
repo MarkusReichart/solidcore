@@ -97,6 +97,7 @@ use crate::nurbs::srf_adv::p5::{
     create_skin_srf_boundary_continuity, BoundaryContinuity, SkinBoundaryOptions,
 };
 use crate::nurbs::srf_basic::{Direction, Surface};
+use crate::nurbs::srf_nurb::DerivativeMatrix;
 use crate::nurbs::srf_tool::p1::extract_patch;
 use crate::surface::surface::Surface as SmSurface;
 
@@ -1541,7 +1542,7 @@ impl BSplineSurface {
             u_side,
             v_side,
             only_upper_half,
-            non_zero_tangents,
+            non_zero_tangents: _,
         } = flags;
 
         // check input - bOnlyUpperHalf can be TRUE only if deriv requests are equal.
@@ -1599,208 +1600,16 @@ impl BSplineSurface {
         // The zero-tangent repair below works on the matrix NLib wrote; upstream's
         // caller array keeps it (raw or partly repaired) whatever the repair's status,
         // including a failed recursive re-evaluation.
-        let status = (|| -> Result<()> {
-            let d = &mut d;
-            // If we don't have to check for zero first derivatives, we're done.
-            if !non_zero_tangents {
-                return Ok(());
-            }
-            if highest_u_deriv < 1 && highest_v_deriv < 1 {
-                return Ok(());
-            }
-
-            // flat index `k` of the upstream array: D[k / (nv + 1)][k % (nv + 1)]
-            let nv1 = highest_v_deriv + 1;
-            let at = |d: &[Vec<Vec3>], k: usize| -> Result<Vec3> {
-                d.get(k / nv1)
-                    .and_then(|row| row.get(k % nv1))
-                    .copied()
-                    .ok_or_else(|| SolidError::sm_err(OP))
-            };
-            let set = |d: &mut [Vec<Vec3>], k: usize, v: Vec3| -> Result<()> {
-                let slot = d
-                    .get_mut(k / nv1)
-                    .and_then(|row| row.get_mut(k % nv1))
-                    .ok_or_else(|| SolidError::sm_err(OP))?;
-                *slot = v;
-                Ok(())
-            };
-
-            // position and tangents
-            let orig_pnt = at(d, 0)?;
-            let orig_du = if highest_u_deriv >= 1 {
-                at(d, nv1)?
-            } else {
-                at(d, 1)?
-            };
-            let orig_dv = if highest_v_deriv >= 1 {
-                at(d, 1)?
-            } else {
-                at(d, nv1)?
-            };
-
-            // tangent sizes
-            let orig_du_len = orig_du.length();
-            let orig_dv_len = orig_dv.length();
-
-            let deriv_lim = crate::surface::surface::p2::derivative_limit(orig_pnt);
-
-            // test
-            let zero_du = orig_du_len < deriv_lim;
-            let zero_dv = orig_dv_len < deriv_lim;
-
-            // no work - no zero tangents to fix
-            if !zero_du && !zero_dv {
-                return Ok(());
-            }
-
-            // when not enough derivatives were asked for - recurse to this function
-            if highest_u_deriv < 2 || highest_v_deriv < 2 {
-                let re = self.evaluate_impl(
-                    cr_uv,
-                    2,
-                    2,
-                    EvaluateFlags {
-                        u_side,
-                        v_side,
-                        only_upper_half: true,
-                        non_zero_tangents: true,
-                    },
-                    true,
-                    None,
-                )?;
-                let re_at = |i: usize, j: usize| -> Result<Vec3> {
-                    re.get(i)
-                        .and_then(|row| row.get(j))
-                        .copied()
-                        .ok_or_else(|| SolidError::sm_err(OP))
-                };
-
-                // save the kluged tangent values (aReDer[3] = Su, aReDer[1] = Sv)
-                if highest_u_deriv >= 1 {
-                    set(d, nv1, re_at(1, 0)?)?;
-                }
-                if highest_v_deriv >= 1 {
-                    set(d, 1, re_at(0, 1)?)?;
-                }
-                return Ok(());
-            }
-
-            // Ok, now we have at least two derivatives.
-            let lnv = highest_v_deriv;
-            let mut su = at(d, lnv + 1)?;
-            let mut sv = at(d, 1)?;
-            let ok = super::p1::check_zero_surface_derivs(
-                s_uv,
-                &natural_uv_domain,
-                &mut su,
-                &mut sv,
-                at(d, 2 * lnv + 2)?,
-                at(d, lnv + 2)?,
-                at(d, 2)?,
-                deriv_lim,
-            );
-            set(d, lnv + 1, su)?;
-            set(d, 1, sv)?;
-
-            // all done?
-            if ok {
-                return Ok(());
-            }
-
-            // Try finding a nonZeroTangent value with a more brute-force method: step
-            // towards the center of the domain.
-            let step_dir_u = if s_uv.x > natural_uv_domain.u_interval().mid() {
-                -1.0
-            } else {
-                1.0
-            };
-            let step_dir_v = if s_uv.y > natural_uv_domain.v_interval().mid() {
-                -1.0
-            } else {
-                1.0
-            };
-
-            let mut step = ZONE_TOL_3D / 10.0; // works well in practice.
-
-            // for larger and larger step off distances
-            while do_zero_sampling && step < 0.1 {
-                // increase the step off distance
-                step *= 10.0;
-
-                // for this step size: try 5 directions; last 4 are diagonals.
-                // Make the first step go in the most likely direction: direction of good
-                // deriv, towards center of surface.
-                let first = if orig_du_len < orig_dv_len {
-                    // step in v
-                    Point2::new(s_uv.x, s_uv.y + step_dir_v * step)
-                } else {
-                    // step in u
-                    Point2::new(s_uv.x + step_dir_u * step, s_uv.y)
-                };
-                let test_uv = [
-                    first,
-                    Point2::new(s_uv.x + step, s_uv.y + step),
-                    Point2::new(s_uv.x - step, s_uv.y - step),
-                    Point2::new(s_uv.x - step, s_uv.y + step),
-                    Point2::new(s_uv.x + step, s_uv.y - step),
-                ];
-
-                // for all 5 sample directions at this step size
-                for t_uv in test_uv {
-                    let t_uv = natural_uv_domain.clamp_point(t_uv);
-                    // just take what's naturally there; one derivative is enough.
-                    let Ok(re) = self.evaluate_impl(
-                        t_uv,
-                        1,
-                        1,
-                        EvaluateFlags {
-                            u_side,
-                            v_side,
-                            only_upper_half: true,
-                            non_zero_tangents: false,
-                        },
-                        false,
-                        None,
-                    ) else {
-                        continue;
-                    };
-                    // aReDer[2] = Su, aReDer[1] = Sv
-                    let mut re_su = re
-                        .get(1)
-                        .and_then(|r| r.first())
-                        .copied()
-                        .ok_or_else(|| SolidError::sm_err(OP))?;
-                    let mut re_sv = re
-                        .first()
-                        .and_then(|r| r.get(1))
-                        .copied()
-                        .ok_or_else(|| SolidError::sm_err(OP))?;
-
-                    // Save the nearby tangent values, if they're good enough.
-                    if re_su.length() >= deriv_lim && re_sv.length() >= deriv_lim {
-                        // Set magnitudes of degenerate derivatives to 1.1 * dDerivLim.
-                        if zero_du {
-                            re_su = re_su.unitize_or_z();
-                            re_su *= 1.1 * deriv_lim;
-                            set(d, highest_v_deriv + 1, re_su)?;
-                        }
-                        if zero_dv {
-                            re_sv = re_sv.unitize_or_z();
-                            re_sv *= 1.1 * deriv_lim;
-                            set(d, 1, re_sv)?;
-                        }
-
-                        // all done
-                        return Ok(());
-                    }
-                }
-            }
-
-            // If we make it to here we are unable to get both of the first derivatives to
-            // a non-zero size.
-            Err(SolidError::sm_err(OP))
-        })();
+        let status = self.repair_zero_tangents(
+            &mut d,
+            cr_uv,
+            s_uv,
+            &natural_uv_domain,
+            highest_u_deriv,
+            highest_v_deriv,
+            flags,
+            do_zero_sampling,
+        );
         match status {
             Ok(()) => Ok(d),
             Err(e) => {
@@ -1811,6 +1620,327 @@ impl BSplineSurface {
                 Err(e)
             }
         }
+    }
+
+    /// [`BSplineSurface::evaluate`] into the caller's fixed matrix (no allocation on the
+    /// NURB path): fills `sd[..=highest_u_deriv][..=highest_v_deriv]` with the values the
+    /// `Vec` path returns, bit for bit, including its zero-tangent repair; on a failed
+    /// repair `sd` holds what upstream leaves in the caller's array.
+    ///
+    /// # Errors
+    ///
+    /// As [`BSplineSurface::evaluate`].
+    pub(crate) fn evaluate_into(
+        &self,
+        cr_uv: Point2,
+        highest_u_deriv: usize,
+        highest_v_deriv: usize,
+        flags: EvaluateFlags,
+        sd: &mut DerivativeMatrix,
+    ) -> Result<()> {
+        const OP: &str = OP_EVAL;
+        let EvaluateFlags {
+            u_side,
+            v_side,
+            only_upper_half,
+            non_zero_tangents: _,
+        } = flags;
+
+        // check input - bOnlyUpperHalf can be TRUE only if deriv requests are equal.
+        if only_upper_half && highest_u_deriv != highest_v_deriv {
+            return Err(SolidError::invalid_input(
+                OP,
+                "only upper half with different orders",
+            ));
+        }
+        if highest_u_deriv > MAX_DERIVATIVE || highest_v_deriv > MAX_DERIVATIVE {
+            return Err(SolidError::invalid_input(
+                OP,
+                "derivative order above NL_MAXDER",
+            ));
+        }
+
+        // When appropriate, clamp input parameters to surface domain
+        let mut s_uv = cr_uv;
+        let natural_uv_domain = self.natural_uv_domain();
+        if self.form != BSplineSurfaceForm::Polynomial
+            && !natural_uv_domain.contains_point(s_uv, 0.0)
+            && !self.is_out_of_bounds_enabled()
+        {
+            s_uv = natural_uv_domain.clamp_point(s_uv);
+        }
+
+        // Setup for NLib call
+        let (uflg, vflg) = (u_side, v_side);
+
+        let sur = self.nurb.as_ref().ok_or_else(|| SolidError::sm_err(OP))?;
+        if self.form == BSplineSurfaceForm::Polynomial {
+            let d = srf_power_basis_eval_derivs(
+                &sur.cpts(),
+                sur.p(),
+                sur.q(),
+                s_uv.x,
+                s_uv.y,
+                only_upper_half,
+                highest_u_deriv,
+                highest_v_deriv,
+            )
+            .map_err(SolidError::nl_ser(OP))?;
+            for (row, src) in sd.iter_mut().zip(&d) {
+                for (x, v) in row.iter_mut().zip(src) {
+                    *x = *v;
+                }
+            }
+        } else {
+            sur.derivs_into(
+                s_uv.x,
+                s_uv.y,
+                uflg,
+                vflg,
+                only_upper_half,
+                highest_u_deriv,
+                highest_v_deriv,
+                sd,
+            )
+            .map_err(SolidError::nl_ser(OP))?;
+        }
+
+        let mut grid = FixedGrid {
+            sd,
+            rows: highest_u_deriv + 1,
+            cols: highest_v_deriv + 1,
+        };
+        self.repair_zero_tangents(
+            &mut grid,
+            cr_uv,
+            s_uv,
+            &natural_uv_domain,
+            highest_u_deriv,
+            highest_v_deriv,
+            flags,
+            true,
+        )
+    }
+
+    /// The zero-tangent repair of `Evaluate` (`bNonZeroTangents`) on the matrix NLib
+    /// wrote, `d` (rows `0..=highest_u_deriv`, columns `0..=highest_v_deriv`), at the
+    /// clamped `s_uv` of the request `cr_uv`. Upstream's caller array keeps what it
+    /// leaves (raw or partly repaired) whatever its status.
+    #[allow(clippy::too_many_lines)] // one upstream block
+    fn repair_zero_tangents<G: DerivGrid>(
+        &self,
+        d: &mut G,
+        cr_uv: Point2,
+        s_uv: Point2,
+        natural_uv_domain: &Extent2d,
+        highest_u_deriv: usize,
+        highest_v_deriv: usize,
+        flags: EvaluateFlags,
+        do_zero_sampling: bool,
+    ) -> Result<()> {
+        const OP: &str = OP_EVAL;
+        let EvaluateFlags {
+            u_side,
+            v_side,
+            only_upper_half: _,
+            non_zero_tangents,
+        } = flags;
+        // If we don't have to check for zero first derivatives, we're done.
+        if !non_zero_tangents {
+            return Ok(());
+        }
+        if highest_u_deriv < 1 && highest_v_deriv < 1 {
+            return Ok(());
+        }
+
+        // flat index `k` of the upstream array: D[k / (nv + 1)][k % (nv + 1)]
+        let nv1 = highest_v_deriv + 1;
+        let at = |d: &G, k: usize| -> Result<Vec3> {
+            d.cell(k / nv1, k % nv1)
+                .ok_or_else(|| SolidError::sm_err(OP))
+        };
+        let set = |d: &mut G, k: usize, v: Vec3| -> Result<()> {
+            let slot = d
+                .cell_mut(k / nv1, k % nv1)
+                .ok_or_else(|| SolidError::sm_err(OP))?;
+            *slot = v;
+            Ok(())
+        };
+
+        // position and tangents
+        let orig_pnt = at(d, 0)?;
+        let orig_du = if highest_u_deriv >= 1 {
+            at(d, nv1)?
+        } else {
+            at(d, 1)?
+        };
+        let orig_dv = if highest_v_deriv >= 1 {
+            at(d, 1)?
+        } else {
+            at(d, nv1)?
+        };
+
+        // tangent sizes
+        let orig_du_len = orig_du.length();
+        let orig_dv_len = orig_dv.length();
+
+        let deriv_lim = crate::surface::surface::p2::derivative_limit(orig_pnt);
+
+        // test
+        let zero_du = orig_du_len < deriv_lim;
+        let zero_dv = orig_dv_len < deriv_lim;
+
+        // no work - no zero tangents to fix
+        if !zero_du && !zero_dv {
+            return Ok(());
+        }
+
+        // when not enough derivatives were asked for - recurse to this function
+        if highest_u_deriv < 2 || highest_v_deriv < 2 {
+            let re = self.evaluate_impl(
+                cr_uv,
+                2,
+                2,
+                EvaluateFlags {
+                    u_side,
+                    v_side,
+                    only_upper_half: true,
+                    non_zero_tangents: true,
+                },
+                true,
+                None,
+            )?;
+            let re_at = |i: usize, j: usize| -> Result<Vec3> {
+                re.get(i)
+                    .and_then(|row| row.get(j))
+                    .copied()
+                    .ok_or_else(|| SolidError::sm_err(OP))
+            };
+
+            // save the kluged tangent values (aReDer[3] = Su, aReDer[1] = Sv)
+            if highest_u_deriv >= 1 {
+                set(d, nv1, re_at(1, 0)?)?;
+            }
+            if highest_v_deriv >= 1 {
+                set(d, 1, re_at(0, 1)?)?;
+            }
+            return Ok(());
+        }
+
+        // Ok, now we have at least two derivatives.
+        let lnv = highest_v_deriv;
+        let mut su = at(d, lnv + 1)?;
+        let mut sv = at(d, 1)?;
+        let ok = super::p1::check_zero_surface_derivs(
+            s_uv,
+            natural_uv_domain,
+            &mut su,
+            &mut sv,
+            at(d, 2 * lnv + 2)?,
+            at(d, lnv + 2)?,
+            at(d, 2)?,
+            deriv_lim,
+        );
+        set(d, lnv + 1, su)?;
+        set(d, 1, sv)?;
+
+        // all done?
+        if ok {
+            return Ok(());
+        }
+
+        // Try finding a nonZeroTangent value with a more brute-force method: step
+        // towards the center of the domain.
+        let step_dir_u = if s_uv.x > natural_uv_domain.u_interval().mid() {
+            -1.0
+        } else {
+            1.0
+        };
+        let step_dir_v = if s_uv.y > natural_uv_domain.v_interval().mid() {
+            -1.0
+        } else {
+            1.0
+        };
+
+        let mut step = ZONE_TOL_3D / 10.0; // works well in practice.
+
+        // for larger and larger step off distances
+        while do_zero_sampling && step < 0.1 {
+            // increase the step off distance
+            step *= 10.0;
+
+            // for this step size: try 5 directions; last 4 are diagonals.
+            // Make the first step go in the most likely direction: direction of good
+            // deriv, towards center of surface.
+            let first = if orig_du_len < orig_dv_len {
+                // step in v
+                Point2::new(s_uv.x, s_uv.y + step_dir_v * step)
+            } else {
+                // step in u
+                Point2::new(s_uv.x + step_dir_u * step, s_uv.y)
+            };
+            let test_uv = [
+                first,
+                Point2::new(s_uv.x + step, s_uv.y + step),
+                Point2::new(s_uv.x - step, s_uv.y - step),
+                Point2::new(s_uv.x - step, s_uv.y + step),
+                Point2::new(s_uv.x + step, s_uv.y - step),
+            ];
+
+            // for all 5 sample directions at this step size
+            for t_uv in test_uv {
+                let t_uv = natural_uv_domain.clamp_point(t_uv);
+                // just take what's naturally there; one derivative is enough.
+                let Ok(re) = self.evaluate_impl(
+                    t_uv,
+                    1,
+                    1,
+                    EvaluateFlags {
+                        u_side,
+                        v_side,
+                        only_upper_half: true,
+                        non_zero_tangents: false,
+                    },
+                    false,
+                    None,
+                ) else {
+                    continue;
+                };
+                // aReDer[2] = Su, aReDer[1] = Sv
+                let mut re_su = re
+                    .get(1)
+                    .and_then(|r| r.first())
+                    .copied()
+                    .ok_or_else(|| SolidError::sm_err(OP))?;
+                let mut re_sv = re
+                    .first()
+                    .and_then(|r| r.get(1))
+                    .copied()
+                    .ok_or_else(|| SolidError::sm_err(OP))?;
+
+                // Save the nearby tangent values, if they're good enough.
+                if re_su.length() >= deriv_lim && re_sv.length() >= deriv_lim {
+                    // Set magnitudes of degenerate derivatives to 1.1 * dDerivLim.
+                    if zero_du {
+                        re_su = re_su.unitize_or_z();
+                        re_su *= 1.1 * deriv_lim;
+                        set(d, highest_v_deriv + 1, re_su)?;
+                    }
+                    if zero_dv {
+                        re_sv = re_sv.unitize_or_z();
+                        re_sv *= 1.1 * deriv_lim;
+                        set(d, 1, re_sv)?;
+                    }
+
+                    // all done
+                    return Ok(());
+                }
+            }
+        }
+
+        // If we make it to here we are unable to get both of the first derivatives to
+        // a non-zero size.
+        Err(SolidError::sm_err(OP))
     }
 }
 
@@ -2191,6 +2321,49 @@ fn corner_blend_n(
     BSplineSurface::create_n_sided_patch(&mut boundaries, &mut ders, tangency_tol_radians, None)
 }
 
+/// A derivative matrix `D[i][j]` the zero-tangent repair of `Evaluate` reads and writes
+/// ([`BSplineSurface::evaluate`]'s `Vec` rows, or a fixed [`DerivativeMatrix`]).
+trait DerivGrid {
+    /// `D[i][j]`; `None` outside the matrix.
+    fn cell(&self, i: usize, j: usize) -> Option<Vec3>;
+    /// `D[i][j]` to write; `None` outside the matrix.
+    fn cell_mut(&mut self, i: usize, j: usize) -> Option<&mut Vec3>;
+}
+
+impl DerivGrid for Vec<Vec<Vec3>> {
+    fn cell(&self, i: usize, j: usize) -> Option<Vec3> {
+        self.get(i).and_then(|row| row.get(j)).copied()
+    }
+
+    fn cell_mut(&mut self, i: usize, j: usize) -> Option<&mut Vec3> {
+        self.get_mut(i).and_then(|row| row.get_mut(j))
+    }
+}
+
+/// The first `rows` x `cols` entries of a [`DerivativeMatrix`] (the shape the `Vec`
+/// path's matrix has, so the same indices are inside or outside it).
+struct FixedGrid<'a> {
+    sd: &'a mut DerivativeMatrix,
+    rows: usize,
+    cols: usize,
+}
+
+impl DerivGrid for FixedGrid<'_> {
+    fn cell(&self, i: usize, j: usize) -> Option<Vec3> {
+        if i >= self.rows || j >= self.cols {
+            return None;
+        }
+        self.sd.get(i).and_then(|row| row.get(j)).copied()
+    }
+
+    fn cell_mut(&mut self, i: usize, j: usize) -> Option<&mut Vec3> {
+        if i >= self.rows || j >= self.cols {
+            return None;
+        }
+        self.sd.get_mut(i).and_then(|row| row.get_mut(j))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2256,6 +2429,98 @@ mod tests {
         assert!(d[0][1].length() > 0.0);
         let raw = s.evaluate_simple(uv, 1, 1, true, true, false).unwrap();
         assert_eq!(raw[0][1].length(), 0.0);
+    }
+
+    /// Compares `evaluate_into` with the Vec path (`evaluate`, or its partial output on
+    /// a failed zero-tangent repair) by to_bits; entries past the orders stay untouched.
+    fn assert_into_matches(s: &BSplineSurface, uv: Point2, hu: usize, hv: usize, f: EvaluateFlags) {
+        let mut partial = Vec::new();
+        let vec = s.evaluate_impl(uv, hu, hv, f, true, Some(&mut partial));
+        let marker = Vec3::new(7.0, 7.0, 7.0);
+        let mut sd = [[marker; MAX_DERIVATIVE + 1]; MAX_DERIVATIVE + 1];
+        let into = s.evaluate_into(uv, hu, hv, f, &mut sd);
+        assert_eq!(
+            vec.as_ref().map(|_| ()).map_err(|e| format!("{e:?}")),
+            into.map_err(|e| format!("{e:?}")),
+            "status at {uv:?} ({hu},{hv}) {f:?}"
+        );
+        let want = match &vec {
+            Ok(d) => Some(d),
+            Err(_) if !partial.is_empty() => Some(&partial),
+            Err(_) => None,
+        };
+        let Some(want) = want else {
+            return;
+        };
+        for (i, row) in sd.iter().enumerate() {
+            for (j, x) in row.iter().enumerate() {
+                let w = want
+                    .get(i)
+                    .and_then(|r| r.get(j))
+                    .copied()
+                    .unwrap_or(marker);
+                assert_eq!(
+                    [x.x.to_bits(), x.y.to_bits(), x.z.to_bits()],
+                    [w.x.to_bits(), w.y.to_bits(), w.z.to_bits()],
+                    "D[{i}][{j}] at {uv:?} ({hu},{hv}) {f:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn evaluate_into_is_bit_identical_to_the_vec_path() {
+        let flag_sets = [
+            EvaluateFlags::default(),
+            EvaluateFlags {
+                only_upper_half: true,
+                ..EvaluateFlags::default()
+            },
+            EvaluateFlags {
+                non_zero_tangents: true,
+                ..EvaluateFlags::default()
+            },
+            EvaluateFlags {
+                only_upper_half: true,
+                non_zero_tangents: true,
+                u_side: Side::Right,
+                v_side: Side::Left,
+            },
+        ];
+        // regular patches, rational-free and curved
+        let curved = plane(3, 2, |i, j| ((i * 3 + j) % 4) as f64 * 0.25);
+        // the u = 0 row collapsed to a point: a zero tangent along that side
+        let mut collapsed = plane(2, 2, |i, j| (i + j) as f64 * 0.1);
+        if let Some(sur) = collapsed.nurb.as_mut() {
+            for j in 0..=2 {
+                *sur.cpt_mut(0, j).unwrap() = CPoint::new(0.0, 0.5, 0.0, NOW);
+            }
+        }
+        // every control point the same: zero tangents everywhere, the repair fails
+        let mut point = plane(2, 2, |_, _| 0.0);
+        if let Some(sur) = point.nurb.as_mut() {
+            for i in 0..=2 {
+                for j in 0..=2 {
+                    *sur.cpt_mut(i, j).unwrap() = CPoint::new(0.3, 0.3, 0.3, NOW);
+                }
+            }
+        }
+        let uvs = [
+            Point2::new(0.0, 0.5),
+            Point2::new(0.0, 0.0),
+            Point2::new(0.3, 0.6),
+            Point2::new(1.0, 1.0),
+            Point2::new(1.4, -0.2),
+        ];
+        for s in [&curved, &collapsed, &point] {
+            for &uv in &uvs {
+                for f in flag_sets {
+                    for (hu, hv) in [(0, 0), (1, 1), (2, 2), (3, 3), (2, 1), (1, 2), (4, 4)] {
+                        assert_into_matches(s, uv, hu, hv, f);
+                    }
+                }
+            }
+        }
     }
 
     #[test]

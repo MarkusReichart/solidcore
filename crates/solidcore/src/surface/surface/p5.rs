@@ -504,12 +504,12 @@ impl Surface {
     ) -> Result<IsoParametricCurve> {
         match self.kind() {
             // (SmSurfOfExtrusion inherits the B-spline override)
-            SurfaceKind::SurfOfExtrusion(s) => {
+            SurfaceKind::SurfOfExtrusion(_) => {
                 let opts = crate::nurbs::b_spline_surface::p2::IsoCurveOptions {
                     domain: domain.copied(),
                     uv_iso_curve: want_uv_iso_curve,
                 };
-                let r = s.base_with_nurb(k)?.create_iso_parametric_curve(
+                let r = self.extrusion_base_with_nurb(k)?.create_iso_parametric_curve(
                     k,
                     param,
                     iso_parameter,
@@ -655,9 +655,9 @@ impl Surface {
 
         // get unique knots crossing the isoParameter curve
         let (mut knots, _) = if param == SurfParamType::U {
-            self.knots(SurfParamType::V, None)?
+            self.knots_with_nurb(k, SurfParamType::V, None)?
         } else {
-            self.knots(SurfParamType::U, None)?
+            self.knots_with_nurb(k, SurfParamType::U, None)?
         };
 
         // when given an optional domain

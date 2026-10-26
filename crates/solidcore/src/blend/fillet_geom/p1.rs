@@ -290,6 +290,13 @@ pub enum FilletErrorType {
     BadTrim = 6,
     /// `SM_FILERR_BAD_MERGE`.
     BadMerge = 7,
+    /// Not upstream (the SolidCraft fork's `SM_FILERR_NO_ROOM`, tangency-labs/solidcore#841,
+    /// #879): the blend is larger than the faces allow, a rail leaving the face it rolls
+    /// on or the blends taking the whole of a face, some meeting it at an angle. Noted
+    /// only with the opt-ins
+    /// [`crate::kernel::UpstreamFixes::fillet_refuse_rails_leaving_faces`] and
+    /// [`crate::kernel::UpstreamFixes::fillet_refuse_face_consuming_blends`].
+    NoRoom = 8,
 }
 
 /// `SmFilletCornerType`: the kind of corner where fillets meet.
@@ -1208,6 +1215,12 @@ pub struct FilletGeom {
     pub ref_eus: Vec<EdgeuseId>,
     /// `m_vSideEUs`: the side curves' edge uses (excluding rails).
     pub side_eus: Vec<EdgeuseId>,
+    /// Not upstream: the tangent-rollover second-surface UV guess per rail index
+    /// (`UVPos(1 - rail)` of the rail's first defined `SM_FV_RAIL_X_EDGEUSE` fillet
+    /// vertex use), filled by `FilletBrep::rail_edgeuse_intersect_with_geometry` for
+    /// `SmConstantRadiusFS::LoadInitialValues`, which reads it through the pseudo B-rep
+    /// upstream.
+    pub rollover_guesses: [Option<Point2>; 2],
 }
 
 impl FilletGeom {
@@ -1258,6 +1271,7 @@ impl FilletGeom {
             vertices: Vec::new(),
             ref_eus: Vec::new(),
             side_eus: Vec::new(),
+            rollover_guesses: [None, None],
         })
     }
 
@@ -3389,8 +3403,8 @@ pub fn examine_n_fix_fillet_geoms(
             .geom(geom2)?
             .fillet_surface()?
             .ok_or_else(|| SolidError::null_pointer(OP_EXAMINE))?;
-        if surface1.degree(SurfParamType::U) < 3
-            || surface2.degree(SurfParamType::U) < 3
+        if surface1.degree_with_nurb(k, SurfParamType::U)? < 3
+            || surface2.degree_with_nurb(k, SurfParamType::U)? < 3
             || !surface1.is_kind_of(BSplineSurface::TYPE)?
             || !surface2.is_kind_of(BSplineSurface::TYPE)?
         {
@@ -3959,6 +3973,58 @@ pub fn set_surface_closure(k: &Kernel, surf: &Surface, domain: &Extent2d) -> Res
 #[must_use]
 pub fn find_mark_for_context2(mark_locks: &[MarkLock], context: Option<usize>) -> Option<usize> {
     mark_locks.iter().position(|lock| lock.context() == context)
+}
+
+impl FilletBrep {
+    /// `SmBrep::DeleteEdge(pEdge)` on the pseudo B-rep (default `pOptSurfaceToKeep =
+    /// NULL`): [`crate::topology::brep::p4::delete_edge`] on the topology records, with
+    /// the records' editing flag as this B-rep's `m_bEditingEnabled` for the call, then
+    /// the fillet members of the records it deleted dropped (`~SmFilletEdge`, whose edge
+    /// uses `DeleteEdge` has already taken, `~SmTopology`'s edge list, and the edge uses'
+    /// and vertex uses' members). Notifications go to a fresh default record set (the
+    /// pseudo B-rep has no listeners).
+    ///
+    /// # Errors
+    ///
+    /// Those of [`crate::topology::brep::p4::delete_edge`]; the members of whatever it
+    /// deleted before failing are dropped too.
+    pub fn delete_edge(&mut self, k: &mut Kernel, e: EdgeId) -> Result<()> {
+        use crate::topology::brep::p2::ArenaNotifyState;
+        use crate::topology::brep::p4::{delete_edge, DeleteEnv};
+
+        // the records DeleteEdge can delete: the edge, its edge uses and their vertex uses
+        let edgeuses = self.brep.edge(e)?.edgeuses.clone();
+        let mut vertexuses = Vec::new();
+        for &eu in &edgeuses {
+            if let Some(vu) = self.brep.edgeuse(eu)?.vertexuse {
+                vertexuses.push(vu);
+            }
+        }
+
+        let mut state = ArenaNotifyState::new(&self.brep);
+        let mut env = state.env(None);
+        let mut delete_env = DeleteEnv::from_notify(&mut env);
+        let editing = self.brep.editing_enabled();
+        self.brep.set_editing_enabled(self.editing_enabled);
+        let result = delete_edge(k, &mut self.brep, &mut delete_env, e, None);
+        self.brep.set_editing_enabled(editing);
+
+        if self.brep.edge(e).is_err() {
+            self.edges.remove(&e);
+            self.edge_list.retain(|&x| x != e);
+        }
+        for eu in edgeuses {
+            if self.brep.edgeuse(eu).is_err() {
+                self.edgeuses.remove(&eu);
+            }
+        }
+        for vu in vertexuses {
+            if self.brep.vertexuse(vu).is_err() {
+                self.vertexuses.remove(&vu);
+            }
+        }
+        result
+    }
 }
 
 #[cfg(test)]

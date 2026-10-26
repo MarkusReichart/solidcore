@@ -11,6 +11,7 @@ use crate::blend::fillet_standard_solver::p2::{
 use crate::error::{Result, SolidError};
 use crate::geom::extent1d::ExtentNd;
 use crate::geom::extent2d::Extent2d;
+use crate::geom::vector2d::Point2;
 use crate::geom::matrix::Matrix;
 use crate::intersect::surface_intersector::p1::TsectPnt;
 use crate::kernel::Kernel;
@@ -55,15 +56,13 @@ impl ConstantRadiusOps for GeometrySolver<'_> {
         Ok(())
     }
 
-    fn check_tangent_rollover_guess_context(&self) -> Result<()> {
-        if self.geometry.fillet_geom_type() == FilletGeomType::TangentRollover {
-            // UNPORTED(blend.fillet_standard_solver_p2): SmConstantRadiusFS::LoadInitialValues tangent-rollover vertex-use context
-            return Err(SolidError::unported(
-                "SmConstantRadiusFS::LoadInitialValues tangent-rollover vertex-use context",
-                "blend.fillet_standard_solver_p2",
-            ));
+    /// The selected geometry's tangent-rollover guess, read from its rail fillet vertex
+    /// uses by `FilletBrep::rail_edgeuse_intersect_with_geometry` before the solve.
+    fn tangent_rollover_guess(&self, rail_index: usize) -> Result<Option<Point2>> {
+        if self.geometry.fillet_geom_type() != FilletGeomType::TangentRollover {
+            return Ok(None);
         }
-        Ok(())
+        Ok(self.geometry.rollover_guesses.get(rail_index).copied().flatten())
     }
 
     fn setup_offset_extension(

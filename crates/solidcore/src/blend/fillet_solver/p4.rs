@@ -76,6 +76,7 @@ use crate::blend::fillet_custom_solver::OffsetSurface;
 use crate::blend::fillet_geom::p1::{
     CornerLookup, FilletBrep, FilletErrorType, FilletGeomId, FilletGeomType, FilletSolverId,
 };
+use crate::blend::fillet_geom::p3::SplitCorners;
 use crate::blend::fillet_intersector::{FilletIntersector, StepSolve as StepSolveFlags};
 use crate::curve::curve::{Curve, CurveKind};
 use crate::error::{Result, SolidError};
@@ -203,9 +204,25 @@ pub trait FilletGeometryContext {
     ) -> Result<&'s FilletSolver>;
 }
 
+/// A [`FilletGeometryContext`] that also lends the executive's corners
+/// ([`SplitCorners`]: `TopologySplit`'s corner calls and the corner table the
+/// geometry's corner lookups read).
+pub trait FilletGeometryCorners: FilletGeometryContext + SplitCorners {
+    /// This context as the corners `TopologySplit` changes.
+    fn as_split_corners(&mut self) -> &mut dyn SplitCorners;
+}
+
+impl<T: FilletGeometryContext + SplitCorners> FilletGeometryCorners for T {
+    fn as_split_corners(&mut self) -> &mut dyn SplitCorners {
+        self
+    }
+}
+
 enum GeometrySolvers<'a> {
     Indexed(&'a [FilletSolver]),
     Live(&'a dyn FilletGeometryContext),
+    /// The executive's context with its corners.
+    LiveCorners(&'a mut dyn FilletGeometryCorners),
 }
 
 /// The objects `CalcFilletGeom` reaches besides the solver.
@@ -375,15 +392,45 @@ impl FilletSolver {
         fillets: &mut FilletBrep,
         context: &impl FilletGeometryContext,
     ) -> Result<()> {
-        Self::calc_fillet_geom_resolved(ops, k, target, fillets, GeometrySolvers::Live(context))
+        Self::calc_fillet_geom_resolved(
+            ops,
+            k,
+            target,
+            fillets,
+            GeometrySolvers::Live(context),
+        )
     }
 
-    fn calc_fillet_geom_resolved(
+    /// [`Self::calc_fillet_geom_with_context`] with a context that also lends the
+    /// executive's corners, which a geometry split (`SmFilletGeom::TopologySplit`) reads
+    /// and adds its fillet vertices to, and whose corner table the cross sections read.
+    ///
+    /// # Errors
+    /// As [`Self::calc_fillet_geom_with_context`]; those of the corners.
+    pub fn calc_fillet_geom_with_corners(
         ops: &mut dyn FilletSolverOps,
         k: &Kernel,
         target: &mut Brep,
         fillets: &mut FilletBrep,
-        solvers: GeometrySolvers<'_>,
+        context: &mut impl FilletGeometryCorners,
+    ) -> Result<()> {
+        Self::calc_fillet_geom_resolved(
+            ops,
+            k,
+            target,
+            fillets,
+            GeometrySolvers::LiveCorners(context),
+        )
+    }
+
+    // one lifetime for the `Cx` it builds: `GeometrySolvers` is invariant in it (the
+    // corners' `&mut dyn`), so the other borrows are shortened to the solvers' lifetime
+    fn calc_fillet_geom_resolved<'a>(
+        ops: &mut dyn FilletSolverOps,
+        k: &'a Kernel,
+        target: &'a mut Brep,
+        fillets: &'a mut FilletBrep,
+        solvers: GeometrySolvers<'a>,
     ) -> Result<()> {
         let mut cx = Cx {
             k,
@@ -540,11 +587,19 @@ const fn bspline_curve_cast(curve: &Curve) -> Option<&BSplineCurve> {
 }
 
 /// `SM_CAST_PTR(SmBSplineSurface, pSurface) != NULL`: the kinds derived from
-/// `SmBSplineSurface` (`SmPlane`, `SmSurfOfRevolution`).
+/// `SmBSplineSurface` (`SmPlane`, `SmSurfOfRevolution`, `SmSurfOfExtrusion`, and through
+/// `SmSurfOfRevolution` `SmCone`/`SmCylinder`, `SmSphere`, `SmTorus`), as
+/// `blend.fillet_geom_p5`'s cast.
 const fn is_bspline_surface(surface: &Surface) -> bool {
     matches!(
         surface.kind(),
-        SurfaceKind::BSpline(_) | SurfaceKind::Plane(_) | SurfaceKind::SurfOfRevolution(_)
+        SurfaceKind::BSpline(_)
+            | SurfaceKind::Plane(_)
+            | SurfaceKind::SurfOfRevolution(_)
+            | SurfaceKind::SurfOfExtrusion(_)
+            | SurfaceKind::Cone(_)
+            | SurfaceKind::Sphere(_)
+            | SurfaceKind::Torus(_)
     )
 }
 
@@ -607,6 +662,7 @@ fn c1_setup(ops: &mut dyn FilletSolverOps, cx: &mut Cx<'_>) -> Result<CalcState>
     match &cx.solvers {
         GeometrySolvers::Indexed(_) => ops.set_extension_flags(cx.target)?,
         GeometrySolvers::Live(context) => context.set_extension_flags(ops, cx.target)?,
+        GeometrySolvers::LiveCorners(context) => context.set_extension_flags(ops, cx.target)?,
     }
 
     // local to-be-filleted edge data
@@ -1595,8 +1651,9 @@ mod tests_c2 {
 
 /// :1955-2011: under `CanMakeAnalytic()`, the base surfaces as B-splines (one offset
 /// level unwrapped, `NER`), `sm_TestAnalyticSurface` on both, then
-/// `CalcCylinderFilletGeom` and `CalcTorusFilletGeom`. `true` when one succeeded
-/// (`return SM_SUCCESS`); their failures fall through to the trace.
+/// `CalcCylinderFilletGeom` and `CalcTorusFilletGeom` (then, with
+/// `Kernel::fixes.fillet_corner_ball_patch`, WR-420's `CalcSphereFilletGeom`). `true` when
+/// one succeeded (`return SM_SUCCESS`); their failures fall through to the trace.
 fn c3_try_analytic(
     ops: &mut dyn FilletSolverOps,
     cx: &mut Cx<'_>,
@@ -1631,6 +1688,18 @@ fn c3_try_analytic(
 
     // try making a torus fillet to store in m_vFilletGeoms[0]; quit when this succeeds
     match calc_torus_fillet_geom(ops, cx, &mut st.store, &st.tsect_pnts) {
+        Ok(()) => return Ok(true),
+        Err(e) if e.is_unported() => return Err(e),
+        Err(_) => {}
+    }
+
+    // Not upstream (WR-420, opt-in): try making the corner ball's patch, for a centre
+    // curve collapsed to a point
+    if !cx.k.fixes.fillet_corner_ball_patch {
+        return Ok(false);
+    }
+    let tsects = st.store.snapshot(cx.fillets, &st.tsect_pnts)?;
+    match FilletSolver::calc_sphere_fillet_geom(ops, cx.k, cx.target, cx.fillets, &tsects, None) {
         Ok(()) => Ok(true),
         Err(e) if e.is_unported() => Err(e),
         Err(_) => Ok(false),
@@ -1886,6 +1955,23 @@ mod tests_c3 {
         let mut st = state(line(), [a, b]);
         let r = with_cx(&k, |cx| c3_try_analytic(&mut fs, cx, &mut st));
         assert!(matches!(r, Ok(false)));
+    }
+
+    /// tangency-labs/solidcore#919/#920/#879: an `SmCylinder` derives from
+    /// `SmBSplineSurface` (through `SmCone` and `SmSurfOfRevolution`), so the analytic
+    /// attempt's cast keeps a cylinder base (a cylinder rim's fillet failed here with
+    /// `SM_ERR_NULL_POINTER`).
+    #[test]
+    fn issue_919_bspline_base_keeps_a_cylinder() {
+        let k = Kernel::default();
+        let cylinder = Surface::from(
+            crate::primitive::api_primitives::create_cylinder_surface(&k, Point3::ZERO, 10.0, 20.0)
+                .unwrap(),
+        );
+        assert!(std::ptr::eq(
+            c3_bspline_base(&cylinder).unwrap(),
+            std::ptr::from_ref(&cylinder)
+        ));
     }
 
     #[test]
@@ -3689,8 +3775,20 @@ fn topology_split(
         .geom(geom)?
         .fillet_solver()
         .ok_or_else(|| SolidError::null_pointer(OP))?;
-    cx.fillets
-        .topology_split(cx.k, geom, geom_type, solver_id, ops.solver(), cx.target)
+    match &mut cx.solvers {
+        GeometrySolvers::LiveCorners(context) => cx.fillets.topology_split_with(
+            cx.k,
+            geom,
+            geom_type,
+            solver_id,
+            ops.solver(),
+            cx.target,
+            context.as_split_corners(),
+        ),
+        _ => cx
+            .fillets
+            .topology_split(cx.k, geom, geom_type, solver_id, ops.solver(), cx.target),
+    }
 }
 
 /// `pFilletGeom->CalcBlendingGeom()` ([`FilletBrep::calc_blending_geom_of_solver`],
@@ -3721,6 +3819,14 @@ fn calc_cross_section(ops: &dyn FilletSolverOps, cx: &mut Cx<'_>, edge: EdgeId) 
             edge,
             None,
             CornerLookup::default(),
+            &|id| context.solver(id, ops.solver()),
+            cx.target,
+        ),
+        GeometrySolvers::LiveCorners(context) => cx.fillets.calc_cross_section_with_lookup(
+            cx.k,
+            edge,
+            None,
+            context.lookup(),
             &|id| context.solver(id, ops.solver()),
             cx.target,
         ),
@@ -4045,8 +4151,8 @@ impl crate::blend::fillet_intersector::FilletSolverOps for IntersectorSolver<'_>
     fn self_intersection_handler(
         &self,
     ) -> Result<Option<crate::blend::fillet_intersector::HandlingAlgorithmType>> {
-        // the handler is the executive's member: the base reports the missing
-        // executive (a NULL dereference upstream) or the unported executive data
+        // the handler is the executive's member: the base reports a missing executive
+        // (a NULL dereference upstream); with one there is no smoothing handler
         self.ops.solver().self_intersection_handler().map(|()| None)
     }
 
@@ -4057,8 +4163,9 @@ impl crate::blend::fillet_intersector::FilletSolverOps for IntersectorSolver<'_>
         _uv_curves1: &mut Vec<BSplineCurve>,
         _uv_curves2: &mut Vec<BSplineCurve>,
     ) -> Result<()> {
-        // as blend::fillet_intersector's ConstantRadiusAssistedFs: no handler can be
-        // held until the executive is ported (`self_intersection_handler` fails first)
+        // as blend::fillet_intersector's ConstantRadiusAssistedFs: the executive holds
+        // no smoothing handler (`self_intersection_handler` reports none), so FlushCurve
+        // never calls this
         // UNPORTED(blend.fillet_executive_p1): SmSelfIntersectionHandler::SmoothOutIntersection (justified: findings.md "fillet_solver_p1: SmoothOutIntersection")
         Err(SolidError::unported(
             "SmSelfIntersectionHandler::SmoothOutIntersection",

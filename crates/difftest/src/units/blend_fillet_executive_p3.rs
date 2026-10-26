@@ -1,7 +1,9 @@
 //! Executive p3 state/error parity and real-solid fillet session checkpoints.
 //! Setup, corner creation and direct first-Nx1 topology use actual bodies and
-//! owned production solvers. Full fillet construction remains deferred at the
-//! missing public API; native result records do not claim Rust geometry success.
+//! owned production solvers. The upstream `TestSmFillets.cpp` chamfer and fillet-edges
+//! examples run through the library's `chamfer_fillet` / `fillet_edges`; the circular,
+//! per-edge, variable-radius and bevel-corner examples stay deferred at their missing
+//! SM_API entry points. Native result records do not claim Rust geometry success.
 
 use crate::{Case, HarnessError, Output, Rng, UnitDiff};
 use serde::{Deserialize, Serialize};
@@ -339,6 +341,16 @@ impl ExecutiveAccess<Handle> for Access {
         _: &mut FilletExecutive<Handle>,
     ) -> SolidResult<()> {
         missing()
+    }
+    fn create_corners(
+        &mut self,
+        k: &mut Kernel,
+        executive: &mut FilletExecutive<Handle>,
+        error: Option<&mut ErrorInfo<Handle>>,
+    ) -> SolidResult<()> {
+        // `CreateFilletCorners` itself (blend.fillet_executive_p1). These records load
+        // no solvers, so no vertex has a pending corner and the factory is never reached.
+        executive.create_fillet_corners(k, |_, _, _, _| missing(), error)
     }
     fn adjust_topology(
         &mut self,
@@ -738,14 +750,68 @@ fn output(values: &[f64]) -> Result<Output, HarnessError> {
     Ok(out)
 }
 
+/// The shim's `upstream` examples 1 (`SmApiChamferFillet(box 5x10x15, 0.5)`) and 2
+/// (`SmApiFilletEdges(box 10x10x10, its first four edges, 1.0, 1, 1, 1.0)`) through the
+/// library: the status (0 on success), then the face, edge and vertex counts, or the
+/// deferral of an unported callee. `None` for the other examples.
+fn upstream_api(example: usize) -> Result<Option<Output>, HarnessError> {
+    use solidcore::blend::fillet_executive::{fillet_edges, session::chamfer_fillet};
+    use solidcore::math::Vec3;
+    use solidcore::primitive::api_primitives::create_box;
+    use solidcore::topology::brep::p1;
+    let err = |e: SolidError| HarnessError::new(e.to_string());
+    let [x, y, z] = match example {
+        1 => [5.0, 10.0, 15.0],
+        2 => [10.0, 10.0, 10.0],
+        _ => return Ok(None),
+    };
+    let mut k = Kernel::default();
+    let mut body = create_box(&mut k, Vec3::ZERO, x, y, z).map_err(err)?;
+    let result = if example == 1 {
+        chamfer_fillet(&mut k, &mut body, 0.5)
+    } else {
+        let edges = p1::edges(&body, None).map_err(err)?;
+        let selected: Vec<_> = edges.into_iter().take(4).collect();
+        fillet_edges(&mut k, &mut body, &selected, 1.0, 1, 1, 1.0)
+    };
+    let status = match result {
+        Ok(()) => 0,
+        Err(error) => {
+            if let Some(deferred) = Output::unported(&error) {
+                return Ok(Some(deferred));
+            }
+            match error {
+                SolidError::InvalidInput { .. } => 1007,
+                SolidError::Upstream { code, .. } => i64::from(code),
+                other => return Err(HarnessError::new(other.to_string())),
+            }
+        }
+    };
+    let mut out = Output::new();
+    out.ints.insert(
+        "api_status_counts".into(),
+        vec![
+            status,
+            p1::faces(&body, None).map_err(err)?.len() as i64,
+            p1::edges(&body, None).map_err(err)?.len() as i64,
+            p1::vertices(&body, None).map_err(err)?.len() as i64,
+        ],
+    );
+    Ok(Some(out))
+}
+
 fn rust(input: &Inputs) -> Result<Output, HarnessError> {
     if let Some(example) = input.upstream_case {
         ffi::validate_upstream_fixture(example).map_err(|e| HarnessError::new(e.to_string()))?;
         if !input.record.is_empty() {
             return Err(HarnessError::new("mixed fixture forms"));
         }
-        // These fixture constructors are the actual missing API entrypoints, not
-        // geometric passes or a replacement for direct p3 parity.
+        // The chamfer and first-four-edges examples run through the library's API
+        // entry points (`chamfer_fillet`, `fillet_edges`), the others' entry points are
+        // not ported.
+        if let Some(out) = upstream_api(example)? {
+            return Ok(out);
+        }
         let symbol = match example {
             // UNPORTED(blend.fillet_executive_p1): SmApiCircularFillet
             0 => "SmApiCircularFillet",

@@ -1,0 +1,10 @@
+#### WR-422. `SmFilletSolver::CalcTorusFilletGeom` places the section of a round centred on the arc's axis from rail points that carry no angle
+- **Severity:** Wrong result (the blend fails with `SM_ERR` 1001)
+- **Area:** Blend
+- **Location:** `source/SMLib/src/SmFilletSolver.cpp` (`SmFilletSolver::CalcTorusFilletGeom`): the revolved section is placed by the base-surface points of the first and last intersection points' uv, and oriented by the edge point nearest the section's centre (`GlobalPointSolve`).
+- **What happens:** a round as wide as the corner round it runs round (an R5 rim beside R5 vertical corners) is centred on that round's axis, where the offset faces collapse. The rail points then lie anywhere on the circle the ball touches, and every edge point is as near the centre, so the torus can turn the long way round (270°), and the roll-over test fails.
+- **Trigger:** an R5 round of the top rim of a 297×100×60 box whose vertical corners are R5 (SolidCraft rig case 1667; on a smaller box it happened to turn the right way).
+- **How found:** SolidCraft regression rig on the SMLib fork (tangency-labs/solidcore#417).
+- **Confirmed:** on the fork's C++ build (tangency-labs/smlib@110b131, capi regression test in `ops_kernel.cpp` matching the closed form).
+- **Fix:** with the section's centre on the arc's axis (within `GetThisApproxTol3d`), the rail points of the start and end sections are turned about the axis into the half-planes through the edge's start and end (`sm_TurnIntoHalfPlane`), and the edge's start orients the sweep instead of the nearest-point solve.
+- **Rust port:** opt-in `Kernel::fixes.fillet_torus_center_on_axis` (default `false`, upstream behaviour), read in `FilletSolver::torus_fillet_geom_parts`; the turn is `turn_into_half_plane` in `crates/solidcore/src/blend/fillet_solver/p2.rs`, documented in that file's Deviations. Test `issue_417_rail_points_turned_into_the_edges_half_planes`. With the default no difftest path changes. Fixes tangency-labs/solidcore#417.
