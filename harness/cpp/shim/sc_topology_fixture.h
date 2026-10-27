@@ -20,6 +20,17 @@
 //   `3 validate_only init_gaps`                 the wire network of prog_test my_test_topology
 //   `5 np (x y z)*np ne (a b has_curve [curve])*ne validate_only init_gaps`
 //                                               shell vertices joined by MakeEdgeTopology edges
+//   `10 nf (face)*nf validate_only init_gaps`   nf CreateFaceFromSurface faces of one B-rep,
+//                                               each `surface u0 v0 u1 v1` as kind 2, or
+//                                               `kind scale a b c ox oy oz axis f0u f0v f1u f1v`
+//                                               with kind 10 SmCylinder(radius scale*a), 11
+//                                               SmSphere(radius scale*a), 12 SmTorus(major
+//                                               scale*a, minor scale*b), 13 SmCone(bottom
+//                                               radius scale*a, semi-angle b degrees) made by
+//                                               CreateCanonical at origin (ox, oy, oz), Z axis
+//                                               along z, x or y (`axis` 0, 1, 2), over the
+//                                               fractions (f0, f1) of the natural domain (an
+//                                               unbounded direction clamped to [0, scale*c])
 // `init_gaps` computes the cached vertex/face, vertex/edge, edge/face and edge/CCW-edge
 // gaps (C++ only) before the op, so their reset is observable.
 //
@@ -40,8 +51,10 @@
 #include <SmBSplineCurve.h>
 #include <SmBSplineSurface.h>
 #include <SmBrep.h>
+#include <SmCone.h>
 #include <SmContext.h>
 #include <SmCurve.h>
+#include <SmCylinder.h>
 #include <SmEdge.h>
 #include <SmEdgeuse.h>
 #include <SmExtent1d.h>
@@ -549,7 +562,7 @@ void put_surface(std::vector<double>& o, const SmSurface* s)
         o.push_back(sur->knv->U[i]);
 }
 
-// Whether the B-rep being exported came from a smTestBrep.cpp block (10..12), whose
+// Whether the B-rep being exported came from a smTestBrep.cpp block (15..17), whose
 // SmCrvOnSurf edge curves are exported as -4 records; every other block keeps the
 // encoding it had before those blocks existed (an SmCrvOnSurf there stays -2).
 bool& crv_on_surf_records()
@@ -566,19 +579,24 @@ struct CosPeek : SmCrvOnSurf
     static SmBoolean SmCrvOnSurf::*matches() { return &CosPeek::m_bParametrizationMatches; }
 };
 
-// An SmCrvOnSurf edge curve as `-4 type version nbytes bytes...`: its binary database record
-// (UV curve, base surface, UV domain, breaks), which SmCrvOnSurf::ReadFromDB reads back with
-// owner flag 2. Written only when that record is the whole curve: owner flag 2 (copies of
-// both inputs), no cached B-spline approximation, and a read-back that writes the same
-// bytes. Returns false (nothing written) otherwise, and the caller falls back to the -2 of
-// put_curve, which the Rust import rejects.
+// An SmCrvOnSurf edge curve as `-4 type version dim nbytes bytes... has_approx [matches
+// max_gap dim n p m (x y z w)*(n+1) knot*(m+1)]`: its binary database record (UV curve, base
+// surface, UV domain, breaks), which SmCrvOnSurf::ReadFromDB reads back with owner flag 2,
+// then the cached B-spline approximation the record leaves out (m_pBSApproxCurve, made when
+// the B-rep was built, e.g. by CalculateBoundingBox or DropPoint through
+// GetOrCreateBSApproxPointer's defaults): its parameterisation flag, gap and raw NURB, which
+// the Rust import rebuilds with the same defaults and checks bit for bit. Written only for
+// owner flag 2 (copies of both inputs), a read-back that writes the same bytes and, with an
+// approximation, one that has a NURB. Returns false (nothing written) otherwise, and the
+// caller falls back to the -2 of put_curve, which the Rust import rejects.
 bool put_crv_on_surf(std::vector<double>& out, const SmCurve* c)
 {
     if (c == nullptr || c->GetType() != SmCrvOnSurf_TYPE)
         return false;
     const SmCrvOnSurf* cos = (const SmCrvOnSurf*)c;
-    if (cos->*CosPeek::owner_flag() != 2 || cos->*CosPeek::approx() != nullptr ||
-        cos->*CosPeek::max_gap() != SM_BIG_DOUBLE || cos->*CosPeek::matches() != FALSE ||
+    const SmBSplineCurve* approx = cos->*CosPeek::approx();
+    const gw_CURVE* approx_nurb = approx ? approx->GetGwNurbPointer() : nullptr;
+    if (cos->*CosPeek::owner_flag() != 2 || (approx != nullptr && approx_nurb == nullptr) ||
         cos->GetUVCurve() == nullptr || cos->GetBaseSurface() == nullptr)
         return false;
     std::string bytes;
@@ -607,6 +625,23 @@ bool put_crv_on_surf(std::vector<double>& out, const SmCurve* c)
     out.push_back((double)bytes.size());
     for (unsigned char byte : bytes)
         out.push_back((double)byte);
+    out.push_back(approx ? 1.0 : 0.0);
+    if (approx)
+    {
+        out.push_back(flg(cos->*CosPeek::matches()));
+        out.push_back(cos->*CosPeek::max_gap());
+        out.push_back((double)approx->GetDim());
+        out.push_back((double)approx_nurb->pol->n);
+        out.push_back((double)approx_nurb->p);
+        out.push_back((double)approx_nurb->knt->m);
+        for (gw_INDEX k = 0; k <= approx_nurb->pol->n; k++)
+        {
+            const gw_CPOINT& q = approx_nurb->pol->Pw[k];
+            out.insert(out.end(), {q.x, q.y, q.z, q.w});
+        }
+        for (gw_INDEX k = 0; k <= approx_nurb->knt->m; k++)
+            out.push_back(approx_nurb->knt->U[k]);
+    }
     return true;
 }
 
@@ -747,6 +782,75 @@ void export_graph(SmBrep* brep, Graph& g, std::vector<double>& o)
         o);
 }
 
+// One face of a kind-10 block (layout in the header) added to `brep`.
+SmStatus analytic_or_surface_face(Rd& rd, const SmContext& ctx, SmBrep* brep)
+{
+    int64_t kind = (int64_t)rd.in[rd.at];
+    SmFace* pFace = nullptr;
+    if (kind < 10)
+    {
+        SmSurface* s = read_surface(rd, ctx);
+        SmPoint2d a = rd.uv(), b = rd.uv();
+        return brep->CreateFaceFromSurface(s, SmExtent2d(a, b), pFace);
+    }
+    rd.at++;
+    double scale = rd.num(), a = rd.num(), b = rd.num(), c = rd.num();
+    SmPoint3d o = rd.vec();
+    int64_t axis = rd.idx();
+    SmPoint2d f0 = rd.uv(), f1 = rd.uv();
+    const SmVector3d x = axis == 1 ? SmVector3d(0, 1, 0) : SmVector3d(1, 0, 0);
+    const SmVector3d y = axis == 0 ? SmVector3d(0, 1, 0) : axis == 1 ? SmVector3d(0, 0, 1) : SmVector3d(0, 0, -1);
+    SmAxis2Placement origin(o, x, y);
+    SmBSplineSurface* s = nullptr;
+    SmStatus st = SM_ERR;
+    if (kind == 10)
+    {
+        SmCylinder* p = nullptr;
+        st = SmCylinder::CreateCanonical(ctx, origin, scale * a, p);
+        s = p;
+    }
+    else if (kind == 11)
+    {
+        SmSphere* p = nullptr;
+        st = SmSphere::CreateCanonical(ctx, origin, scale * a, p);
+        s = p;
+    }
+    else if (kind == 12)
+    {
+        SmTorus* p = nullptr;
+        st = SmTorus::CreateCanonical(ctx, origin, scale * a, scale * b, p);
+        s = p;
+    }
+    else
+    {
+        SmCone* p = nullptr;
+        st = SmCone::CreateCanonical(ctx, origin, scale * a, b, p);
+        s = p;
+    }
+    if (st != SM_SUCCESS)
+    {
+        delete s;
+        return st;
+    }
+    if (s == nullptr)
+        return SM_ERR;
+    SmExtent2d dom = s->GetNaturalUVDomain();
+    SmPoint2d lo = dom.GetMin(), hi = dom.GetMax();
+    if (hi.x - lo.x > 1e5)
+    {
+        lo.x = 0.0;
+        hi.x = scale * c;
+    }
+    if (hi.y - lo.y > 1e5)
+    {
+        lo.y = 0.0;
+        hi.y = scale * c;
+    }
+    SmPoint2d d0(lo.x + f0.x * (hi.x - lo.x), lo.y + f0.y * (hi.y - lo.y));
+    SmPoint2d d1(lo.x + f1.x * (hi.x - lo.x), lo.y + f1.y * (hi.y - lo.y));
+    return brep->CreateFaceFromSurface(s, SmExtent2d(d0, d1), pFace);
+}
+
 // Builds the B-rep of a B-rep block; nullptr (status in `st`) when construction fails.
 SmBrep* build(Rd& rd, const char* path, SmStatus& status)
 {
@@ -764,14 +868,14 @@ SmBrep* build(Rd& rd, const char* path, SmStatus& status)
     {
         status = sc_topology_fixture::ellipse_face(brep, rd, ctx);
     }
-    else if (kind == 10 || kind == 11 || kind == 12)
+    else if (kind == 15 || kind == 16 || kind == 17)
     {
         // the smTestBrep.cpp fixtures (support/test_brep_fixture.h), each building its own
         // B-rep; their edges' SmCrvOnSurf curves are exported as -4 records
         delete brep;
-        if (kind == 12)
+        if (kind == 17)
             brep = sc_test_brep::xy_sheet(ctx, rd.num(), status);
-        else if (kind == 10)
+        else if (kind == 15)
             brep = sc_test_brep::loop_orientation_case(ctx, (ULONG)rd.idx(), status);
         else
             brep = sc_test_brep::torus_vertex_loop_case(const_cast<SmContext&>(ctx), (ULONG)rd.idx(), status);
@@ -855,6 +959,12 @@ SmBrep* build(Rd& rd, const char* path, SmStatus& status)
             pEdge->SetInterval(c->GetNaturalInterval());
             pEdge->SetOrientation(SM_OT_SAME);
         }
+    }
+    else if (kind == 10)
+    {
+        int64_t nf = rd.idx();
+        for (int64_t i = 0; i < nf && status == SM_SUCCESS; i++)
+            status = analytic_or_surface_face(rd, ctx, brep);
     }
     else
     {

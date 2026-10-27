@@ -5,7 +5,7 @@
 //! `source/SMLib/src/SmVertexProps.cpp`, `source/SMLib/inc/SmHealProbArray.h`.
 //!
 //! A B-rep block is one of [`super::topology_vertexuse`]'s (kinds `0..=3` and the
-//! `smTestBrep` blocks `10..=12`),
+//! `smTestBrep` blocks `15..=17`),
 //! `4 dx dy dz validate_only init_gaps` (`SmPrimitiveCreation::CreateBox`) or
 //! `5 radius swap_uv validate_only init_gaps` (a face on the full
 //! `SmSphere::CreateCanonical` domain), `13 radius a0 a1 validate_only init_gaps` or
@@ -346,7 +346,10 @@ fn targets(rd: &mut Reader<'_>) -> Result<(), FfiError> {
 /// loaded face targets for the single-vertex-sphere regression. `42 null_face`
 /// seeds degenerate/missing/crossed face queues with no crossed direction, only
 /// immediately before a final step 38 (or 35/39 for null faces). Step 38
-/// also outputs each current face props' crossed direction, flag and tried state.
+/// also outputs each current face props' crossed direction, flag and tried state. While
+/// a target face props has no face, whose mark v1.0.1's `Fix_SplitEdgesAtSeam` reads
+/// unchecked (UB-265), the shim replaces the whole record by `-999 265` (a rejected
+/// case).
 /// Selectors use the
 /// fixture graph's traversal order. Step 33 refuses catch-up into an uninitialized
 /// incremental vertex voxel model (`-2`). A nonempty add list also requires every
@@ -355,7 +358,7 @@ fn targets(rd: &mut Reader<'_>) -> Result<(), FfiError> {
 /// model remain valid. Catch-up through `Fix_CoinVertices` or later is terminal
 /// because it can delete original fixture topology.
 ///
-/// v1.0.1 prog_test steps (outputs before `status new_probs` as noted): `43 sel`
+/// v1.0.1 `prog_test` steps (outputs before `status new_probs` as noted): `43 sel`
 /// `ResetInfiniteRegion` of the `sel`-th region with `SM_VS_INFINITEREGION_SWAP`; `44
 /// op` `SmBrep::HealBrep(op)`; `45` the region list (`n (index is_void)*`, index `-3`
 /// for a region not in the fixture graph), the infinite region's index and the face,
@@ -393,7 +396,7 @@ pub fn check_heal(args: &[f64]) -> Result<(), FfiError> {
             ));
         }
         match code {
-            12..=14 | 21 | 24 => {
+            12..=14 | 21 | 24 | 43 => {
                 rd.index(MAX_SEL)?;
             }
             15 => {
@@ -465,9 +468,6 @@ pub fn check_heal(args: &[f64]) -> Result<(), FfiError> {
             40 => {
                 rd.flag()?;
                 rd.index(26)?;
-            }
-            43 => {
-                rd.index(MAX_SEL)?;
             }
             44 | 46 => {
                 rd.index(26)?;

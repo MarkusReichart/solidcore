@@ -18,7 +18,7 @@
 //! [`super::topology_edgeuse_p1`]. Its native curve record prefixes the regular
 //! B-spline edge block; UV trims retain their original NURB parameters.
 //!
-//! Kinds `10 case`, `11 case` and `12 size` are the `prog_test` `smTestBrep.cpp` fixtures
+//! Kinds `15 case`, `16 case` and `17 size` are the `prog_test` `smTestBrep.cpp` fixtures
 //! (`sm_MakeLoopOrientationCase`, `sm_MakeTorusVertexLoopCase`, `sm_make_xy_sheet`; shim
 //! `support/test_brep_fixture.h`). Their export writes each `SmCrvOnSurf` edge curve as
 //! `-4 type version dim nbytes byte*nbytes`, its binary database record; every other kind
@@ -275,26 +275,11 @@ pub(crate) fn brep_block_at(input: &[f64], path: &str) -> Result<usize, FfiError
     Ok(rd.at)
 }
 
-/// A B-rep block.
-fn brep_block(rd: &mut Reader<'_>, path: &str) -> Result<(), FfiError> {
-    let kind = rd.index(12)?;
-    match kind {
-        0 => {
-            let p = Path::new(path);
-            if p.extension().and_then(|e| e.to_str()) != Some("smb") || !p.is_file() {
-                return Err(bad("B-rep file: need an existing .smb file"));
-            }
-            rd.flag()?;
-        }
-        1 => {
-            let (a, b) = curve(rd)?;
-            let t0 = rd.finite()?;
-            let t1 = rd.finite()?;
-            if !(a <= t0 && t0 < t1 && t1 <= b) {
-                return Err(bad("wire edge interval outside the curve's"));
-            }
-        }
-        2 | 4 => {
+/// Most faces of a kind-10 block.
+pub const MAX_FACES: usize = 4;
+
+/// The `surface u0 v0 u1 v1` face of a kind-2 (or kind-10) block.
+fn face_block(rd: &mut Reader<'_>) -> Result<(), FfiError> {
             let dom = surface(rd)?;
             let d = rd.finites(4)?;
             let (Some(&a), Some(&b2), Some(&c), Some(&e)) =
@@ -317,6 +302,67 @@ fn brep_block(rd: &mut Reader<'_>, path: &str) -> Result<(), FfiError> {
                     }
                 }
             }
+    Ok(())
+}
+
+/// A canonical analytic face of a kind-10 block: `kind scale a b c ox oy oz axis f0u f0v
+/// f1u f1v` (kind 10 cylinder, 11 sphere, 12 torus, 13 cone).
+fn analytic_face_block(rd: &mut Reader<'_>) -> Result<(), FfiError> {
+    let kind = rd.index(13)?;
+    let scale = rd.finite()?;
+    let a = rd.finite()?;
+    let b = rd.finite()?;
+    let c = rd.finite()?;
+    if !(1e-3..=1e3).contains(&scale) || !(1e-3..=1e2).contains(&a) || !(0.0..=1e2).contains(&c) {
+        return Err(bad("analytic face: size out of range"));
+    }
+    let ok = match kind {
+        10 | 11 => true,
+        // a torus with a minor radius below its major one, a cone of semi-angle in (0, 90)
+        12 => b > 0.0 && b < a,
+        13 => b > 0.0 && b < 90.0,
+        _ => false,
+    };
+    if !ok {
+        return Err(bad("analytic face: bad kind or shape"));
+    }
+    let o = rd.vec3()?;
+    if o.iter().any(|x| x.abs() > 1e4) {
+        return Err(bad("analytic face: origin out of range"));
+    }
+    rd.index(2)?;
+    let f = rd.finites(4)?;
+    let (Some(&f0u), Some(&f0v), Some(&f1u), Some(&f1v)) = (f.first(), f.get(1), f.get(2), f.get(3))
+    else {
+        return Err(bad("analytic face: domain too short"));
+    };
+    if f.iter().any(|t| !(0.0..=1.0).contains(t)) || f0u >= f1u || f0v >= f1v {
+        return Err(bad("analytic face: domain fractions not ordered in [0, 1]"));
+    }
+    Ok(())
+}
+
+/// A B-rep block.
+fn brep_block(rd: &mut Reader<'_>, path: &str) -> Result<(), FfiError> {
+    let kind = rd.index(17)?;
+    match kind {
+        0 => {
+            let p = Path::new(path);
+            if p.extension().and_then(|e| e.to_str()) != Some("smb") || !p.is_file() {
+                return Err(bad("B-rep file: need an existing .smb file"));
+            }
+            rd.flag()?;
+        }
+        1 => {
+            let (a, b) = curve(rd)?;
+            let t0 = rd.finite()?;
+            let t1 = rd.finite()?;
+            if !(a <= t0 && t0 < t1 && t1 <= b) {
+                return Err(bad("wire edge interval outside the curve's"));
+            }
+        }
+        2 | 4 => {
+            face_block(rd)?;
             if kind == 4 {
                 // kind 4 adds an inner vertex loop at these fractions of the domain
                 for _ in 0..2 {
@@ -324,6 +370,34 @@ fn brep_block(rd: &mut Reader<'_>, path: &str) -> Result<(), FfiError> {
                     if !(0.0..=1.0).contains(&t) {
                         return Err(bad("vertex loop fraction outside [0, 1]"));
                     }
+                }
+            }
+        }
+        // the prog_test smTestBrep.cpp fixtures (harness/cpp/shim/support/test_brep_fixture.h)
+        15 => {
+            rd.index(MAX_LOOP_ORIENTATION_CASE)?;
+        }
+        16 => {
+            rd.index(MAX_TORUS_VERTEX_LOOP_CASE)?;
+        }
+        17 => {
+            // CreateRectangle refuses no size itself: keep the sheet positive and moderate
+            let size = rd.finite()?;
+            if !(size > 0.0 && size <= 1e4) {
+                return Err(bad("xy sheet size outside (0, 1e4]"));
+            }
+        }
+        10 => {
+            // faces of one B-rep: kind-2 faces or canonical analytic ones
+            let nf = rd.index(MAX_FACES)?;
+            if nf == 0 {
+                return Err(bad("face list: need at least one face"));
+            }
+            for _ in 0..nf {
+                if rd.input.get(rd.at).is_some_and(|&k| k >= 10.0) {
+                    analytic_face_block(rd)?;
+                } else {
+                    face_block(rd)?;
                 }
             }
         }
@@ -354,20 +428,6 @@ fn brep_block(rd: &mut Reader<'_>, path: &str) -> Result<(), FfiError> {
             )?;
         }
         3 => {}
-        // the prog_test smTestBrep.cpp fixtures (harness/cpp/shim/support/test_brep_fixture.h)
-        10 => {
-            rd.index(MAX_LOOP_ORIENTATION_CASE)?;
-        }
-        11 => {
-            rd.index(MAX_TORUS_VERTEX_LOOP_CASE)?;
-        }
-        12 => {
-            // CreateRectangle refuses no size itself: keep the sheet positive and moderate
-            let size = rd.finite()?;
-            if !(size > 0.0 && size <= 1e4) {
-                return Err(bad("xy sheet size outside (0, 1e4]"));
-            }
-        }
         _ => return Err(bad("unsupported B-rep kind")),
     }
     rd.flag()?;
@@ -375,9 +435,9 @@ fn brep_block(rd: &mut Reader<'_>, path: &str) -> Result<(), FfiError> {
     Ok(())
 }
 
-/// Largest `sm_MakeLoopOrientationCase` case of a kind-10 block (upstream runs 0..13).
+/// Largest `sm_MakeLoopOrientationCase` case of a kind-15 block (upstream runs 0..13).
 pub const MAX_LOOP_ORIENTATION_CASE: usize = 12;
-/// Largest `sm_MakeTorusVertexLoopCase` fixture of a kind-11 block (`lCase % 10`).
+/// Largest `sm_MakeTorusVertexLoopCase` fixture of a kind-16 block (`lCase % 10`).
 pub const MAX_TORUS_VERTEX_LOOP_CASE: usize = 9;
 
 /// Most points of a kind-5 network block.

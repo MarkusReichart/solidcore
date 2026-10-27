@@ -595,7 +595,7 @@ fn find_edgeuse_seam_sides(
 ) -> Result<u32> {
     const FRACTIONS: [f64; 6] = [1e-4, 1e-3, 1e-2, 0.1, 0.5, 0.9];
     let mut sides = 0u32;
-    let domain = surface.natural_uv_domain();
+    let domain = surface.natural_uv_domain_with_nurb(k)?;
     // Start close to the encounter, then look farther along a coincident run.
     // Use a 3D seam neighborhood rather than a UV tolerance near a pole.
     for way in 0..2 {
@@ -1355,7 +1355,7 @@ impl<O: ClassObject> CurveClassification<O> {
         let surface = surface.ok_or_else(|| {
             SolidError::invalid_input(OP_CROSS, "face without a surface (UB-124)")
         })?;
-        let srf_domain = surface.natural_uv_domain();
+        let srf_domain = surface.natural_uv_domain_with_nurb(k)?;
         let srf_min_uv = srf_domain.min();
         let srf_max_uv = srf_domain.max();
         let crv_classification_interval = self.interval();
@@ -1401,7 +1401,7 @@ impl<O: ClassObject> CurveClassification<O> {
                     k,
                     surface,
                     smp_pt,
-                    &surface.natural_uv_domain(),
+                    &surface.natural_uv_domain_with_nurb(k)?,
                     None,
                     None,
                     smp_uv,
@@ -1713,7 +1713,7 @@ impl<O: ClassObject> CurveClassification<O> {
             .curve()
             .and_then(|h| geometry.curve(h))
             .ok_or_else(|| SolidError::null_pointer(OP_CROSS))?;
-        let domain = surface.natural_uv_domain();
+        let domain = surface.natural_uv_domain_with_nurb(k)?;
         let pn = sample.evaluate(k, touch.param, 1, true, true)?;
         let (Some(&sample_pt), Some(&sample_tan)) = (pn.first(), pn.get(1)) else {
             return Err(SolidError::sm_err(OP_CROSS));
@@ -1872,7 +1872,7 @@ impl<O: ClassObject> CurveClassification<O> {
             c.k,
             c.surface,
             classify_crv_pn[0],
-            &c.surface.natural_uv_domain(),
+            &c.surface.natural_uv_domain_with_nurb(k)?,
             None,
             None,
             Vec2::UNDEF,
@@ -2148,7 +2148,7 @@ impl<O: ClassObject> CurveClassification<O> {
                 c.k,
                 c.surface,
                 edge_pn[0],
-                &c.surface.natural_uv_domain(),
+                &c.surface.natural_uv_domain_with_nurb(k)?,
                 None,
                 None,
                 Vec2::UNDEF,

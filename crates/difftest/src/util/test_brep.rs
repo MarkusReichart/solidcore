@@ -5,9 +5,9 @@
 //!
 //! | Block | Upstream builder |
 //! |-------|------------------|
-//! | `10 case` | `sm_MakeLoopOrientationCase(lCase)` |
-//! | `11 case` | `sm_MakeTorusVertexLoopCase(lCase)` (fixture `lCase % 10`) |
-//! | `12 size` | `sm_make_xy_sheet(dSize)` |
+//! | `15 case` | `sm_MakeLoopOrientationCase(lCase)` |
+//! | `16 case` | `sm_MakeTorusVertexLoopCase(lCase)` (fixture `lCase % 10`) |
+//! | `17 size` | `sm_make_xy_sheet(dSize)` |
 //!
 //! The C++ side builds the B-rep with the upstream constructors; the Rust side imports the
 //! export like every other block. A runner takes a [`TestBrepIn`] beside its usual B-rep
@@ -20,11 +20,6 @@ use solidcore::kernel::Kernel;
 use solidcore::topology::database_io::{DatabaseReader, FileType, InputStream};
 
 use crate::HarnessError;
-
-/// Largest `sm_MakeLoopOrientationCase` case (the upstream test runs 0..13).
-pub const MAX_LOOP_ORIENTATION_CASE: u32 = 12;
-/// Largest `sm_MakeTorusVertexLoopCase` fixture (`lCase % 10`).
-pub const MAX_TORUS_VERTEX_LOOP_CASE: u32 = 9;
 
 /// A `smTestBrep.cpp` fixture.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,9 +39,9 @@ pub(crate) enum TestBrepIn {
 /// block.
 pub(crate) fn block(t: &TestBrepIn, validate_only: bool, init_gaps: bool) -> Vec<f64> {
     let mut v = match t {
-        TestBrepIn::LoopOrientation { case } => vec![10.0, f64::from(*case)],
-        TestBrepIn::TorusVertexLoop { case } => vec![11.0, f64::from(*case)],
-        TestBrepIn::XySheet { size } => vec![12.0, *size],
+        TestBrepIn::LoopOrientation { case } => vec![15.0, f64::from(*case)],
+        TestBrepIn::TorusVertexLoop { case } => vec![16.0, f64::from(*case)],
+        TestBrepIn::XySheet { size } => vec![17.0, *size],
     };
     v.push(f64::from(u8::from(validate_only)));
     v.push(f64::from(u8::from(init_gaps)));
@@ -107,10 +102,11 @@ mod tests {
 
     #[test]
     fn blocks() {
-        let t: TestBrepIn = serde_json::from_str(r#"{"kind":"loop_orientation","case":3}"#).unwrap();
-        assert_eq!(block(&t, false, true), vec![10.0, 3.0, 0.0, 1.0]);
+        let t: TestBrepIn =
+            serde_json::from_str(r#"{"kind":"loop_orientation","case":3}"#).unwrap();
+        assert_eq!(block(&t, false, true), vec![15.0, 3.0, 0.0, 1.0]);
         let t: TestBrepIn = serde_json::from_str(r#"{"kind":"xy_sheet","size":20}"#).unwrap();
-        assert_eq!(block(&t, false, false), vec![12.0, 20.0, 0.0, 0.0]);
+        assert_eq!(block(&t, false, false), vec![17.0, 20.0, 0.0, 0.0]);
     }
 
     #[test]

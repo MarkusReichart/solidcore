@@ -71,7 +71,7 @@ fn encode_nurb(v: &mut Vec<f64>, c: &Nurb) -> Result<(), FfiError> {
     if n1 < 2 || c.p < 1 || c.p > 17 || c.p > n1 - 1 || c.knots.len() != n1 + c.p + 1 {
         return Err(bad("probe_issue_1036: malformed NURB sizes"));
     }
-    if c.knots.iter().any(|k| !k.is_finite()) || c.knots.windows(2).any(|w| w[0] > w[1]) {
+    if c.knots.iter().any(|k| !k.is_finite()) || c.knots.windows(2).any(|w| w.first() > w.last()) {
         return Err(bad("probe_issue_1036: knots not finite and non-decreasing"));
     }
     if c.cpts.iter().any(|p| {
@@ -107,7 +107,7 @@ fn encode_skin(v: &mut Vec<f64>, s: &Skin) -> Result<(), FfiError> {
 ///
 /// [`FfiError::InvalidArgument`] for inputs outside the accepted range; the shim's status.
 pub fn run(op: Op, a: &Skin, b: &Skin) -> Result<Vec<f64>, FfiError> {
-    let mut prog = vec![op as i32 as f64];
+    let mut prog = vec![f64::from(op as i32)];
     encode_skin(&mut prog, a)?;
     encode_skin(&mut prog, b)?;
     let n_in = i64::try_from(prog.len()).map_err(|_| bad("program too long"))?;

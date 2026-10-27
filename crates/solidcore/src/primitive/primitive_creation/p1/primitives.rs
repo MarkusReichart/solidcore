@@ -307,7 +307,7 @@ fn drop_uv_curves(
     output.clear();
     let dropped = surface.drop_curve::<NoObject>(
         k,
-        &surface.natural_uv_domain(),
+        &surface.natural_uv_domain_with_nurb(k)?,
         curve,
         &curve.natural_interval(),
         tolerance,
@@ -900,7 +900,7 @@ impl PrimitiveCreation {
             let mut sweep_dir = direction.unitize()?;
             let mut distance = distance;
             if distance < 0.0 {
-                sweep_dir = sweep_dir * -1.0;
+                sweep_dir *= -1.0;
                 distance = -distance;
             }
             let mut analytic_domain = Extent2d::from_bounds(0.0, 0.0, 1.0, distance);
@@ -968,7 +968,7 @@ impl PrimitiveCreation {
                     ignore_status(extrusion_face(k, brep, &extrusion, domain))?;
                     continue;
                 };
-                let domain = surface.natural_uv_domain();
+                let domain = surface.natural_uv_domain_with_nurb(k)?;
                 ignore_status(create_face(k, brep, surface, domain))?;
             }
             if cap_ends {

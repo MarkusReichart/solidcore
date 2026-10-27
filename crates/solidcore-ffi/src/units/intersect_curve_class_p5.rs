@@ -330,10 +330,10 @@ pub fn topo(op: TopoOp, path: &str, input: &[f64]) -> Result<Vec<f64>, FfiError>
 }
 
 /// The face-merge ops of [`face`] (shim `harness/cpp/shim/intersect_curve_class_p5_face.cpp`,
-/// prog_test `my_test_separating_closed_edges`).
+/// `prog_test` `my_test_separating_closed_edges`).
 ///
 /// The input starts with a source: `0` and a B-rep block of the shared topology fixture
-/// (unit `topology.vertexuse`'s blocks, e.g. `12 size` `sm_make_xy_sheet`), or `1 height
+/// (unit `topology.vertexuse`'s blocks, e.g. `17 size` `sm_make_xy_sheet`), or `1 height
 /// base top a0 a1` (`SmPrimitiveCreation::CreateCone(height, base, top, a0, a1,
 /// SmAxis2Placement())` into a new B-rep). The B-rep's editing is enabled and its
 /// non-exported analytic geometry is replaced by plain B-splines before the op.
@@ -369,22 +369,19 @@ pub enum FaceOp {
 /// [`FfiError::InvalidArgument`] for a malformed input.
 pub fn validate_face(op: FaceOp, path: &str, input: &[f64]) -> Result<(), FfiError> {
     let mut rd = Reader { input, at: 0 };
-    match rd.index(1)? {
-        0 => {
-            let rest = input.get(1..).ok_or_else(|| bad("input too short"))?;
-            rd.at = 1 + super::topology_vertexuse::brep_block_at(rest, path)?;
+    if rd.index(1)? == 0 {
+        let rest = input.get(1..).ok_or_else(|| bad("input too short"))?;
+        rd.at = 1 + super::topology_vertexuse::brep_block_at(rest, path)?;
+    } else {
+        let c = rd.finites(5)?;
+        let (Some(&h), Some(&r0), Some(&r1)) = (c.first(), c.get(1), c.get(2)) else {
+            return Err(bad("cone parameters"));
+        };
+        if !(h > 0.0 && h <= 1e6 && (0.0..=1e6).contains(&r0) && (0.0..=1e6).contains(&r1)) {
+            return Err(bad("cone height or radius out of range"));
         }
-        _ => {
-            let c = rd.finites(5)?;
-            let (Some(&h), Some(&r0), Some(&r1)) = (c.first(), c.get(1), c.get(2)) else {
-                return Err(bad("cone parameters"));
-            };
-            if !(h > 0.0 && h <= 1e6 && (0.0..=1e6).contains(&r0) && (0.0..=1e6).contains(&r1)) {
-                return Err(bad("cone height or radius out of range"));
-            }
-            if c.iter().skip(3).any(|a| a.abs() > 720.0) {
-                return Err(bad("cone angle out of range"));
-            }
+        if c.iter().skip(3).any(|a| a.abs() > 720.0) {
+            return Err(bad("cone angle out of range"));
         }
     }
     if op == FaceOp::Merge {

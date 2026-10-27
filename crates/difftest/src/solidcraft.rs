@@ -1380,12 +1380,14 @@ fn enable_fix(k: &mut Kernel, name: &str) -> Result<(), String> {
         "fillet_refuse_crossing_rails" => &mut k.fixes.fillet_refuse_crossing_rails,
         "cone_parallel_line_midpoint" => &mut k.fixes.cone_parallel_line_midpoint,
         "analytic_copy_keeps_parameterization" => &mut k.fixes.analytic_copy_keeps_parameterization,
+        "precise_properties_body_length_scale" => &mut k.fixes.precise_properties_body_length_scale,
         _ => return Err(format!("unknown `fixes` entry `{name}`")),
     };
     *field = true;
     Ok(())
 }
 
+#[cfg(all(test, feature = "cpp"))]
 /// Probe (pin v1.0.1): `case`'s steps on solidcore with its `fixes`, returning the kernel
 /// and the `result` body unmeasured (the run of [`run_rust`] without its measurement).
 ///
@@ -1409,6 +1411,7 @@ pub(crate) fn probe_build(case: &Case) -> Result<(Kernel, Brep), String> {
     Ok((k, body))
 }
 
+#[cfg(all(test, feature = "cpp"))]
 /// Probe (pin v1.0.1): the volume [`run_rust`] measures on `b` (`make_missing_nurbs`,
 /// then `brep_volume` at [`VOLUME_ACCURACY`]).
 ///

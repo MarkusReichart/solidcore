@@ -7,8 +7,9 @@
 //! network of `prog_test` `my_test_topology`). The Rust side imports the graph that
 //! runner's shim exports (raw members, in traversal order; planes as planes, lines as
 //! lines) with [`shared::import`] and runs the ported functions on it; results are
-//! compared as flags, statuses, tolerances, edge use / vertex use states and sampled
-//! curve points (see the FFI module docs for each op's output).
+//! compared as flags, statuses, tolerances, edge use / vertex use states, the full UV trim
+//! curves `CreateUVTrimCurves` leaves ([`crate::util::trim_curve`]) and sampled curve
+//! points (see the FFI module docs for each op's output).
 //!
 //! **Inexact geometry.** The shared export carries an analytic face surface (surface of
 //! revolution, cone, cylinder, sphere, torus, extrusion) exactly, as its upstream database
@@ -22,6 +23,14 @@
 //!
 //! Face, loop and other-face selectors are taken modulo the B-rep's counts, so
 //! generated cases need no counts; a B-rep without faces gives `no face` on both sides.
+//!
+//! **Touching faces.** The inline `touching_*` cases ([`touching_cases`]) build one B-rep
+//! of several `CreateFaceFromSurface` faces (block kind 10: planes and canonical
+//! cylinders, spheres and tori, carried exactly by the export) that meet at single points
+//! (a sphere on a plane, sphere on sphere, sphere on a cylinder, a torus on a plane, at
+//! interior, seam, pole and boundary points, with gaps up to and beyond the tolerance)
+//! and compare `FaceIntersect`'s touching points (`Point3DClassify` on both faces of the
+//! one B-rep) and curves with the C++.
 
 use std::collections::BTreeMap;
 
@@ -40,13 +49,15 @@ use solidcore::topology::edgeuse::p1 as eu1;
 use solidcore::topology::face::p3;
 use solidcore::topology::loopuse as lu1;
 use solidcore::topology::topology_traverser;
-use solidcore::topology::{Brep, FaceId, LoopId};
+use solidcore::topology::{Brep, EdgeId, FaceId, LoopId};
 use solidcore::{EntityRef, SolidError};
 use solidcore_ffi::units::topology_face_p3::{self as ffi, Op, N_ARGS};
 use solidcore_ffi::units::topology_vertexuse::{self as fixture, Op as FixtureOp};
 
-use super::topology_vertexuse::{self as shared, BrepIn};
-use crate::{Case, HarnessError, Output, Rng, UnitDiff};
+use super::topology_vertexuse::{self as shared, BrepIn, SrfIn};
+use crate::util::trim_curve::put_trim_curve;
+use crate::runner::default_cases;
+use crate::{Case, CaseContext, CaseSource, HarnessError, Output, Rng, UnitDiff};
 
 /// The difftest runner.
 pub struct Runner;
@@ -74,6 +85,9 @@ fn native_bspline_copy(curve: &SmCurve) -> Option<SmCurve> {
 const EXACT_SURFACES: [i64; 2] = [15002, 15011];
 /// `SmBSplineCurve_TYPE`, `SmLine_TYPE`: imported exactly.
 const EXACT_CURVES: [i64; 2] = [14033, 14010];
+/// `SmCircle_TYPE`, `SmEllipse_TYPE`: imported exactly from their native record
+/// (`sc_exact_curve_export.h`) when the Rust edge holds an ellipse.
+const EXACT_RECORD_CURVES: [i64; 2] = [14021, 14022];
 
 /// "Upstream would dereference null" in an output slot.
 const NULL_DEREF: f64 = -2.0;
@@ -146,10 +160,62 @@ fn minus_one() -> i64 {
     -1
 }
 
+/// A canonical analytic surface of a kind-10 face (the shim's `CreateCanonical` kinds).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum Shape {
+    /// `SmCylinder`, radius `scale * a`.
+    Cylinder,
+    /// `SmSphere`, radius `scale * a`.
+    Sphere,
+    /// `SmTorus`, major radius `scale * a`, minor `scale * b`.
+    Torus,
+}
+
+/// One face of a kind-10 B-rep block.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "face", rename_all = "snake_case")]
+enum FaceIn {
+    /// A surface block over `dom`, as a `Face` B-rep's.
+    Surface { surface: SrfIn, dom: [f64; 4] },
+    /// A canonical analytic surface at `origin` (Z axis along z, x or y for `axis` 0, 1,
+    /// 2) over the fractions `from`..`to` of its natural domain (an unbounded direction
+    /// clamped to `[0, scale * c]`).
+    Analytic {
+        shape: Shape,
+        scale: f64,
+        a: f64,
+        #[serde(default)]
+        b: f64,
+        #[serde(default)]
+        c: f64,
+        origin: [f64; 3],
+        #[serde(default)]
+        axis: u8,
+        from: [f64; 2],
+        to: [f64; 2],
+    },
+}
+
+/// A B-rep of several faces (block kind 10), only for this runner.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum FacesBrep {
+    Faces { faces: Vec<FaceIn> },
+}
+
+/// The case's B-rep: the shared `topology.vertexuse` kinds, or several faces.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+enum CaseBrep {
+    Faces(FacesBrep),
+    Shared(BrepIn),
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Inputs {
     #[serde(default = "network")]
-    brep: BrepIn,
+    brep: CaseBrep,
     /// An upstream `smTestBrep` fixture block replacing `brep` (`util::test_brep`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     test_brep: Option<crate::util::test_brep::TestBrepIn>,
@@ -165,8 +231,8 @@ struct Inputs {
     op: OpIn,
 }
 
-fn network() -> BrepIn {
-    BrepIn::Network
+fn network() -> CaseBrep {
+    CaseBrep::Shared(BrepIn::Network)
 }
 
 fn flag(b: bool) -> f64 {
@@ -183,7 +249,19 @@ fn block(i: &Inputs) -> Result<Vec<f64>, HarnessError> {
         ));
     }
     let mut v = Vec::new();
-    match &i.brep {
+    let brep = match &i.brep {
+        CaseBrep::Shared(b) => b,
+        CaseBrep::Faces(FacesBrep::Faces { faces }) => {
+            v.extend([10.0, faces.len() as f64]);
+            for face in faces {
+                push_face(&mut v, face)?;
+            }
+            v.push(flag(i.validate_only));
+            v.push(flag(i.init_gaps));
+            return Ok(v);
+        }
+    };
+    match brep {
         BrepIn::File { rebuild, .. } => v.extend([0.0, flag(*rebuild)]),
         BrepIn::Wire { curve, t0, t1 } => {
             v.push(1.0);
@@ -205,6 +283,39 @@ fn block(i: &Inputs) -> Result<Vec<f64>, HarnessError> {
     Ok(v)
 }
 
+/// One face of a kind-10 block.
+fn push_face(v: &mut Vec<f64>, face: &FaceIn) -> Result<(), HarnessError> {
+    match face {
+        FaceIn::Surface { surface, dom } => {
+            shared::push_surface(v, surface)?;
+            v.extend(dom);
+        }
+        FaceIn::Analytic {
+            shape,
+            scale,
+            a,
+            b,
+            c,
+            origin,
+            axis,
+            from,
+            to,
+        } => {
+            let kind = match shape {
+                Shape::Cylinder => 10.0,
+                Shape::Sphere => 11.0,
+                Shape::Torus => 12.0,
+            };
+            v.extend([kind, *scale, *a, *b, *c]);
+            v.extend(origin);
+            v.push(f64::from(*axis));
+            v.extend(from);
+            v.extend(to);
+        }
+    }
+    Ok(())
+}
+
 /// A built B-rep: its export and counts.
 struct Built {
     path: String,
@@ -215,7 +326,10 @@ struct Built {
 
 /// Exports the case's B-rep; `Err(output)` when it could not be built.
 fn build(i: &Inputs) -> Result<Result<Built, Output>, HarnessError> {
-    let path = shared::path_of(&i.brep)?;
+    let path = match &i.brep {
+        CaseBrep::Shared(b) => shared::path_of(b)?,
+        CaseBrep::Faces(_) => String::new(),
+    };
     let block = block(i)?;
     let export = crate::export_memo::export("topology_vertexuse", &[&path], &block, || {
         fixture::eval(FixtureOp::Export, &path, &block)
@@ -483,6 +597,7 @@ fn is_vertex_loop(b: &Brep, l: LoopId) -> bool {
 fn inexact_geometry(
     types: &[f64],
     exact: &[bool],
+    b: &Brep,
     crv_on_surf_exact: bool,
 ) -> Result<Option<Output>, HarnessError> {
     let bad = || harness("bad types export");
@@ -525,11 +640,21 @@ fn inexact_geometry(
             return Ok(Some(Output::deferred(unit, symbol)));
         }
     }
-    if curves.iter().any(|&t| {
-        t >= 0.0
-            && !EXACT_CURVES.contains(&(t as i64))
-            && !(crv_on_surf_exact && t as i64 == CRV_ON_SURF_TYPE)
-    }) {
+    let exact_curve = |i: usize, t: i64| {
+        EXACT_CURVES.contains(&t)
+            || (crv_on_surf_exact && t == CRV_ON_SURF_TYPE)
+            || (EXACT_RECORD_CURVES.contains(&t)
+                && b.edge(EdgeId::from_index(i as u32)).is_ok_and(|e| {
+                    e.curve
+                        .as_ref()
+                        .is_some_and(|c| matches!(c.kind(), CurveKind::Ellipse(_)))
+                }))
+    };
+    if curves
+        .iter()
+        .enumerate()
+        .any(|(i, &t)| t >= 0.0 && !exact_curve(i, t as i64))
+    {
         return Ok(Some(Output::deferred(
             "topology.brep_p7",
             "SmBrep::ReadFromFile",
@@ -596,7 +721,7 @@ fn run_rust_case(i: &Inputs) -> Result<Output, HarnessError> {
     if op as i32 >= Op::LoopOrient as i32 && !vertex_loop {
         let types = ffi::eval(Op::Types, &built.path, &built.block, &[])
             .map_err(|e| harness(format!("c++ types: {e}")))?;
-        if let Some(o) = inexact_geometry(&types, &exact, i.test_brep.is_some())? {
+        if let Some(o) = inexact_geometry(&types, &exact, &b, i.test_brep.is_some())? {
             return Ok(o);
         }
     }
@@ -757,6 +882,9 @@ fn run_rust_case(i: &Inputs) -> Result<Output, HarnessError> {
             }
             put_tols(&b, &mut out);
             put_use_states(&b, &mut out);
+            for (_, eu) in b.edgeuses().iter() {
+                value!(put_trim_curve(&k, &mut out, eu.uv_trim_curve.as_ref()));
+            }
         }
         OpIn::Intersect { .. } => {
             let other = FaceId::from_index(a[1] as u32);
@@ -786,6 +914,117 @@ fn run_rust_case(i: &Inputs) -> Result<Output, HarnessError> {
 }
 
 // ---- generation ---------------------------------------------------------------------------
+
+/// A sphere face of radius `r` at `origin` over the fractions `from`..`to` of its domain.
+fn sphere(r: f64, origin: [f64; 3], axis: u8, from: [f64; 2], to: [f64; 2]) -> FaceIn {
+    FaceIn::Analytic {
+        shape: Shape::Sphere,
+        scale: 1.0,
+        a: r,
+        b: 0.0,
+        c: 0.0,
+        origin,
+        axis,
+        from,
+        to,
+    }
+}
+
+/// A plane face through `o` with normal `n` over `dom` (plane parameters about `o`).
+fn plane(o: [f64; 3], n: [f64; 3], dom: [f64; 4]) -> FaceIn {
+    FaceIn::Surface {
+        surface: SrfIn::Plane { o, n },
+        dom,
+    }
+}
+
+/// The inline touching-face cases (see the module docs): each B-rep's faces intersected
+/// pairwise in both orders, with and without points.
+fn touching_cases() -> Vec<(String, Value)> {
+    const ALL: ([f64; 2], [f64; 2]) = ([0.0, 0.0], [1.0, 1.0]);
+    let sq = |h: f64| [-h, -h, h, h];
+    let full = |r: f64, o: [f64; 3]| sphere(r, o, 0, ALL.0, ALL.1);
+    let breps: Vec<(&str, Vec<FaceIn>)> = vec![
+        // a sphere resting on a plane (a box face) at an interior point of both
+        ("sphere_plane", vec![full(1.0, [0.0; 3]), plane([0.0, 1.0, 0.0], [0.0, 1.0, 0.0], sq(0.5))]),
+        ("sphere_plane_flip", vec![full(1.0, [0.0; 3]), plane([0.0, 1.0, 0.0], [0.0, -1.0, 0.0], sq(0.5))]),
+        // the touch point outside the plane face, on its boundary
+        ("sphere_plane_outside", vec![full(1.0, [0.0; 3]), plane([0.0, 1.0, 0.0], [0.0, 1.0, 0.0], [0.2, 0.2, 0.7, 0.7])]),
+        ("sphere_plane_on_edge", vec![full(1.0, [0.0; 3]), plane([0.0, 1.0, 0.0], [0.0, 1.0, 0.0], [0.0, -0.5, 0.5, 0.5])]),
+        ("sphere_plane_on_corner", vec![full(1.0, [0.0; 3]), plane([0.0, 1.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 0.5, 0.5])]),
+        // the touch point outside the sphere face (a longitude band away from it)
+        ("sphere_band_plane", vec![sphere(1.0, [0.0; 3], 0, [0.0, 0.0], [0.2, 1.0]), plane([0.0, 1.0, 0.0], [0.0, 1.0, 0.0], sq(0.5))]),
+        // on the sphere's seam edge and at its pole
+        ("sphere_seam_plane", vec![full(1.0, [0.0; 3]), plane([1.0, 0.0, 0.0], [1.0, 0.0, 0.0], sq(0.5))]),
+        ("sphere_pole_plane", vec![full(1.0, [0.0; 3]), plane([0.0, 0.0, 1.0], [0.0, 0.0, 1.0], sq(0.5))]),
+        // a sphere placed along another axis, off the origin
+        ("sphere_axis_x_plane", vec![sphere(1.0, [2.0, -1.0, 3.0], 1, ALL.0, ALL.1), plane([2.0, 0.0, 3.0], [0.0, 1.0, 0.0], sq(0.5))]),
+        ("sphere_axis_y_plane", vec![sphere(1.0, [2.0, -1.0, 3.0], 2, ALL.0, ALL.1), plane([3.0, -1.0, 3.0], [1.0, 0.0, 0.0], sq(0.5))]),
+        // gaps below, near and beyond the tolerances
+        ("sphere_plane_gap_1e-9", vec![full(1.0, [0.0; 3]), plane([0.0, 1.0 + 1e-9, 0.0], [0.0, 1.0, 0.0], sq(0.5))]),
+        ("sphere_plane_gap_1e-6", vec![full(1.0, [0.0; 3]), plane([0.0, 1.0 + 1e-6, 0.0], [0.0, 1.0, 0.0], sq(0.5))]),
+        ("sphere_plane_gap_1e-3", vec![full(1.0, [0.0; 3]), plane([0.0, 1.0 + 1e-3, 0.0], [0.0, 1.0, 0.0], sq(0.5))]),
+        ("sphere_plane_overlap_1e-9", vec![full(1.0, [0.0; 3]), plane([0.0, 1.0 - 1e-9, 0.0], [0.0, 1.0, 0.0], sq(0.5))]),
+        // tiny and huge
+        ("sphere_plane_tiny", vec![full(1e-3, [0.0; 3]), plane([0.0, 1e-3, 0.0], [0.0, 1.0, 0.0], sq(5e-4))]),
+        ("sphere_plane_huge", vec![full(100.0, [0.0; 3]), plane([0.0, 100.0, 0.0], [0.0, 1.0, 0.0], sq(50.0))]),
+        // two spheres, and a sphere on a cylinder's side
+        ("sphere_sphere", vec![full(1.0, [0.0; 3]), full(0.5, [0.0, 1.5, 0.0])]),
+        ("sphere_sphere_gap", vec![full(1.0, [0.0; 3]), full(0.5, [0.0, 1.5 + 1e-7, 0.0])]),
+        ("cylinder_sphere", vec![
+            FaceIn::Analytic { shape: Shape::Cylinder, scale: 1.0, a: 1.0, b: 0.0, c: 2.0, origin: [0.0; 3], axis: 0, from: ALL.0, to: ALL.1 },
+            full(0.5, [0.0, 1.5, 1.0]),
+        ]),
+        // a cylinder lying on a plane (a line, not a point) as a control
+        ("cylinder_plane_line", vec![
+            FaceIn::Analytic { shape: Shape::Cylinder, scale: 1.0, a: 1.0, b: 0.0, c: 2.0, origin: [0.0; 3], axis: 0, from: ALL.0, to: ALL.1 },
+            plane([0.0, 1.0, 1.0], [0.0, 1.0, 0.0], sq(0.5)),
+        ]),
+        // a torus touching a plane at its outer equator, and on its top circle (a curve)
+        ("torus_plane_point", vec![
+            FaceIn::Analytic { shape: Shape::Torus, scale: 1.0, a: 2.0, b: 0.5, c: 0.0, origin: [0.0; 3], axis: 0, from: ALL.0, to: ALL.1 },
+            plane([0.0, 2.5, 0.0], [0.0, 1.0, 0.0], sq(0.5)),
+        ]),
+        ("torus_plane_circle", vec![
+            FaceIn::Analytic { shape: Shape::Torus, scale: 1.0, a: 2.0, b: 0.5, c: 0.0, origin: [0.0; 3], axis: 0, from: ALL.0, to: ALL.1 },
+            plane([0.0, 0.0, 0.5], [0.0, 0.0, 1.0], sq(3.0)),
+        ]),
+    ];
+    let mut out = Vec::new();
+    for (name, faces) in breps {
+        for (face, other) in [(0, 1), (1, 0)] {
+            for (approx_tol, ang_tol_deg, want_points) in
+                [(1e-6, 5.0, true), (1e-4, 20.0, true), (1e-6, 5.0, false)]
+            {
+                let i = Inputs {
+                    brep: CaseBrep::Faces(FacesBrep::Faces {
+                        faces: faces.clone(),
+                    }),
+                    test_brep: None,
+                    validate_only: false,
+                    init_gaps: false,
+                    vertex_loop: None,
+                    op: OpIn::Intersect {
+                        face,
+                        other,
+                        approx_tol,
+                        ang_tol_deg,
+                        coincidence: None,
+                        want_points,
+                    },
+                };
+                let tag = format!(
+                    "touching_{name}_{face}{other}_tol{approx_tol:e}{}",
+                    if want_points { "" } else { "_nopts" }
+                );
+                if let Ok(v) = serde_json::to_value(i) {
+                    out.push((tag, v));
+                }
+            }
+        }
+    }
+    out
+}
 
 fn gen_op(rng: &mut Rng) -> OpIn {
     let face = rng.below(1 << 20) as i64;
@@ -860,6 +1099,19 @@ impl UnitDiff for Runner {
         run_cpp_case(&case.parse()?)
     }
 
+    fn cases(&self, ctx: &CaseContext) -> Result<Vec<Case>, HarnessError> {
+        let mut v = default_cases(self, ctx)?;
+        for (name, inputs) in touching_cases() {
+            v.push(Case {
+                unit: self.id().into(),
+                name,
+                source: CaseSource::Inline,
+                inputs,
+            });
+        }
+        Ok(v)
+    }
+
     fn run_rust(&self, case: &Case) -> Result<Output, HarnessError> {
         run_rust_case(&case.parse()?)
     }
@@ -869,7 +1121,7 @@ impl UnitDiff for Runner {
         let vertex_loop = (matches!(brep, BrepIn::Face { .. }) && rng.chance(0.4))
             .then(|| [rng.uniform(0.1, 0.9), rng.uniform(0.1, 0.9)]);
         let i = Inputs {
-            brep,
+            brep: CaseBrep::Shared(brep),
             test_brep: None,
             vertex_loop,
             validate_only: rng.chance(0.1),
