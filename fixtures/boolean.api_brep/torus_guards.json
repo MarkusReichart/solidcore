@@ -1,6 +1,68 @@
 {
  "cases": [
   {
+   "name": "torus_guard_spindle_box_intersection",
+   "note": "A spindle torus (major 2.0, minor 3.0; SmTorus::CreateCanonical accepts minor >= major) intersection with a box through its side; volume and face areas compared.",
+   "inputs": {
+    "api": "measured",
+    "a": {
+     "kind": "box",
+     "origin": [
+      1.0,
+      -1.5,
+      -1.5
+     ],
+     "size": [
+      6.0,
+      3.0,
+      3.0
+     ]
+    },
+    "b": {
+     "kind": "torus",
+     "center": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "major": 2.0,
+     "minor": 3.0
+    },
+    "operation": 2
+   }
+  },
+  {
+   "name": "torus_guard_spindle_box_difference",
+   "note": "A spindle torus (major 2.0, minor 3.0; SmTorus::CreateCanonical accepts minor >= major) difference with a box through its side; volume and face areas compared.",
+   "inputs": {
+    "api": "measured",
+    "a": {
+     "kind": "box",
+     "origin": [
+      1.0,
+      -1.5,
+      -1.5
+     ],
+     "size": [
+      6.0,
+      3.0,
+      3.0
+     ]
+    },
+    "b": {
+     "kind": "torus",
+     "center": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "major": 2.0,
+     "minor": 3.0
+    },
+    "operation": 3
+   }
+  },
+  {
    "name": "torus_guard_horn_box_intersection",
    "note": "A horn torus (major 2.5, minor 2.5; SmTorus::CreateCanonical accepts minor >= major) intersection with a box through its side; volume and face areas compared.",
    "inputs": {

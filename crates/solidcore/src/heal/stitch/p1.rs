@@ -900,6 +900,9 @@ pub struct Stitch<'c> {
     /// Remove sliver faces smaller than tolerance first (`m_bRemoveLaminarSlivers`,
     /// default `FALSE`).
     pub remove_laminar_slivers: bool,
+    /// Not upstream (#855): edges never glued to another edge (`None`: upstream's
+    /// stitch). Set only by `stitch_into_solid_keeping_open`.
+    pub(crate) keep_open: Option<Vec<EdgeId>>,
 }
 
 impl core::fmt::Debug for Stitch<'_> {
@@ -1119,6 +1122,7 @@ impl<'c> Stitch<'c> {
             split_edges_with_vertices: true,
             making_manifold_solid: true,
             remove_laminar_slivers: false,
+            keep_open: None,
         }
     }
 
@@ -2596,6 +2600,8 @@ pub fn api_stitch(k: &mut Kernel, b: Option<&mut Brep>) -> Result<()> {
     // StitchAndOrient() with its header defaults
     ignore_status(stitch_and_orient(k, b, -0.1, false, None, None))?;
     // Check manifold?
+    // (not upstream: the port's cached topology fields, true for the caller)
+    b.refresh_cached_topology();
     Ok(())
 }
 
@@ -2658,7 +2664,10 @@ pub struct AdvancedStitch {
 pub fn api_stitch_into_solid(k: &mut Kernel, b: Option<&mut Brep>) -> Result<AdvancedStitch> {
     let b =
         b.ok_or_else(|| SolidError::invalid_input(API_OP, "SmApiStitchIntoSolid: null B-rep"))?;
-    super::p2::stitch_into_solid(k, b)
+    let out = super::p2::stitch_into_solid(k, b)?;
+    // (not upstream: the port's cached topology fields, true for the caller)
+    b.refresh_cached_topology();
+    Ok(out)
 }
 
 /// `SmApiStitchIntoShell`: `SmStitch::StitchIntoShell`.
@@ -2674,7 +2683,10 @@ pub fn api_stitch_into_shell(
 ) -> Result<AdvancedStitch> {
     let b =
         b.ok_or_else(|| SolidError::invalid_input(API_OP, "SmApiStitchIntoShell: null B-rep"))?;
-    super::p2::stitch_into_shell(k, b, shell_is_well_formed, max_stitching_ratio)
+    let out = super::p2::stitch_into_shell(k, b, shell_is_well_formed, max_stitching_ratio)?;
+    // (not upstream: the port's cached topology fields, true for the caller)
+    b.refresh_cached_topology();
+    Ok(out)
 }
 
 /// `SmApiUnifyNormals`: [`Stitch::unify_normals`] with the default callback and the
@@ -2699,7 +2711,10 @@ pub fn api_unify_normals(
     let tol = b.tolerance();
     let mut callback = DefaultStitchCallback::new();
     let mut stitch = Stitch::new(&mut callback, tol, true, true);
-    stitch.unify_normals(k, b, start_face, num_samples)
+    let out = stitch.unify_normals(k, b, start_face, num_samples)?;
+    // (not upstream: the port's cached topology fields, true for the caller)
+    b.refresh_cached_topology();
+    Ok(out)
 }
 
 /// `SmApiSimpleFaceStitch`: [`Stitch::do_simple_face_stitch`] with the default
@@ -2720,7 +2735,10 @@ pub fn api_simple_face_stitch(
     let tol = b.tolerance();
     let mut callback = DefaultStitchCallback::new();
     let mut stitch = Stitch::new(&mut callback, tol, true, true);
-    stitch.do_simple_face_stitch(k, b, faces_to_keep, faces_to_delete)
+    let out = stitch.do_simple_face_stitch(k, b, faces_to_keep, faces_to_delete)?;
+    // (not upstream: the port's cached topology fields, true for the caller)
+    b.refresh_cached_topology();
+    Ok(out)
 }
 
 /// The options of [`api_stitch_advanced`] (the `SmStitch` flags it exposes).
@@ -2758,6 +2776,8 @@ pub fn api_stitch_advanced(
     stitch.making_manifold_solid = options.making_manifold_solid;
     stitch.remove_laminar_slivers = options.remove_laminar_slivers;
     let r = stitch.do_stitching(k, b, None, None, super::p2::MinGapRequest::default())?;
+    // (not upstream: the port's cached topology fields, true for the caller)
+    b.refresh_cached_topology();
     Ok(AdvancedStitch {
         produces_a_solid: false,
         stitched_edges: r.stitched_edges,

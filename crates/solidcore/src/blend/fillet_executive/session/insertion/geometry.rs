@@ -623,6 +623,9 @@ impl<'a> InsertionGeometry<'a> {
         SurfaceBinding::capture_in_body(context, self.body_mut(role), role, face)
     }
     /// Capture the actual managed fillet Surface without a numerical copy.
+    ///
+    /// (Unreferenced: no insertion step calls it yet; its owned-surface case is left
+    /// as is until fillets run end to end.)
     /// # Errors
     /// Foreign managed body or unavailable owned-Surface binding.
     pub fn capture_fillet_surface(
@@ -659,17 +662,23 @@ impl<'a> InsertionGeometry<'a> {
     /// # Errors
     /// Missing original Surface or unresolved foreign owner.
     pub fn surface_face(&self, binding: SurfaceBinding) -> Result<Option<FilletObject>> {
-        let Some(owner) = self.bound_surface(binding)?.owner() else {
+        let surface = self.bound_surface(binding)?;
+        let Some(owner) = surface.owner() else {
             return Ok(None);
         };
         if let Some((role, entity @ EntityRef::Face(_))) = self.owner_binding(owner) {
             return Ok(Some(Self::handle(role, entity)));
         }
-        // UNPORTED(blend.fillet_executive_p1): actual foreign Surface owner lookup.
-        Err(SolidError::unported(
-            "SmSurface::GetFace (foreign insertion owner)",
-            "blend.fillet_executive_p1",
-        ))
+        // `GetFace()` continues up an owning surface's own owner chain and is `NULL`
+        // when that reaches no face (an edge, a curve or no owner)
+        let Some(face) = surface.face()? else {
+            return Ok(None);
+        };
+        match self.owner_binding(face) {
+            Some((role, entity @ EntityRef::Face(_))) => Ok(Some(Self::handle(role, entity))),
+            // a face outside the insertion's three bodies has no handle here
+            _ => Err(invalid("Surface owner face is outside the insertion bodies")),
+        }
     }
     fn owner_binding(&self, owner: ObjectRef) -> Option<(InsertionBody, EntityRef)> {
         let mut found = None;

@@ -663,7 +663,7 @@ fn cr_initial_body<S: ConstantRadiusOps + ?Sized>(
                 k,
                 base2,
                 face_owner(brep.as_deref_mut(), base2_id),
-                &base2.natural_uv_domain(),
+                &base2.natural_uv_domain_with_nurb(k)?,
                 pnt,
                 EFF_ZERO_SQ,
             )?;
@@ -681,7 +681,7 @@ fn cr_initial_body<S: ConstantRadiusOps + ?Sized>(
         // Before we add the rGuessT values, drop point to other offset surface
         // to get a better guess
         let uv_guess = Point2::new(srf2_guess_uv.x, srf2_guess_uv.y);
-        let mut domain = base2.natural_uv_domain();
+        let mut domain = base2.natural_uv_domain_with_nurb(k)?;
         solver.setup_offset_extension(k, base2, &mut domain)?; // expands sDomain
 
         if let Some((sol_uv, dist)) = offset_local_point_solve(k, surface2, &domain, pnt, uv_guess)?
@@ -698,7 +698,7 @@ fn cr_initial_body<S: ConstantRadiusOps + ?Sized>(
                 k,
                 base2,
                 face_owner(brep, base2_id),
-                &base2.natural_uv_domain(),
+                &base2.natural_uv_domain_with_nurb(k)?,
                 pnt,
                 EFF_ZERO_SQ,
             )?;
@@ -715,7 +715,7 @@ fn cr_initial_body<S: ConstantRadiusOps + ?Sized>(
 
     // Start setting the return values:
     // the next two entries in rIntervals and rPeriodicities.
-    let mut domain = base2.natural_uv_domain();
+    let mut domain = base2.natural_uv_domain_with_nurb(k)?;
     solver.setup_offset_extension(k, base2, &mut domain)?; // expands sDomain
 
     let surface2_index = guess_t.len();
@@ -1982,7 +1982,7 @@ impl VariableRadiusFs {
             let other_rail = 1 - rail_index;
             let solver = &self.curve_based.solver;
             let surface2 = solver.rail(other_rail)?;
-            let domain = surface2.base_surface().natural_uv_domain();
+            let domain = surface2.base_surface().natural_uv_domain_with_nurb(k)?;
             let size = solver.surface_extension_factor * domain.size();
             let extended = Extent2d::from_points(
                 Point2::new(domain.min().x - size.x, domain.min().y - size.y),

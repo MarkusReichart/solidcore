@@ -73,9 +73,16 @@
 //!   (one object upstream, which Rust cannot lend twice) the second runs on a copy and
 //!   its changes are dropped (`plan/findings.md`, "`blend.fillet_solver_p2`: back-edges
 //!   into the solver from `blend.fillet_geom`").
-//! - **Unported callees.** `SmTemporaryRadiusChange` (`blend.fillet_executive_p2`)
-//!   for a solver (its set-up is a no-op for a `NULL` solver). Each stub replaces only
-//!   its call; the code behind it is ported.
+//! - **Temporary radius change.** `SmTemporaryRadiusChange` around each
+//!   `RailEdgeuseIntersect` is `DirectTemporaryRadiusChange` (`blend.fillet_executive_p2`)
+//!   on the solver's [`FilletSolverOps::variable_radius_mut`], made by `rail_edgeuse_intersect`
+//!   for its `temp_radius_solver` and reverted after the intersection, also when it fails
+//!   (the destructor).
+//! - **Retry radius (opt-in, WR-300).** With `Kernel::fixes.fillet_retry_radius_as_first`
+//!   set, `CalcRailIntEdgeuse`'s retry with a doubled extension holds the radius only at
+//!   a corner calculated as constant radius, as its first search does (upstream holds
+//!   it everywhere, so a variable round's rail end is found at a radius its law does not
+//!   have there). Off by default: the C++ comparison is unchanged.
 //! - **Record writes.** `SetPoint` on a fillet vertex and `SetCurve` on a fillet edge
 //!   apply the `SM_NO_CHANGE_GEOMETRY` resets directly (as `_p1` and `_p4` do: the
 //!   pseudo B-rep has no notification environment); `SetOwner` of the new curve is
@@ -728,6 +735,14 @@ fn rail_edgeuse_intersect(
     result
 }
 
+/// Whether `CalcRailIntEdgeuse`'s retry with a doubled extension holds the radius
+/// constant (passes its solver to `SmTemporaryRadiusChange`): always upstream; with
+/// `Kernel::fixes.fillet_retry_radius_as_first` (WR-300) only where the first search does,
+/// at a corner calculated as constant radius.
+fn retry_holds_radius(k: &Kernel, calc_as_const_rad: bool) -> bool {
+    !k.fixes.fillet_retry_radius_as_first || calc_as_const_rad
+}
+
 // ---- sm_SrfSrfIntersection --------------------------------------------------------------
 
 /// The curves of [`srf_srf_intersection`]: the 3D intersection curve (`None` only on a
@@ -796,8 +811,8 @@ pub fn srf_srf_intersection(
     let mut surface1_uv_curves: Vec<Option<Curve>> = Vec::new();
     let mut surface2_uv_curves: Vec<Option<Curve>> = Vec::new();
 
-    let domain1 = surf1.natural_uv_domain();
-    let domain2 = surf2.natural_uv_domain();
+    let domain1 = surf1.natural_uv_domain_with_nurb(k)?;
+    let domain2 = surf2.natural_uv_domain_with_nurb(k)?;
     // GetNaturalUVDomain makes a plane's NURB in place (through a const cast) and keeps
     // it; the port's query does not, so the routine continues on such copies
     let surf1 = &*with_lazy_nurb(surf1);
@@ -1364,8 +1379,7 @@ impl FilletBrep {
     /// `SM_ERR` without a fillet geometry and, for a blending corner, when no
     /// intersection is found; those of the evaluations and solves;
     /// those of [`CornerLookup::corner`] (`corners` resolves the vertex's corner);
-    /// [`SolidError::Unported`] for the temporary radius change of a solver
-    /// (`blend.fillet_executive_p2`) and those of `SmFilletSolver::RailEdgeuseIntersect`.
+    /// those of `SmFilletSolver::RailEdgeuseIntersect`.
     pub fn calc_rail_int_edgeuse(
         &mut self,
         k: &Kernel,
@@ -1610,6 +1624,7 @@ impl FilletBrep {
                 let ext_factor = fs.extension_factor();
                 fs.set_extension_factor(2.0 * ext_factor);
 
+                let held = retry_holds_radius(k, corners.corner(corner)?.is_calc_as_const_rad());
                 for &guess in &guess_edge_parameters {
                     let _ = solvers.solver(si)?;
                     let r = rail_edgeuse_intersect(
@@ -1618,7 +1633,7 @@ impl FilletBrep {
                         g1,
                         solvers,
                         target,
-                        Some(si),
+                        held.then_some(si),
                         rail_index,
                         side_eu1,
                         guess,
@@ -2362,7 +2377,7 @@ impl FilletBrep {
             .clone();
         let face_srf = &face_srf;
         let surf_net = b_spline_net(face_srf).ok_or_else(|| SolidError::null_pointer(OP))?;
-        let uv_domain = face_srf.natural_uv_domain();
+        let uv_domain = face_srf.natural_uv_domain_with_nurb(k)?;
         let tol = face2::tolerance(target, face)?;
 
         // Determine if we want to work on 2D or 3D
@@ -2746,6 +2761,19 @@ mod tests {
             Err(SolidError::InvalidInput { .. })
         ));
         assert_eq!(derived.0.extension_factor(), 4.5);
+    }
+
+    /// tangency-labs/solidcore#1023: the retry rail search of a variable round holds
+    /// the radius only where the first search does (opt-in, WR-300): the retry passes
+    /// its solver to `SmTemporaryRadiusChange` only when held.
+    #[test]
+    fn issue_1023_retry_holds_radius_only_as_first() {
+        let mut k = Kernel::default();
+        assert!(retry_holds_radius(&k, false));
+        assert!(retry_holds_radius(&k, true));
+        k.fixes.fillet_retry_radius_as_first = true;
+        assert!(!retry_holds_radius(&k, false));
+        assert!(retry_holds_radius(&k, true));
     }
 
     #[test]

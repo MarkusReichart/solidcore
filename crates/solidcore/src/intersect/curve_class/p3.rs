@@ -2071,6 +2071,93 @@ impl<O: ClassObject> CurveClassification<O> {
     }
 }
 
+impl<O: ClassObject> CurveClassification<O> {
+    /// Not upstream (opt-in `Kernel::fixes.classify_edge_interval_between_vertices`,
+    /// tangency-labs/solidcore#1036): classify interval `index` to edge `E` when its two ends
+    /// classify to the two (distinct) vertices of `E` and its midpoint drops onto `E` within
+    /// the intersection tolerance. This is the case [`Self::classify_edge_interval`] (the
+    /// fork's `ClassifyEdgeInterval`) leaves out: it needs one end on `E` itself, but where a
+    /// face's boundary is split into edges at the curve's crossings, each interval running
+    /// along it spans one whole edge and both its ends are vertices. An interval whose
+    /// midpoint is already classified, and a 2D classification curve's, is left as it is.
+    ///
+    /// # Errors
+    ///
+    /// An unresolved handle; those of the midpoint evaluation and the drop to the edge.
+    pub fn classify_vertex_vertex_edge_interval(
+        &mut self,
+        k: &Kernel,
+        geometry: &impl ClassGeometry<O>,
+        index: usize,
+    ) -> Result<()> {
+        let ivl = *self.at(index)?;
+
+        // no work - Mid already classified, or a 2D classification curve
+        if ivl.mid.point_class() != PointClassType::Unknown
+            || cc_curve(self, geometry, OP_EDGE_INTERVAL)?.dim() != 3
+        {
+            return Ok(());
+        }
+
+        // no work - not two distinct vertex ends
+        if ivl.start.point_class() != PointClassType::Vertex
+            || ivl.end.point_class() != PointClassType::Vertex
+        {
+            return Ok(());
+        }
+        let (Some(start), Some(end)) = (ivl.start.object(), ivl.end.object()) else {
+            return Ok(());
+        };
+        if start == end {
+            return Ok(());
+        }
+        let (b, v1) = vertex_of(geometry, start, "SmVertex::GetEdges")?;
+        let (b2, v2) = vertex_of(geometry, end, "SmVertex::GetEdges")?;
+        if !core::ptr::eq(b, b2) {
+            return Ok(());
+        }
+
+        let mid_pt =
+            cc_curve(self, geometry, OP_EDGE_INTERVAL)?.evaluate_point(k, ivl.interval.mid())?;
+        let src_zone = src_zone_tol_3d_of(k, Some(&*self));
+
+        // the edges joining the two vertices, in the vertex's edge order
+        let mut found = None;
+        for e in topo_vertex::edges(b, v1, None)? {
+            if topo_edge::other_vertex(b, e, Some(v1))? != Some(v2) {
+                continue;
+            }
+            let Some(edge) = geometry.topology_handle_in(b, EntityRef::Edge(e)) else {
+                continue;
+            };
+            let xsect_tol_3d =
+                xsect_tol_3d_from_zones(k, src_zone, object_zone_tol_3d(k, geometry, Some(edge))?);
+            let dropped = edge_curve(geometry, edge)?
+                .ok_or_else(|| SolidError::null_pointer(OP_EDGE_INTERVAL))?
+                .drop_point(
+                    k,
+                    &edge_interval(geometry, edge)?,
+                    mid_pt,
+                    None,
+                    xsect_tol_3d,
+                    None,
+                    SolverOperation::Minimize,
+                )?;
+            // when MidPt is within tol of the edge - the interval runs along it
+            if dropped.success && dropped.distance < xsect_tol_3d {
+                found = Some(edge);
+                break;
+            }
+        }
+        if let Some(edge) = found {
+            self.at_mut(index)?
+                .mid
+                .set_class_object(PointClassType::Edge, Some(edge));
+        }
+        Ok(())
+    }
+}
+
 /// Whether `object` is an edge or vertex handle (used by the harness to keep stand-ins of
 /// other kinds away from the topology paths).
 #[must_use]

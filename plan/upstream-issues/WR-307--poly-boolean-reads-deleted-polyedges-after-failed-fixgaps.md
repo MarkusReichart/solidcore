@@ -1,0 +1,19 @@
+#### WR-307. `SmPolyMerge::ManifoldBoolean` goes on with deleted PolyEdges after `FixGaps` fails part-way
+- **Severity:** Crash (use after free)
+- **Area:** Polygon Boolean (tessellations)
+- **Location:**
+  - `source/SMLib/src/SmPolyMerge.cpp:1255`-`1263`, in `SmPolyMerge::ManifoldBoolean` (def. `:1122`). The common edges and vertices are re-collected only when `FixGaps` returns `SM_SUCCESS` with `bModifiedTopology`. Otherwise the old lists are kept. The edge loop then reads them, for example `pFace->IsMarked` at `:1399`.
+  - `source/SMLib/src/SmPolyIntersector.cpp`, `SmPolyIntersector::FixGaps` (def. `:1058`):
+    - It merges coincident vertices in both PolyBreps first (`CombineCoincidentVertices` at `:1137` and `:1144`), which deletes PolyEdges.
+    - Then it joins vertices with new edges. `MakeEdgeInFace` is wrapped in `SER` at `:1214` and `:1224`, so a failure there returns `SM_ERR` with the topology already changed.
+    - Its relation upkeep (`:1150`-`1158`) removes only the Brep's deleted PolyEdges, never the Other's (`sDeletedOtherEdges`).
+    - If the Other's `CombineCoincidentVertices` fails (`SER`, `:1144`), even the Brep's deleted PolyEdges keep their relations.
+- **What happens:** when `FixGaps` fails in its second step, `ManifoldBoolean` keeps the common-edge list from before the merge, and that list still holds deleted PolyEdges. A deleted edge's memory can already be in use by a new PolyEdge without a face, so `SmTopology::IsMarked` is called on a null face.
+- **Trigger:** prog_test's `tessellation` suite, `my_poly_boolean_regression` (`tests/prog_test/src/smTessTest.cpp:3559`, run as test 16 of `my_test_tess` at `:2941`). It is a union of a pair of solids from `TestFiles/pt_TestFiles/Solids/box_cone_grid.smp`, but only with tessellations refined to the chord tolerance. Stock meshes don't reach the failing `MakeEdgeInFace`.
+- **How found:** reported in tangency-labs/solidcore#732, with a gdb backtrace: `SmTopology::GetMark(this=0x0)` ← `IsMarked` ← `SmPolyMerge::ManifoldBoolean` `SmPolyMerge.cpp:1399`. At the crash, `FixGaps` had returned 1001 with `bModifiedTopology = TRUE`.
+- **Confirmed:** no (read at c9c5979 `source/SMLib/src/SmPolyMerge.cpp:1255`-`1263` and `source/SMLib/src/SmPolyIntersector.cpp:1137`-`1158`, `:1214`, `:1224`; reproduced on the SolidCraft fork build: prog_test `tessellation` suite with refined meshes, gdb backtrace in the issue). With stock tessellations the path is not reached, so the pinned prog_test passes.
+- **Fix (SolidCraft fork, "SMLib: a polygon boolean whose gap fixing fails reads no deleted PolyEdge"):**
+  - `ManifoldBoolean` re-collects the common edges and vertices whenever `FixGaps` changed the topology, whatever its status.
+  - `FixGaps` removes each PolyBrep's deleted PolyVertex and PolyEdges from the relations right after that PolyBrep's merge.
+- **Rust port:** no counterpart. `SmPolyMerge.cpp` and `SmPolyIntersector.cpp` are outside the port's closure (`plan/closure.md`, "Provably unused"), so the polygon Boolean is not ported. The B-rep Boolean's `FixGaps` path is not affected. `SmMerge::ManifoldBoolean` stops on its failure (`SER`, `source/SMLib/src/SmMerge.cpp:3023`), and so does the port (`?` in `boolean::merge::p4`).
+- tangency-labs/solidcore#732.

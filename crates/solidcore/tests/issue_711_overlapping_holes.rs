@@ -56,6 +56,7 @@ fn issue_711_second_overlapping_hole_fails_by_default() {
     let mut disc = create_cylinder(&mut k, Point3::new(0.0, 0.0, 0.0), 20.0, 10.0).unwrap();
     let first = create_cylinder(&mut k, Point3::new(6.0, 0.0, -1.0), 5.0, 12.0).unwrap();
     disc = boolean_difference(&mut k, disc, first).unwrap();
+    solidcore::topology::integrity::check(&disc).unwrap();
     let second = create_cylinder(
         &mut k,
         Point3::new(3.0, 3.0 * 3.0_f64.sqrt(), -1.0),

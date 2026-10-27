@@ -415,7 +415,11 @@ pub fn check_shape_match(
 }
 
 /// `SmSurface::EvaluateGeometric` for code generic over the surface type (the
-/// `SmSurface` body, which no ported surface kind overrides).
+/// `SmSurface` body. `SmCurveBoundedSurface` overrides it to forward to its basis
+/// surface
+/// ([`crate::surface::curve_bounded_surface::CurveBoundedSurface::evaluate_geometric`]);
+/// `Surface::evaluate_geometric` runs this body for it too, which evaluates through
+/// [`Surface::evaluate`] and so through the basis, giving the same result).
 ///
 /// # Errors
 ///
@@ -559,7 +563,7 @@ impl Surface {
         let mut approx_singularities: u32 = SS_NONE;
 
         // locals
-        let uv_domain = self.natural_uv_domain();
+        let uv_domain = self.natural_uv_domain_with_nurb(k)?;
         let u_ivl = uv_domain.u_interval();
         let v_ivl = uv_domain.v_interval();
         let approx_tol = surface_approx_tol_3d(k, self, face_tolerance)?;
@@ -835,9 +839,10 @@ impl Surface {
         // Also set up what will be the expanded domain.
         let mut new_domain = Extent2d::new();
 
-        let other_dom = other_domain
-            .copied()
-            .unwrap_or_else(|| other.natural_uv_domain());
+        let other_dom = match other_domain {
+            Some(d) => *d,
+            None => other.natural_uv_domain_with_nurb(k)?,
+        };
 
         // upstream ignores the status of the point evaluations
         let mut pt = Vec3::UNDEF;

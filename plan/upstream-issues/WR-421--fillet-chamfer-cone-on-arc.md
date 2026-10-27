@@ -1,0 +1,11 @@
+#### WR-421. `SmFilletSolver::CalcTorusFilletGeom` revolves only circular sections, so a chamfer on an arc is traced and can collapse
+- **Severity:** Wrong result (the chamfer fails with `SM_ERR` 1001)
+- **Area:** Blend
+- **Location:** `source/SMLib/src/SmFilletSolver.cpp` (`SmFilletSolver::CalcTorusFilletGeom`): `SM_ERR` unless the generator is `SM_FSG_CIRCULAR`, so a linear section (a chamfer) on a circular arc always goes to the offset trace.
+- **What happens:** where the offset of one face collapses (a chamfer as wide as the corner round it runs round, whose offset is the round's axis), the intersection of the offset surfaces is a single point and the trace fails.
+- **Trigger:** a 1 mm chamfer round a box's bottom loop whose vertical edges are rounded R1: each corner round's chamfer closes to a point on the round's axis (SolidCraft rig case 2719).
+- **How found:** SolidCraft regression rig on the SMLib fork (tangency-labs/solidcore#420).
+- **Confirmed:** no (read at c9c5979 `source/SMLib/src/SmFilletSolver.cpp:882`: `CalcTorusFilletGeom` refuses any generator but `SM_FSG_CIRCULAR`, so a chamfer on an arc goes to the trace; reproduced on the SolidCraft fork build: capi regression test in `ops_kernel.cpp`, tangency-labs/smlib@8a7deae; the rig dump removes exactly 76 + 4π/6)
+- **Fix ports new fork geometry:** revolving a linear section into a cone is fork code (smlib@8a7deae); the Rust port adds it behind an opt-in.
+- **Fix:** a linear section is accepted too and revolved like the circular one: the section is the line from rail point to rail point (`CreateLineSegment`), giving a cone.
+- **Rust port:** opt-in `Kernel::fixes.fillet_chamfer_cone_on_arc` (default `false`, upstream behaviour), read in `FilletSolver::torus_fillet_geom_parts`; the section is `torus_section` in `crates/solidcore/src/blend/fillet_solver/p2.rs`, documented in that file's Deviations. Test `issue_420_chamfer_section_on_an_arc_is_a_line`. With the default no difftest path changes (`blend.fillet_solver_p2`'s torus cases with a linear generator still get `SM_ERR`). Fixes tangency-labs/solidcore#420.

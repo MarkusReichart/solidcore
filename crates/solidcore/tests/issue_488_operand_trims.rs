@@ -52,6 +52,7 @@ fn void_cut(keep: bool) -> (Vec<Option<String>>, Vec<Option<String>>) {
     let tool = create_cylinder(&mut k, Point3::new(5.0, 5.0, 3.0), 2.0, 4.0).unwrap();
     let before = side_trims(&k, &tool);
     let result = boolean_difference(&mut k, cube, tool).unwrap();
+    solidcore::topology::integrity::check(&result).unwrap();
     (before, side_trims(&k, &result))
 }
 

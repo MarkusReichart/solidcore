@@ -211,6 +211,11 @@ pub struct OffsetExecutive {
     /// convex round thinner than the wall), mated across instead of offset
     /// (`m_sCollapsedFaces`; only with `Kernel::fixes.offset_collapsed_rounds_mated`).
     pub(super) collapsed_faces: Vec<FaceId>,
+    /// Not upstream (#855, `plan/findings/offset.offset_executive_p2--issue-855-stitch-closes-dropped-lobe.md`):
+    /// the loop stretches `resolve_crossing_loops` dropped, which leave gaps the merge
+    /// must not have closed by the protective stitch. `None` unless that resolution ran
+    /// (only with `Kernel::fixes.offset_resolve_crossing_loops`).
+    pub(super) crossing_open_stretches: Option<Vec<super::crossing_loops::OpenStretch>>,
 }
 
 impl OffsetExecutive {
@@ -257,6 +262,7 @@ impl OffsetExecutive {
             blend_to_faces: Relation::default(),
             extended_surfaces: BTreeMap::new(),
             collapsed_faces: Vec::new(),
+            crossing_open_stretches: None,
         }
     }
 

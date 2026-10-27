@@ -56,7 +56,7 @@
 //! Debug drawing/assertions are omitted. No recursion is introduced.
 
 use crate::curve::curve::Curve;
-use crate::error::{Result, SolidError};
+use crate::error::{EntityRef, Result, SolidError, SM_ERR_NULL_POINTER};
 use crate::geom::axis2_placement::Axis2Placement;
 use crate::geom::context::{MarkLock, ALL_MARKS};
 use crate::geom::extent1d::Extent1d;
@@ -117,6 +117,17 @@ impl<T> Drop for PendingTopology<'_, T> {
 }
 
 const OP: &str = "topology::brep::p5";
+
+/// `SM_ERR_NULL_POINTER` where upstream would dereference a null pointer: `operation` is
+/// `topology::brep::p5::<function>/<what was null>` (one per site, so a failure names its
+/// site), with the entity at hand when there is one.
+fn null_at(operation: &'static str, entity: Option<EntityRef>) -> SolidError {
+    SolidError::Upstream {
+        operation,
+        code: SM_ERR_NULL_POINTER,
+        entity,
+    }
+}
 
 /// Runs `f` with the caller's notification environment, or, for a plain entry point
 /// (`notifications` is `None`: the caller keeps no notification state of its own),
@@ -420,7 +431,12 @@ pub fn combine_with_notifications(
         true,
         true,
     ))?;
-    let env = notifications.ok_or_else(|| SolidError::null_pointer(OP))?;
+    let env = notifications.ok_or_else(|| {
+        null_at(
+            "topology::brep::p5::combine_with_notifications/notifications",
+            None,
+        )
+    })?;
     crate::topology::brep::p1::update_vertex_edge_intervals(k, b, env, survivor)
 }
 
@@ -445,12 +461,8 @@ fn notify_merge_with_body(
     body: Option<ObjectRef>,
 ) -> Result<()> {
     let data = [
-        Some(brep_p2::NotifyArg::Entity(crate::error::EntityRef::Vertex(
-            survivor,
-        ))),
-        Some(brep_p2::NotifyArg::Entity(crate::error::EntityRef::Vertex(
-            deleted,
-        ))),
+        Some(brep_p2::NotifyArg::Entity(EntityRef::Vertex(survivor))),
+        Some(brep_p2::NotifyArg::Entity(EntityRef::Vertex(deleted))),
         Some(brep_p2::NotifyArg::Object(
             body.unwrap_or_else(|| brep_p2::brep_ref(b)),
         )),
@@ -563,8 +575,8 @@ fn set_vertex_point(
                 env.records,
                 env.attributes,
                 env.context.as_deref_mut().or(fallback),
-                (env.key_of)(crate::error::EntityRef::Vertex(vertex)),
-                &|vu| (env.key_of)(crate::error::EntityRef::Vertexuse(vu)),
+                (env.key_of)(EntityRef::Vertex(vertex)),
+                &|vu| (env.key_of)(EntityRef::Vertexuse(vu)),
             ))
         },
     )
@@ -593,9 +605,12 @@ fn create_wire_edge_from_curve_in(
 ) -> Result<EdgeId> {
     let start = curve.evaluate_point(k, interval.min())?;
     let end = curve.evaluate_point(k, interval.max())?;
-    let region = b
-        .infinite_region()
-        .ok_or_else(|| SolidError::null_pointer(OP))?;
+    let region = b.infinite_region().ok_or_else(|| {
+        null_at(
+            "topology::brep::p5::create_wire_edge_from_curve_in/infinite_region",
+            None,
+        )
+    })?;
     let (first, edge, last) = with_p3_notifications(k, b, Some(&mut *env), |k, b, env| {
         let (_, first) = make_shell_vertex(b, region, start, env)?;
         let (edge, last) = make_wire_edge_vertex(
@@ -697,7 +712,12 @@ pub fn delete_topological_vertex_with_notifications(
     let mut notifications = Some(env);
     require_editing(editing_enabled)?;
     crate::error::ignore_status(notify_pre_edit(k, b, notifications.as_deref_mut()))?;
-    let vertex = vertex.ok_or_else(|| SolidError::null_pointer(OP))?;
+    let vertex = vertex.ok_or_else(|| {
+        null_at(
+            "topology::brep::p5::delete_topological_vertex_with_notifications/vertex",
+            None,
+        )
+    })?;
     let edges = vertex::edges(b, vertex, None)?;
     let [first, last] = edges.as_slice() else {
         return Err(SolidError::sm_err(OP));
@@ -789,7 +809,7 @@ pub fn delete_topological_vertex_with_notifications(
                         if survivor_range.contains_value(far, crate::math::EFF_ZERO) {
                             let far_vertex =
                                 crate::topology::edge::other_vertex(b, deleted, Some(vertex))?
-                                    .ok_or_else(|| SolidError::null_pointer(OP))?;
+                                    .ok_or_else(|| null_at("topology::brep::p5::delete_topological_vertex_with_notifications/far_vertex", Some(EntityRef::Edge(deleted))))?;
                             let point = b.vertex(far_vertex)?.point;
                             // Native ignores EvaluatePoint's status. Its defined
                             // SM_UNDEF_DOUBLE sentinel remains explicit when an ordinary evaluation fails.
@@ -870,7 +890,12 @@ pub fn delete_topological_vertex_with_notifications(
         notifications.as_deref_mut(),
     ))?;
     let surviving_vertex = crate::topology::edge::other_vertex(b, deleted, Some(vertex))?
-        .ok_or_else(|| SolidError::null_pointer(OP))?;
+        .ok_or_else(|| {
+            null_at(
+                "topology::brep::p5::delete_topological_vertex_with_notifications/surviving_vertex",
+                Some(EntityRef::Edge(deleted)),
+            )
+        })?;
     squeeze_edge(
         k,
         b,
@@ -888,10 +913,12 @@ pub fn delete_topological_vertex_with_notifications(
 }
 
 fn edge_curve(b: &Brep, edge: EdgeId) -> Result<&Curve> {
-    b.edge(edge)?
-        .curve
-        .as_ref()
-        .ok_or_else(|| SolidError::null_pointer(OP))
+    b.edge(edge)?.curve.as_ref().ok_or_else(|| {
+        null_at(
+            "topology::brep::p5::edge_curve/edge.curve",
+            Some(EntityRef::Edge(edge)),
+        )
+    })
 }
 /// The two curves of `DeleteTopologicalVertex`'s coincidence check as its solutions
 /// name them (upstream's `pDeleteCurve`, `pSurviveCurve`), with the natural interval
@@ -953,7 +980,10 @@ fn bspline_curve_base_mut(curve: &mut Curve) -> Result<&mut BSplineCurve> {
         CurveKind::Ellipse(ellipse) => Ok(ellipse.base_mut()),
         CurveKind::Hyperbola(hyperbola) => Ok(hyperbola.base_mut()),
         CurveKind::Parabola(parabola) => Ok(parabola.base_mut()),
-        _ => Err(SolidError::null_pointer(OP)),
+        _ => Err(null_at(
+            "topology::brep::p5::bspline_curve_base_mut/b_spline_kind",
+            None,
+        )),
     }
 }
 /// `pSurvivingEdge->SetCurve(pCurve, TRUE)` (status ignored upstream): notified, the
@@ -1007,14 +1037,15 @@ fn set_edge_curve_owner(
         key: b.key(),
     };
     with_notifications(b, notifications, None, |b, env, _| {
-        let owner = (env.key_of)(crate::error::EntityRef::Edge(edge));
-        let curve = b
-            .edge_mut(edge)?
-            .curve
-            .as_mut()
-            .ok_or_else(|| SolidError::null_pointer(OP))?;
+        let owner = (env.key_of)(EntityRef::Edge(edge));
+        let curve = b.edge_mut(edge)?.curve.as_mut().ok_or_else(|| {
+            null_at(
+                "topology::brep::p5::set_edge_curve_owner/edge.curve",
+                Some(EntityRef::Edge(edge)),
+            )
+        })?;
         let _ = curve.set_owner(Some(owner), Some(brep));
-        b.set_geometry_owner_key(crate::error::EntityRef::Edge(edge), Some(owner));
+        b.set_geometry_owner_key(EntityRef::Edge(edge), Some(owner));
         Ok(())
     })
 }
@@ -1029,12 +1060,8 @@ fn notify_edge_merge(
     notifications: Option<&mut EditNotifyEnv<'_>>,
 ) -> Result<()> {
     let data = [
-        Some(brep_p2::NotifyArg::Entity(crate::error::EntityRef::Edge(
-            survivor,
-        ))),
-        Some(brep_p2::NotifyArg::Entity(crate::error::EntityRef::Edge(
-            deleted,
-        ))),
+        Some(brep_p2::NotifyArg::Entity(EntityRef::Edge(survivor))),
+        Some(brep_p2::NotifyArg::Entity(EntityRef::Edge(deleted))),
         Some(brep_p2::NotifyArg::Object(brep_p2::brep_ref(b))),
     ];
     with_notifications(b, notifications, Some(&mut k.context), |b, env, _| {
@@ -1070,7 +1097,12 @@ pub fn find_and_set_infinite_region(
     bbox: Option<&Extent3d>,
 ) -> Result<()> {
     let region = crate::topology::brep::p9::find_infinite_region(k, b, query, shell, bbox)?
-        .ok_or_else(|| SolidError::null_pointer(OP))?;
+        .ok_or_else(|| {
+            null_at(
+                "topology::brep::p5::find_and_set_infinite_region/infinite_region",
+                None,
+            )
+        })?;
     if let Some(shell) = shell {
         if shell_is_faceuse_shell(b, shell)? {
             void_setting = SetRegionVoidType::InfiniteRegionSwap;
@@ -1151,8 +1183,18 @@ fn glue_with_notification_identity(
     if survivor == deleted {
         return Ok(());
     }
-    let survivor = survivor.ok_or_else(|| SolidError::null_pointer(OP))?;
-    let deleted = deleted.ok_or_else(|| SolidError::null_pointer(OP))?;
+    let survivor = survivor.ok_or_else(|| {
+        null_at(
+            "topology::brep::p5::glue_with_notification_identity/survivor",
+            None,
+        )
+    })?;
+    let deleted = deleted.ok_or_else(|| {
+        null_at(
+            "topology::brep::p5::glue_with_notification_identity/deleted",
+            None,
+        )
+    })?;
     crate::error::ignore_status(notify_pre_edit_with_body(
         k,
         b,
@@ -1194,7 +1236,12 @@ fn glue_with_notification_identity(
             }
         }
     }
-    let (first, last) = pair.ok_or_else(|| SolidError::null_pointer(OP))?;
+    let (first, last) = pair.ok_or_else(|| {
+        null_at(
+            "topology::brep::p5::glue_with_notification_identity/shell_pair",
+            None,
+        )
+    })?;
     let mut first = Some(first);
     let radius = distance + b.vertex(deleted)?.tolerance;
     if radius > b.vertex(survivor)?.tolerance {
@@ -1205,24 +1252,35 @@ fn glue_with_notification_identity(
         return Ok(());
     }
     if vertex::is_shell_vertex(b, survivor)? {
-        let vu =
-            vertex::primary_vertexuse(b, survivor)?.ok_or_else(|| SolidError::null_pointer(OP))?;
+        let vu = vertex::primary_vertexuse(b, survivor)?.ok_or_else(|| {
+            null_at(
+                "topology::brep::p5::glue_with_notification_identity/survivor.vertexuse",
+                Some(EntityRef::Vertex(survivor)),
+            )
+        })?;
         let crate::topology::VertexuseOwner::Shell(shell) = b.vertexuse(vu)?.owner else {
             return Err(SolidError::sm_err(OP));
         };
-        let shell = shell.ok_or_else(|| SolidError::null_pointer(OP))?;
+        let shell = shell.ok_or_else(|| {
+            null_at(
+                "topology::brep::p5::glue_with_notification_identity/shell",
+                None,
+            )
+        })?;
         if shell_vertexuse(b, shell)? != Some(vu) {
             return Err(SolidError::sm_err(OP));
         }
-        let region = b
-            .shell(shell)?
-            .region
-            .ok_or_else(|| SolidError::null_pointer(OP))?;
+        let region = b.shell(shell)?.region.ok_or_else(|| {
+            null_at(
+                "topology::brep::p5::glue_with_notification_identity/shell.region",
+                Some(EntityRef::Shell(shell)),
+            )
+        })?;
         crate::error::ignore_status(remove_region_shell(b, region, shell))?;
         destroy_shell(k, b, notifications.as_deref_mut(), shell)?;
         first = None;
         remove_vertexuse(b, survivor, vu)?;
-        destroy_topology_record(b, crate::error::EntityRef::Vertexuse(vu))?;
+        destroy_topology_record(b, EntityRef::Vertexuse(vu))?;
     }
     let wires = if let Some(given) = wire_edges {
         given.to_vec()
@@ -1237,23 +1295,27 @@ fn glue_with_notification_identity(
         post_insert_vertexuse(b, survivor, vu)?;
     }
     remove_owned_vertex(b, deleted);
-    destroy_topology_record(b, crate::error::EntityRef::Vertex(deleted))?;
+    destroy_topology_record(b, EntityRef::Vertex(deleted))?;
     if let Some(first) = first.filter(|&first| first != last) {
         if let Some(vu) = shell_vertexuse(b, last)? {
-            let vertex = b
-                .vertexuse(vu)?
-                .vertex
-                .ok_or_else(|| SolidError::null_pointer(OP))?;
+            let vertex = b.vertexuse(vu)?.vertex.ok_or_else(|| {
+                null_at(
+                    "topology::brep::p5::glue_with_notification_identity/vertexuse.vertex",
+                    Some(EntityRef::Vertexuse(vu)),
+                )
+            })?;
             crate::error::ignore_status(remove_vertexuse(b, vertex, vu))?;
             clear_shell_list(b, last)?;
-            destroy_topology_record(b, crate::error::EntityRef::Vertexuse(vu))?;
+            destroy_topology_record(b, EntityRef::Vertexuse(vu))?;
         } else {
             transfer_shell_children(k, b, last, first, &wires)?;
         }
-        let region = b
-            .shell(last)?
-            .region
-            .ok_or_else(|| SolidError::null_pointer(OP))?;
+        let region = b.shell(last)?.region.ok_or_else(|| {
+            null_at(
+                "topology::brep::p5::glue_with_notification_identity/last.region",
+                Some(EntityRef::Shell(last)),
+            )
+        })?;
         crate::error::ignore_status(remove_region_shell(b, region, last))?;
         destroy_shell(k, b, notifications, last)?;
     }
@@ -1316,7 +1378,7 @@ fn notify_vertex_pre_edit_with_body(
         notifications,
         Some(&mut k.context),
         |b, env, fallback| {
-            let this = (env.key_of)(crate::error::EntityRef::Vertex(vertex));
+            let this = (env.key_of)(EntityRef::Vertex(vertex));
             vertex::notify(
                 b,
                 vertex,
@@ -1326,7 +1388,7 @@ fn notify_vertex_pre_edit_with_body(
                 NotifyOperation::PreEdit,
                 this,
                 [Some(this), Some(brep), None],
-                &|vu| (env.key_of)(crate::error::EntityRef::Vertexuse(vu)),
+                &|vu| (env.key_of)(EntityRef::Vertexuse(vu)),
             )
         },
     )
@@ -1355,7 +1417,7 @@ fn notify_face_pre_edit_with_body(
         notifications,
         Some(&mut k.context),
         |b, env, fallback| {
-            let this = (env.key_of)(crate::error::EntityRef::Face(face));
+            let this = (env.key_of)(EntityRef::Face(face));
             let mut forwarded = crate::topology::edge::NotifyEnv {
                 records: env.records,
                 attributes: env.attributes,
@@ -1396,7 +1458,8 @@ fn destroy_shell(
     env: Option<&mut EditNotifyEnv<'_>>,
     shell: ShellId,
 ) -> Result<()> {
-    let env = env.ok_or_else(|| SolidError::null_pointer(OP))?;
+    let env =
+        env.ok_or_else(|| null_at("topology::brep::p5::destroy_shell/notifications", None))?;
     crate::topology::shell::destroy(k, b, shell, env)
 }
 
@@ -1406,7 +1469,7 @@ fn destroy_shell(
 /// list removals) and deletes only the named record. Vertex and vertex use
 /// destructors send no notification upstream; their `~SmAObject` attribute cleanup is
 /// not modelled.
-fn destroy_topology_record(b: &mut Brep, entity: crate::error::EntityRef) -> Result<()> {
+fn destroy_topology_record(b: &mut Brep, entity: EntityRef) -> Result<()> {
     use crate::error::EntityRef as E;
     match entity {
         E::Vertexuse(id) => b.remove_vertexuse_record(id).map(drop),
@@ -1621,7 +1684,7 @@ pub(crate) fn make_edge_with_backend<B: FaceEdgeBackend>(
     output: &mut B::Output,
 ) -> Result<()> {
     require_editing(editing_enabled)?;
-    let f = face.ok_or_else(|| SolidError::null_pointer(OP))?;
+    let f = face.ok_or_else(|| null_at("topology::brep::p5::make_edge_with_backend/face", None))?;
     b.validate_face(f)?;
     *output = B::Output::default();
     let (t_start, t_end, end_orientation) = if orientation == OrientType::Opposite {
@@ -1641,7 +1704,12 @@ pub(crate) fn make_edge_with_backend<B: FaceEdgeBackend>(
             b.tolerance()?,
             false,
         )?
-        .ok_or_else(|| SolidError::null_pointer(OP))?;
+        .ok_or_else(|| {
+            null_at(
+                "topology::brep::p5::make_edge_with_backend/start_sector",
+                None,
+            )
+        })?;
     let last = b
         .sector(
             f,
@@ -1654,7 +1722,12 @@ pub(crate) fn make_edge_with_backend<B: FaceEdgeBackend>(
             b.tolerance()?,
             false,
         )?
-        .ok_or_else(|| SolidError::null_pointer(OP))?;
+        .ok_or_else(|| {
+            null_at(
+                "topology::brep::p5::make_edge_with_backend/end_sector",
+                None,
+            )
+        })?;
     b.insert(
         f,
         first,
@@ -1761,7 +1834,7 @@ pub(crate) fn find_vertex_sector(
     all_sectors: bool,
 ) -> Result<Option<VertexuseId>> {
     // NER(cpVertex)
-    let vertex = v.ok_or_else(|| SolidError::null_pointer(OP))?;
+    let vertex = v.ok_or_else(|| null_at("topology::brep::p5::find_vertex_sector/vertex", None))?;
     let sector = face_p4::find_vertex_sector(
         k,
         b,
@@ -1878,14 +1951,18 @@ fn make_manifold_in(
         }
         for face in brep_faces(b)? {
             let (first, last) = face_shells(b, face)?;
-            let r1 = b
-                .shell(first)?
-                .region
-                .ok_or_else(|| SolidError::null_pointer(OP))?;
-            let r2 = b
-                .shell(last)?
-                .region
-                .ok_or_else(|| SolidError::null_pointer(OP))?;
+            let r1 = b.shell(first)?.region.ok_or_else(|| {
+                null_at(
+                    "topology::brep::p5::make_manifold_in/first.region",
+                    Some(EntityRef::Shell(first)),
+                )
+            })?;
+            let r2 = b.shell(last)?.region.ok_or_else(|| {
+                null_at(
+                    "topology::brep::p5::make_manifold_in/last.region",
+                    Some(EntityRef::Shell(last)),
+                )
+            })?;
             let keep1 = regions.contains(&r1);
             let keep2 = regions.contains(&r2);
             if r1 != r2 && (keep1 != keep2 || (keep_interior_faces && keep1)) {
@@ -1936,15 +2013,31 @@ fn brep_vertices(b: &Brep) -> Result<Vec<VertexId>> {
 }
 fn face_shells(b: &Brep, face: FaceId) -> Result<(ShellId, ShellId)> {
     let (a, z) = crate::topology::face::p2::faceuses(b, face)?;
-    let a = a.ok_or_else(|| SolidError::null_pointer(OP))?;
-    let z = z.ok_or_else(|| SolidError::null_pointer(OP))?;
+    let a = a.ok_or_else(|| {
+        null_at(
+            "topology::brep::p5::face_shells/faceuse_a",
+            Some(EntityRef::Face(face)),
+        )
+    })?;
+    let z = z.ok_or_else(|| {
+        null_at(
+            "topology::brep::p5::face_shells/faceuse_z",
+            Some(EntityRef::Face(face)),
+        )
+    })?;
     Ok((
-        b.faceuse(a)?
-            .shell
-            .ok_or_else(|| SolidError::null_pointer(OP))?,
-        b.faceuse(z)?
-            .shell
-            .ok_or_else(|| SolidError::null_pointer(OP))?,
+        b.faceuse(a)?.shell.ok_or_else(|| {
+            null_at(
+                "topology::brep::p5::face_shells/faceuse_a.shell",
+                Some(EntityRef::Faceuse(a)),
+            )
+        })?,
+        b.faceuse(z)?.shell.ok_or_else(|| {
+            null_at(
+                "topology::brep::p5::face_shells/faceuse_z.shell",
+                Some(EntityRef::Faceuse(z)),
+            )
+        })?,
     ))
 }
 /// `SmBrep::DeleteFace(face, bDeleteEdgesVertices, bDoRegionNesting, NULL,
@@ -2016,16 +2109,27 @@ pub fn remove_topological_with_notifications(
             if keep_edges.is_some_and(|keep| keep.contains(&edge)) {
                 continue;
             }
-            let keep = topological
-                .surf_to_keep
-                .ok_or_else(|| SolidError::null_pointer(OP))?;
+            let keep = topological.surf_to_keep.ok_or_else(|| {
+                null_at(
+                    "topology::brep::p5::remove_topological_with_notifications/surf_to_keep",
+                    Some(EntityRef::Edge(edge)),
+                )
+            })?;
             let edgeuses = crate::topology::edge::edgeuses(b, edge, None, None)?;
             let first = *edgeuses.first().ok_or_else(|| SolidError::sm_err(OP))?;
             let third = *edgeuses.get(2).ok_or_else(|| SolidError::sm_err(OP))?;
-            let face0 = crate::topology::edgeuse::p1::face(b, first)?
-                .ok_or_else(|| SolidError::null_pointer(OP))?;
-            let face1 = crate::topology::edgeuse::p1::face(b, third)?
-                .ok_or_else(|| SolidError::null_pointer(OP))?;
+            let face0 = crate::topology::edgeuse::p1::face(b, first)?.ok_or_else(|| {
+                null_at(
+                    "topology::brep::p5::remove_topological_with_notifications/first_edgeuse.face",
+                    Some(EntityRef::Edgeuse(first)),
+                )
+            })?;
+            let face1 = crate::topology::edgeuse::p1::face(b, third)?.ok_or_else(|| {
+                null_at(
+                    "topology::brep::p5::remove_topological_with_notifications/third_edgeuse.face",
+                    Some(EntityRef::Edgeuse(third)),
+                )
+            })?;
             // A face owns one surface value. Equal owner metadata on two
             // values cannot establish pointer identity.
             let same_surface = face0 == face1;
@@ -2034,7 +2138,7 @@ pub fn remove_topological_with_notifications(
                     .face(keep)?
                     .surface
                     .as_ref()
-                    .ok_or_else(|| SolidError::null_pointer(OP))?
+                    .ok_or_else(|| null_at("topology::brep::p5::remove_topological_with_notifications/keep.surface", Some(EntityRef::Face(keep))))?
                     .natural_uv_domain();
                 crate::topology::face::p2::set_uv_domain(b, keep, &domain)?;
                 let tolerance = b.face(keep)?.tolerance;
@@ -2103,7 +2207,12 @@ fn delete_edge_keep_surface(
     faces
         .into_iter()
         .find(|&f| b.face(f).is_ok_and(|r| r.surface.is_some()))
-        .ok_or_else(|| SolidError::null_pointer(OP))
+        .ok_or_else(|| {
+            null_at(
+                "topology::brep::p5::delete_edge_keep_surface/face_with_surface",
+                None,
+            )
+        })
 }
 
 /// Removes the requested faces then their wire edges and shell vertices.
@@ -2399,14 +2508,18 @@ fn squeeze_face_in(
         let nest = (shell_size(b, shell1)? == 1 || shell_size(b, shell2)? == 1) && shell1 != shell2;
         let mut keep_region = None;
         if nest {
-            let r1 = b
-                .shell(shell1)?
-                .region
-                .ok_or_else(|| SolidError::null_pointer(OP))?;
-            let r2 = b
-                .shell(shell2)?
-                .region
-                .ok_or_else(|| SolidError::null_pointer(OP))?;
+            let r1 = b.shell(shell1)?.region.ok_or_else(|| {
+                null_at(
+                    "topology::brep::p5::squeeze_face_in/shell1.region",
+                    Some(EntityRef::Shell(shell1)),
+                )
+            })?;
+            let r2 = b.shell(shell2)?.region.ok_or_else(|| {
+                null_at(
+                    "topology::brep::p5::squeeze_face_in/shell2.region",
+                    Some(EntityRef::Shell(shell2)),
+                )
+            })?;
             let n1 = region_size(b, r1)?;
             let n2 = region_size(b, r2)?;
             let keep_first = if region_is_infinite(b, r1)? {
@@ -2576,11 +2689,7 @@ fn transform_in(
         bbox.add_point(point);
     }
     for edge in crate::topology::brep::p1::curve_owners(b, None, &|e| {
-        transform_owner_key(
-            b,
-            crate::EntityRef::Edge(e),
-            owner_keys(crate::EntityRef::Edge(e)),
-        )
+        transform_owner_key(b, EntityRef::Edge(e), owner_keys(EntityRef::Edge(e)))
     })? {
         crate::error::ignore_status(notify_edge_pre_edit(
             k,
@@ -2588,11 +2697,12 @@ fn transform_in(
             edge,
             notifications.as_deref_mut(),
         ))?;
-        let curve = b
-            .edge_mut(edge)?
-            .curve
-            .as_mut()
-            .ok_or_else(|| SolidError::null_pointer(OP))?;
+        let curve = b.edge_mut(edge)?.curve.as_mut().ok_or_else(|| {
+            null_at(
+                "topology::brep::p5::transform_in/edge.curve",
+                Some(EntityRef::Edge(edge)),
+            )
+        })?;
         curve.transform(k, placement, scale)?;
     }
     let mut rectangular: Vec<_> = brep_faces(b)?.into_iter().map(Some).collect();
@@ -2604,11 +2714,7 @@ fn transform_in(
         }
     }
     for face in crate::topology::brep::p1::surface_owners(b, None, &|f| {
-        transform_owner_key(
-            b,
-            crate::EntityRef::Face(f),
-            owner_keys(crate::EntityRef::Face(f)),
-        )
+        transform_owner_key(b, EntityRef::Face(f), owner_keys(EntityRef::Face(f)))
     })? {
         crate::error::ignore_status(notify_face_pre_edit(
             k,
@@ -2617,19 +2723,21 @@ fn transform_in(
             notifications.as_deref_mut(),
         ))?;
         let transformed = {
-            let surface = b
-                .face_mut(face)?
-                .surface
-                .as_mut()
-                .ok_or_else(|| SolidError::null_pointer(OP))?;
+            let surface = b.face_mut(face)?.surface.as_mut().ok_or_else(|| {
+                null_at(
+                    "topology::brep::p5::transform_in/face.surface",
+                    Some(EntityRef::Face(face)),
+                )
+            })?;
             crate::error::ignored(surface.transform(k, placement, scale))?.is_some()
         };
         if !transformed {
-            let surface = b
-                .face_mut(face)?
-                .surface
-                .as_mut()
-                .ok_or_else(|| SolidError::null_pointer(OP))?;
+            let surface = b.face_mut(face)?.surface.as_mut().ok_or_else(|| {
+                null_at(
+                    "topology::brep::p5::transform_in/face.surface_untransformed",
+                    Some(EntityRef::Face(face)),
+                )
+            })?;
             let base =
                 transformed_surface_base(k, surface)?.ok_or_else(|| SolidError::sm_err(OP))?;
             replace_surface(
@@ -2686,8 +2794,8 @@ fn turn_to_nurbs(
         let mut selection = std::collections::BTreeMap::new();
         for entity in brep_faces(b)?
             .into_iter()
-            .map(crate::EntityRef::Face)
-            .chain(brep_edges(b)?.into_iter().map(crate::EntityRef::Edge))
+            .map(EntityRef::Face)
+            .chain(brep_edges(b)?.into_iter().map(EntityRef::Edge))
         {
             selection.insert(entity, transform_owner_key(b, entity, key_of(entity)));
         }
@@ -2714,7 +2822,7 @@ fn notify_edge_pre_edit(
         notifications,
         Some(&mut k.context),
         |b, env, fallback| {
-            let this = (env.key_of)(crate::error::EntityRef::Edge(edge));
+            let this = (env.key_of)(EntityRef::Edge(edge));
             let mut forwarded = crate::topology::edge::NotifyEnv {
                 records: env.records,
                 attributes: env.attributes,
@@ -2736,14 +2844,14 @@ fn notify_edge_pre_edit(
 // transform notifications use distinct identities. Match only a proven producer
 // key or the issued notification identity; foreign and unowned geometry keep the
 // native filter.
-fn transform_owner_key(b: &Brep, entity: crate::EntityRef, kernel_key: ObjectRef) -> ObjectRef {
+fn transform_owner_key(b: &Brep, entity: EntityRef, kernel_key: ObjectRef) -> ObjectRef {
     let owner = match entity {
-        crate::EntityRef::Edge(edge) => b
+        EntityRef::Edge(edge) => b
             .edges()
             .get(edge)
             .and_then(|e| e.curve.as_ref())
             .and_then(Curve::owner),
-        crate::EntityRef::Face(face) => b
+        EntityRef::Face(face) => b
             .faces()
             .get(face)
             .and_then(|f| f.surface.as_ref())
@@ -2832,7 +2940,7 @@ fn replace_surface(
     // The kernel is held immutably here (`SmSurface` evaluation), so an arena-only
     // caller's notifications reach no context callbacks.
     let (_, faces) = with_notifications(b, notifications, None, |b, env, _| {
-        let face_ref = (env.key_of)(crate::error::EntityRef::Face(face));
+        let face_ref = (env.key_of)(EntityRef::Face(face));
         brep_p2::replace_surface(k, b, env, face, surface, face_ref, old, create_uv_trims)
     })?;
     if let Some(modified) = modified {
@@ -2956,7 +3064,7 @@ mod tests {
             SolidError::sm_err("SmStitch::StitchVertexPairs"),
             SolidError::NotFound {
                 operation: "SmStitch::SplitEdgesWithVertices",
-                entity: crate::error::EntityRef::Edge(EdgeId::from_index(2)),
+                entity: EntityRef::Edge(EdgeId::from_index(2)),
             },
             SolidError::Degenerate {
                 operation: "SmStitch::StitchEdgesOfVertices",
@@ -3115,9 +3223,7 @@ mod tests {
             let original_key = b.key();
             let serial = b.notify_serial().unwrap();
             let key_of = |entity| crate::topology::brep::p3::topology_ref(serial, entity);
-            let body = key_of(crate::EntityRef::Brep(crate::topology::BrepId::from_index(
-                0,
-            )));
+            let body = key_of(EntityRef::Brep(crate::topology::BrepId::from_index(0)));
             assert_ne!(body.key, original_key);
             let survivor = b.vertex_list()[0];
             let deleted = if separate_region {
@@ -3143,8 +3249,8 @@ mod tests {
             } else {
                 b.vertex_list()[1]
             };
-            let survivor_ref = key_of(crate::EntityRef::Vertex(survivor));
-            let deleted_ref = key_of(crate::EntityRef::Vertex(deleted));
+            let survivor_ref = key_of(EntityRef::Vertex(survivor));
+            let deleted_ref = key_of(EntityRef::Vertex(deleted));
             let mut records = BTreeMap::new();
             crate::topology::brep::p3::seed_records(&mut records, &b, &key_of);
             let mut attributes = AttributeStore::default();

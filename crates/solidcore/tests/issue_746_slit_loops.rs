@@ -24,7 +24,9 @@ fn touching_union(remove_slits: bool) -> Brep {
     k.fixes.remove_slit_loops_where_solids_touch = remove_slits;
     let cube = create_box(&mut k, Point3::new(0.0, 0.0, 0.0), 10.0, 10.0, 10.0).unwrap();
     let post = create_cylinder(&mut k, Point3::new(12.5, 5.0, 2.0), 2.5, 6.0).unwrap();
-    boolean_union(&mut k, cube, post).unwrap()
+    let body = boolean_union(&mut k, cube, post).unwrap();
+    solidcore::topology::integrity::check(&body).unwrap();
+    body
 }
 
 /// The largest number of loops on one face.

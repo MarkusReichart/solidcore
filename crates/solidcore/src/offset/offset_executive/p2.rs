@@ -750,7 +750,24 @@ impl OffsetExecutive {
             // FindAndSetInfiniteRegion when >1 region (editing temporarily false),
             // refresh regions, set void flags by infinite-region identity, then
             // transfer result ownership and clear the executive temporary.
-            crate::error::ignore_status(stitch::stitch_into_solid(kernel, &mut result))?;
+            // Not upstream (#855, `Kernel::fixes.offset_resolve_crossing_loops` only):
+            // the edges along the loop stretches `resolve_crossing_loops` dropped stay
+            // open, so the stitch does not close the dropped lobe into a region that
+            // MakeManifold would then keep.
+            if let Some(dropped) = self.crossing_open_stretches.take() {
+                // (a failing match leaves no edge open: upstream's stitch)
+                let open = crate::error::ignored(super::crossing_loops::edges_left_open(
+                    kernel, &result, &dropped,
+                ))?
+                .unwrap_or_default();
+                crate::error::ignore_status(stitch::stitch_into_solid_keeping_open(
+                    kernel,
+                    &mut result,
+                    &open,
+                ))?;
+            } else {
+                crate::error::ignore_status(stitch::stitch_into_solid(kernel, &mut result))?;
+            }
             // MakeManifold exists in p5, but its remaining metadata/topology
             // adapters must still propagate Unported even though native ignores
             // ordinary errors. Do not turn that partial path into empty success.
@@ -1316,7 +1333,10 @@ pub fn api_shell_brep_full(
         &working_faces,
         &mut working_notifications,
     );
-    outcome.result
+    let mut result = outcome.result?;
+    // (not upstream: the port's cached topology fields, true again for the caller)
+    result.refresh_cached_topology();
+    Ok(result)
 }
 
 /// Full-offset API: guard native null with 1007, then call the static executive.
@@ -1329,7 +1349,10 @@ pub fn api_offset_brep_full(
     notifications: &mut OffsetNotifications<'_>,
 ) -> Result<Brep> {
     let original = original.ok_or_else(|| invalid_input(OP_API_OFFSET))?;
-    offset_brep(kernel, original, options, notifications)
+    let mut result = offset_brep(kernel, original, options, notifications)?;
+    // (not upstream: the port's cached topology fields, true again for the caller)
+    result.refresh_cached_topology();
+    Ok(result)
 }
 
 fn configured_executive(original: &Brep, options: OffsetOptions) -> OffsetExecutive {

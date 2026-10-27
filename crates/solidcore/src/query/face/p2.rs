@@ -2032,6 +2032,11 @@ pub fn curve_on_classify_mut<O: ClassObject>(
         if k.fixes.classify_edge_interval {
             cc.classify_edge_interval(k, &*objects, ii)?;
         }
+        // not upstream (#1036, opt-in): the same for an interval spanning a whole edge
+        // between its two vertices
+        if k.fixes.classify_edge_interval_between_vertices {
+            cc.classify_vertex_vertex_edge_interval(k, &*objects, ii)?;
+        }
 
         // classify the interval - avoiding point classification if possible
         if cc.at(ii)?.mid.point_class() == PointClassType::Unknown {

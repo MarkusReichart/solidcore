@@ -297,6 +297,24 @@ impl FilletSurfaceGenerator {
         }
     }
 
+    /// Not upstream (the SolidCraft fork's `MeetsItsFacesTangentially`,
+    /// tangency-labs/solidcore#879,
+    /// `plan/findings/blend.fillet_executive_p3--fork-faces-outlast-their-blends-879.md`):
+    /// whether each cross section is tangent, at its ends
+    /// on the rails, to the faces the fillet rolls on. The base generator and any custom
+    /// one: not known, `false`; the linear section cuts across both faces, `false`; the
+    /// circular section's arc about the ball's centre is square at each rail to the
+    /// face normal there (the complement arc too), `true` unless mirrored about the
+    /// rails' chord; the blend curve takes its end tangents from that arc, `true`.
+    #[must_use]
+    pub const fn meets_its_faces_tangentially(&self) -> bool {
+        match self {
+            Self::Base | Self::EiffelTower | Self::Linear => false,
+            Self::Circular(g) => !g.mirror,
+            Self::BlendCurve(_) => true,
+        }
+    }
+
     /// `SmBlendCurveCrossSectionFSG::GetBlendScale` (`None` for the other kinds).
     #[must_use]
     pub const fn blend_scale(&self) -> Option<f64> {

@@ -149,9 +149,9 @@ pub struct UpstreamFixes {
     pub fillet_retry_radius_as_first: bool,
     /// `TestRollOver` joins a rail's neighbouring intervals on its face or the face's boundary before the rollover, so a rail along its face's rim does not fail "Unable to Process Rollover" (WR-301, #485).
     pub fillet_rail_rim_on_face: bool,
-    /// The fillet executive refuses a blend whose rails leave the faces they roll on (`RailsFitTheirFaces`, no room) (WR-302, #1024/#841).
+    /// The fillet executive refuses a blend whose rails leave the faces they roll on (`RailsFitTheirFaces`, no room) (fork feature, plan/findings/blend.fillet_solver_p5--fork-rails-fit-their-faces.md, #1024/#841).
     pub fillet_refuse_rails_leaving_faces: bool,
-    /// `create_fillet_brep` refuses blends that take the whole of a face they roll on (`FacesOutlastTheirBlends`, no room) (WR-320, #879).
+    /// `create_fillet_brep` refuses blends that take the whole of a face they roll on (`FacesOutlastTheirBlends`, no room) (a SolidCraft fork feature, #879: plan/findings/blend.fillet_executive_p3--fork-faces-outlast-their-blends-879.md).
     pub fillet_refuse_face_consuming_blends: bool,
     /// `DoFillet` refuses a filleted target that is not a closed manifold solid (an edge that is not `SmEdge::IsManifold`) with `SM_FILERR_BAD_MERGE`, where upstream returns success (WR-212, #422).
     pub fillet_refuse_non_manifold_result: bool,
@@ -199,7 +199,7 @@ pub struct UpstreamFixes {
     pub revolve_analytic_profile_faces: bool,
     /// A taper extrude's corner whose links meet at both ends pivots on the joint nearest its offset curve (WR-402, #479).
     pub taper_pivot_nearest_corner: bool,
-    /// A full-turn rotational sweep makes a closed shell inside another solid its cavity (WR-403, #478).
+    /// A full-turn rotational sweep makes a closed shell inside another solid its cavity (WR-442 addendum, #478).
     pub revolve_nested_shells_as_cavities: bool,
     /// A curve sweep caps from the side faces at the sweep's start and end (WR-404, #411).
     pub curve_sweep_caps_at_sweep_ends: bool,
@@ -245,6 +245,8 @@ pub struct UpstreamFixes {
     pub boolean_cleanup_removes_slits: bool,
     /// `SmFace::CurveOnClassify` classifies an interval whose two ends lie on one face edge (or its vertices) and whose midpoint is within the intersection tolerance of it as on that edge (the fork's `ClassifyEdgeInterval`, WR-305, #1057).
     pub classify_edge_interval: bool,
+    /// `SmFace::CurveOnClassify` also classifies an interval whose two ends are the two vertices of one face edge, and whose midpoint is within the intersection tolerance of that edge, as on the edge. WR-305's case needs one end on the edge itself (#1036).
+    pub classify_edge_interval_between_vertices: bool,
     /// `SmProtoEdge::Resolve` treats a proto edge from a proto vertex back to itself whose ends find one vertex definition as degenerate below twice the proto vertex's containment radius, and `ImprintIntersections` fits that vertex to its edges (WR-306, #1058).
     pub degenerate_proto_edge_in_one_vertex: bool,
     /// `MakeEdgeInFaceWithVU` grows each end vertex's tolerance to twice its gap to the new edge's end (only if larger), after `RefreshTolerance` keeps it as it was, so `AssertValid` does not refuse the edge (WR-460, #870; the SolidCraft fork's fix; `plan/upstream-issues/WR-460--make-edge-in-face-vertex-tolerance-gap.md`).
@@ -265,6 +267,8 @@ pub struct UpstreamFixes {
     pub analytic_copy_keeps_parameterization: bool,
     /// `SmFilletSolver::ComputePointValues`' bigger-step retry of the forward finite-difference step solves with the bigger step (`dBigStep`), not with the small `dStep` again (WR-456, #1181).
     pub fillet_point_bigger_step_retry: bool,
+    /// A fillet's trace also runs through the filleted edge's end where a rail ends on an extended edge, so the surface reaches that end (#1022, WR-468).
+    pub fillet_through_extended_rail_end: bool,
 }
 
 /// Options for [`Kernel::new`].

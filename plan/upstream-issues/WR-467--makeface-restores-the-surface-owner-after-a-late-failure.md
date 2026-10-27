@@ -1,0 +1,20 @@
+#### WR-467. `SmBrep::MakeFace` gives a face's surface back to its old owner after a late failure, but still returns the face
+- **Severity:** Leak, or use after free, depending on the caller
+- **Area:** Topology
+- **Location:**
+  - `source/SMLib/src/SmBrep.cpp:18860`: `SmBrep::MakeFace` saves `pOldOwner = pSurface->GetOwner()`.
+  - `:18885`: after `MakeFaceTopology`, it calls `pSurface->SetOwner(pOldOwner)` "regardless if MakeFaceTopology fails or succeeds".
+  - `:18888`-`18889`: `SER(eStat)` on failure, while `rpNewFace` still holds the face `MakeFaceTopology` made.
+  - `MakeFaceTopology` (def. `:14141`) links the new face to the surface (`:14295`-`14296`, `pSurface->SetOwner(pNewF); pNewF->m_pSurface = pSurface`) before steps that can still fail, such as `TestClosureSplitRegion` at `:14796`.
+  - `SmFace::~SmFace` (`source/SMLib/src/SmFace.cpp:99`-`100`) deletes its surface only when it is the surface's owner.
+- **What happens:** when `MakeFaceTopology` fails after making the face, `MakeFace` returns the error and the face, and the face points at a surface whose owner is the old one (NULL for a new surface). The face never deletes that surface. A caller that keeps the surface because a face came back leaks it. A caller that frees the surface on any failure leaves the face pointing at freed memory. No caller can handle both cases correctly.
+- **Trigger:** reported for a box far smaller than the tolerance: origin (7.0415e-9, 7.0415e-9, 7.0415e-9), size (7.0415e-9, 3.0402e-5, 7.0424e-9). The top face closes a shell against the bottom one, then `TestClosureSplitRegion` → `IsInnerShell` fails. Pinned `SmPrimitiveCreation::CreateBox` ignores the statuses of its `CreateFaceFromSurface` calls (`source/SMLib/src/SmPrimitiveCreation.cpp:314` and following), so the box is returned as a success.
+- **How found:** tangency-labs/solidcore#894. An ASan fuzz run on the SolidCraft fork (`smlib_fuzz`, `smlib_make_box`) found the leak: 8104 bytes in 10 allocations, rooted at a box plane. A gdb trace showed `MakeFace` returning 1001 with `rpNewFace` set, the old owner NULL restored, and `~SmFace` not deleting the plane. The issue reports that stock 1.0.1 (3fd5b95) leaks 30728 bytes for the same box.
+- **Confirmed:** no (read at c9c5979 `source/SMLib/src/SmBrep.cpp:18860`, `:18885`, `:18888`-`18889`, `:14295`-`14296` and `source/SMLib/src/SmFace.cpp:99`-`100`; reported with an ASan leak and a gdb trace on the SolidCraft fork build, not run on the pinned C++ build).
+- **Fix (SolidCraft fork, "SMLib: a face made before its making fails keeps its surface"):**
+  - A face that `MakeFace` returns owns its surface whatever the status. With no face returned, the surface stays the caller's. The owner save and restore are removed.
+  - Callers that freed the surface on every failure now free it only when no face was made: the cone, sphere, torus and draft walls, `MakeFaceFromPolyFaceFast`, the `MakeFacesWithCurves` subpatches and `SmApiTrimProjectParallel`.
+- **Rust port:** neither failure mode exists here, because surfaces are values in the arena, so nothing is freed while still in use and nothing leaks. Both paths are in `crates/solidcore/src/topology/brep/p7.rs`:
+  - `make_face` (`:983`) builds the face on a clone of the caller's surface (`:909`), and restores the old owner only on the caller's original (`:932`). A late failure returns the error and no face id (`:1042`).
+  - The surface-transfer path (PR #902, header Deviation "Original-surface transfer ownership (#894)", `:93`) keeps the installed surface owned by its face on a late failure (`:959`-`967`), which is the fork's rule.
+- tangency-labs/solidcore#894.

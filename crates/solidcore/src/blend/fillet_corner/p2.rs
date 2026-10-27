@@ -950,7 +950,7 @@ impl FilletCorner {
             .fillet_surface()?
             .ok_or_else(|| invalid(OP, "fillet geometry without fillet surface"))?;
 
-        let srf_domain = fillet_srf.natural_uv_domain();
+        let srf_domain = fillet_srf.natural_uv_domain_with_nurb(k)?;
         // u runs the long way, v goes across the fillet. (statuses ignored)
         let srf_pt00 =
             unchecked_point(fillet_srf.evaluate_point(k, srf_domain.evaluate(0.0, 0.0)))?;

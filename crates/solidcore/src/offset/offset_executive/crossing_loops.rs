@@ -18,7 +18,9 @@
 //! outer loop (each a sheet of its own, as the fork's `SplitDisconnectedShells` leaves
 //! them), and one that comes apart and keeps holes as well is not resolved
 //! (`SM_ERR_BAD_INTERSECTIONS`). No recursion; every loop is bounded by the face's
-//! edge uses and crossings.
+//! edge uses and crossings. Not in the fork (#855): the dropped stretches are recorded
+//! (`OpenStretch`), and `edges_left_open` finds them again in the merged result so that
+//! the protective stitch leaves them open.
 
 use super::p1::OffsetExecutive;
 use super::p2::OffsetNotifications;
@@ -47,7 +49,9 @@ use crate::topology::edgeuse::{p1 as eu, p3 as eu3};
 use crate::topology::face::p2 as face;
 use crate::topology::topology;
 use crate::topology::topology_traverser::face_edges;
-use crate::topology::{loopuse, vertexuse, Brep, EdgeId, EdgeuseId, FaceId, LoopId, LoopuseStart};
+use crate::topology::{
+    loopuse, vertex, vertexuse, Brep, EdgeId, EdgeuseId, FaceId, LoopId, LoopuseStart,
+};
 
 const OP: &str = "offset::offset_executive::crossing_loops::resolve_crossing_loops";
 
@@ -77,6 +81,75 @@ struct LoopStretch {
     keep: bool,
     /// `sMid`: its middle point.
     mid: Point3,
+}
+
+/// Not upstream (#855): a loop stretch `resolve_crossing_loops` dropped, by its end
+/// points and the point at the middle of its edge-parameter interval. The merge
+/// rebuilds every edge, so the stretch is found again in the merged result by these
+/// points ([`edges_left_open`]), not by an id.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct OpenStretch {
+    start: Point3,
+    end: Point3,
+    mid: Point3,
+}
+
+/// Not upstream (#855, `plan/findings/offset.offset_executive_p2--issue-855-stitch-closes-dropped-lobe.md`):
+/// the lamina edges of the merged offset `b` that lie along the dropped `stretches`,
+/// which the protective `StitchIntoSolid` must leave open (two such edges, a dropped
+/// stretch of a face's outer loop and one of its inner loop, can be closer than the
+/// stitch tolerance and would close the dropped lobe into a region of its own).
+///
+/// The edge ids of the offset B-rep do not survive the merge (every edge of the result
+/// is rebuilt, split at the intersections), so an edge is matched by its points: both
+/// end vertices within their own tolerance (`Vertex::tolerance`) of the stretch's end
+/// points, in either order, and its curve's middle within its own tolerance
+/// (`Edge::tolerance`) of the stretch's middle point. The match must be one to one;
+/// otherwise (an edge on two stretches, a stretch on two edges or on none) no edge is
+/// returned and the stitch runs as upstream's.
+///
+/// # Errors
+///
+/// Those of the topology reads and curve evaluations.
+pub(super) fn edges_left_open(
+    kernel: &Kernel,
+    b: &Brep,
+    stretches: &[OpenStretch],
+) -> Result<Vec<EdgeId>> {
+    let mut matched: Vec<Option<EdgeId>> = vec![None; stretches.len()];
+    for e in bp1::edges(b, None)? {
+        if !edge::is_lamina(b, e)? {
+            continue;
+        }
+        let (Some(v0), Some(v1)) = edge::start_end_vertices(b, e)? else {
+            continue;
+        };
+        let (p0, t0) = (vertex::point(b, v0)?, vertex::tolerance(b, v0)?);
+        let (p1, t1) = (vertex::point(b, v1)?, vertex::tolerance(b, v1)?);
+        let ivl = edge::interval(b, e)?;
+        let mid = edge_curve(b, e)?.evaluate_point(kernel, ivl.evaluate(0.5))?;
+        let mid_tol = edge::tolerance(b, e)?;
+        let mut on: Option<usize> = None;
+        for (ss, s) in stretches.iter().enumerate() {
+            let ends = (p0.distance(s.start) <= t0 && p1.distance(s.end) <= t1)
+                || (p0.distance(s.end) <= t0 && p1.distance(s.start) <= t1);
+            if !ends || mid.distance(s.mid) > mid_tol {
+                continue;
+            }
+            if on.is_some() {
+                return Ok(Vec::new());
+            }
+            on = Some(ss);
+        }
+        if let Some(ss) = on {
+            let slot = at_mut(&mut matched, ss)?;
+            if slot.is_some() {
+                return Ok(Vec::new());
+            }
+            *slot = Some(e);
+        }
+    }
+    Ok(matched.into_iter().collect::<Option<Vec<_>>>().unwrap_or_default())
 }
 
 /// A crossing of the loops of an offset face that is not resolved
@@ -170,6 +243,7 @@ impl OffsetExecutive {
         notifications: &mut OffsetNotifications<'_>,
     ) -> Result<()> {
         let mut offset = required(self.take_offset_brep())?;
+        self.crossing_open_stretches = Some(Vec::new());
         let status = bp1::faces(&offset, None).and_then(|faces| {
             faces.into_iter().try_for_each(|f| {
                 self.resolve_crossing_loops_of_face(kernel, &mut offset, f, notifications)
@@ -392,6 +466,16 @@ impl OffsetExecutive {
                 }
             }
             at_mut(&mut stretches, ss)?.keep = keep;
+        }
+        // (#855) the dropped stretches, for the stitch after the merge
+        let mut dropped: Vec<OpenStretch> = Vec::new();
+        for stretch in stretches.iter().filter(|s| !s.keep) {
+            let curve = edge_curve(b, edge_of(b, stretch.edgeuse)?)?;
+            dropped.push(OpenStretch {
+                start: curve.evaluate_point(kernel, stretch.lo)?,
+                end: curve.evaluate_point(kernel, stretch.hi)?,
+                mid: stretch.mid,
+            });
         }
 
         // Close the kept stretches into loops: each goes on to the one kept stretch that
@@ -683,6 +767,9 @@ impl OffsetExecutive {
                 body,
             )
         })?;
+        if let Some(open) = self.crossing_open_stretches.as_mut() {
+            open.extend(dropped);
+        }
         Ok(())
     }
 }

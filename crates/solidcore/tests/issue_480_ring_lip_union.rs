@@ -1,8 +1,10 @@
 //! tangency-labs/solidcore#480: a union of a half-annulus lip onto a ring whose outer
-//! cylinder walls are 1e-4 to 1e-3 apart (10 to 100 times `SM_ZONE_TOL_3D`). Upstream's
-//! `SmApiBoolean` fails ("not a solid") at those offsets and is valid at 0 and 0.01. The
-//! two r 5 cylinders cross at a grazing angle beside the coincident cap/top planes. The
-//! Rust port gives a valid union at every offset (WR-362); this guards it.
+//! cylinder walls are 1e-4 to 1e-3 apart (10 to 100 times `SM_ZONE_TOL_3D`). SolidCraft
+//! reports that `SmApiBoolean` fails ("not a solid") at those offsets and is valid at 0
+//! and 0.01. The two r 5 cylinders cross at a grazing angle beside the coincident cap/top
+//! planes. The Rust port gives a valid union at every offset (not reproduced; see
+//! `plan/findings/boolean.api_brep--issues-480-387-388-not-reproduced-regression-guards.md`);
+//! this guards it.
 //!
 //! With the ring turned 90 degrees, its circles' seam vertex sits at (0, 15, 2), e / 2 from
 //! where the two r 5 rims cross: for 4e-5 < e <= 2e-4 `SmProtoEdge::Resolve` splits the
@@ -58,7 +60,9 @@ fn ring_and_lip_body(k: &mut Kernel, e: f64, turn_deg: f64) -> solidcore::Result
     let half = create_box(k, Point3::new(e - 10.0, 0.0, 0.0), 20.0, 10.0, 30.0)?;
     let lip = boolean_difference(k, tube, half)?;
 
-    boolean_union(k, ring, lip)
+    let body = boolean_union(k, ring, lip)?;
+    solidcore::topology::integrity::check(&body)?;
+    Ok(body)
 }
 
 /// [`ring_and_lip_body`] unturned; its volume.

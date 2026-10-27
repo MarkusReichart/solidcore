@@ -71,18 +71,34 @@ pub fn load_pts(path: &Path) -> Result<Vec<[f64; 3]>, HarnessError> {
     Ok(pts)
 }
 
-/// Loads every `*.json` in `fixtures/<unit>/`, sorted by file name. A missing
-/// directory yields no cases. Case names must be unique within the unit.
-pub fn load_fixture_dir(root: &Path, unit: &str) -> Result<Vec<Case>, HarnessError> {
-    let dir = root.join("fixtures").join(unit);
-    let Ok(rd) = fs::read_dir(&dir) else {
-        return Ok(Vec::new());
+/// Environment variable that adds `fixtures/<unit>/opt_in/*.json` to a run. Those cases
+/// are kept out of every ordinary run (CI included): a native result that is not stable
+/// from process to process, or a native crash that would end the whole unit's process
+/// (e.g. the #460 heap-layout cases, ND-261 and UB-264).
+pub const OPT_IN_FIXTURES_ENV: &str = "DIFFTEST_OPT_IN_FIXTURES";
+
+/// The `*.json` files of `dir`, sorted by file name (none for a missing directory).
+fn json_files(dir: &Path) -> Vec<PathBuf> {
+    let Ok(rd) = fs::read_dir(dir) else {
+        return Vec::new();
     };
     let mut files: Vec<PathBuf> = rd
         .filter_map(|e| e.ok().map(|e| e.path()))
         .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
         .collect();
     files.sort();
+    files
+}
+
+/// Loads every `*.json` in `fixtures/<unit>/`, sorted by file name, then, only when
+/// [`OPT_IN_FIXTURES_ENV`] is set, every `*.json` in `fixtures/<unit>/opt_in/`. A missing
+/// directory yields no cases. Case names must be unique within the unit.
+pub fn load_fixture_dir(root: &Path, unit: &str) -> Result<Vec<Case>, HarnessError> {
+    let dir = root.join("fixtures").join(unit);
+    let mut files = json_files(&dir);
+    if std::env::var_os(OPT_IN_FIXTURES_ENV).is_some() {
+        files.extend(json_files(&dir.join("opt_in")));
+    }
     let mut cases: Vec<Case> = Vec::new();
     for f in files {
         let rel = f

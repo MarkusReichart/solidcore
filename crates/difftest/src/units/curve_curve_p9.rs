@@ -1237,9 +1237,17 @@ fn gen_gcs(k: &Kernel, rng: &mut Rng) -> OpIn {
     let target = if sop == 6 {
         // mostly a distance some pair of points of the two curves really has
         if rng.chance(0.8) {
-            let p = point_at(k, &c1, ivl1[0] + (ivl1[1] - ivl1[0]) * rng.uniform(0.0, 1.0));
+            let p = point_at(
+                k,
+                &c1,
+                ivl1[0] + (ivl1[1] - ivl1[0]) * rng.uniform(0.0, 1.0),
+            );
             let other = c2.as_ref().unwrap_or(&c1);
-            let q = point_at(k, other, ivl2[0] + (ivl2[1] - ivl2[0]) * rng.uniform(0.0, 1.0));
+            let q = point_at(
+                k,
+                other,
+                ivl2[0] + (ivl2[1] - ivl2[0]) * rng.uniform(0.0, 1.0),
+            );
             let d = [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
             Some(d.iter().map(|x| x * x).sum::<f64>().sqrt().max(0.05))
         } else {
@@ -1491,10 +1499,9 @@ mod tests {
     /// The corpus case `name` of `tests/fuzz_corpus/curve.curve_p9.json`, run on the
     /// Rust side only (as the library would be called; the runner refuses it first).
     fn corpus_rust(name: &str) -> Output {
-        let corpus: Value = serde_json::from_str(include_str!(
-            "../../tests/fuzz_corpus/curve.curve_p9.json"
-        ))
-        .unwrap();
+        let corpus: Value =
+            serde_json::from_str(include_str!("../../tests/fuzz_corpus/curve.curve_p9.json"))
+                .unwrap();
         let case = corpus["cases"]
             .as_array()
             .unwrap()

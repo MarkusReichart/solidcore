@@ -2809,7 +2809,7 @@ fn loop_orientation(
     patch_normal: Vec3,
     op: &'static str,
 ) -> Result<OrientType> {
-    let uv_domain = surface.natural_uv_domain();
+    let uv_domain = surface.natural_uv_domain_with_nurb(k)?;
     let solutions = surface.global_point_solve::<ObjectHandle>(
         k,
         None,

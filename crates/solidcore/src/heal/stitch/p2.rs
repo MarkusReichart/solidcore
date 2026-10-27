@@ -14,6 +14,9 @@
 //! | [`Stitch::split_edges_with_vertices`], [`SplitEdges`] | `SmStitch::SplitEdgesWithVertices`    |
 //!
 //! Deviations:
+//! - Not upstream (#855): `stitch_into_solid_keeping_open` (crate-internal, for the
+//!   offset's crossing-loop opt-in) is `StitchIntoSolid` whose edge gluing skips a
+//!   given set of edges (`Stitch::keep_open`, `None` everywhere else).
 //! - Out-params become return values. `DoStitching`'s optional `pdMinUnstitched*Gap`
 //!   pointers are the [`MinGapRequest`] flags (a requested edge gap also widens the
 //!   drop tolerance, as upstream); the gaps come back as `Some` when requested.
@@ -717,6 +720,13 @@ impl Stitch<'_> {
                         continue;
                     }
 
+                    // (not upstream, #855) never glue an edge the caller keeps open
+                    if let Some(open) = &self.keep_open {
+                        if open.contains(&e) || open.contains(&test_e) {
+                            continue;
+                        }
+                    }
+
                     // Skip this one if there is a Candidate list and neither the edge
                     // nor its mate is on it.
                     if restricted && !cand_edges.contains(&test_e) && !cand_edges.contains(&e) {
@@ -1332,6 +1342,31 @@ pub fn solid_stitch_start(k: &Kernel, b: &Brep) -> Result<(f64, f64)> {
 /// Those of `CalculateBoundingBox` and [`Stitch::do_stitching`];
 /// [`SolidError::InvalidInput`] past [`MAX_TOL_DOUBLINGS`].
 pub fn stitch_into_solid(k: &mut Kernel, b: &mut Brep) -> Result<AdvancedStitch> {
+    stitch_into_solid_with(k, b, None)
+}
+
+/// Not upstream (#855, `plan/findings/offset.offset_executive_p2--issue-855-stitch-closes-dropped-lobe.md`):
+/// [`stitch_into_solid`] that never glues an edge of `keep_open` to another edge
+/// (`Stitch::keep_open`): gaps the caller made on purpose, not modelling gaps.
+///
+/// # Errors
+///
+/// Those of [`stitch_into_solid`].
+pub(crate) fn stitch_into_solid_keeping_open(
+    k: &mut Kernel,
+    b: &mut Brep,
+    keep_open: &[EdgeId],
+) -> Result<AdvancedStitch> {
+    stitch_into_solid_with(k, b, Some(keep_open))
+}
+
+/// The body of [`stitch_into_solid`]; `keep_open` is `Some` only for
+/// [`stitch_into_solid_keeping_open`].
+fn stitch_into_solid_with(
+    k: &mut Kernel,
+    b: &mut Brep,
+    keep_open: Option<&[EdgeId]>,
+) -> Result<AdvancedStitch> {
     let mut out = AdvancedStitch {
         produces_a_solid: false,
         stitched_edges: 0,
@@ -1358,6 +1393,9 @@ pub fn stitch_into_solid(k: &mut Kernel, b: &mut Brep) -> Result<AdvancedStitch>
         stitch.fast_edge_compare = true;
         stitch.split_edges_with_vertices = false;
         stitch.making_manifold_solid = true;
+        if let Some(open) = keep_open {
+            stitch.keep_open = Some(open.to_vec());
+        }
         let r = stitch.do_stitching(k, b, None, None, MinGapRequest::default())?;
         if r.max_vertex_gap > out.max_vertex_gap {
             out.max_vertex_gap = r.max_vertex_gap;

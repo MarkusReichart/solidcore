@@ -1,0 +1,13 @@
+#### UB-263. `SmBrepData` and `SmPolyBrepData` copy their reference members implicitly: a copy aliases the arrays and both delete them
+- **Severity:** Crash / undefined behaviour
+- **Area:** Topology
+- **Location:**
+  - `source/SMLib/inc/SmBrepData.h:794` (`class SmBrepData`) holds its record arrays as reference members, for example `SmTArray<SmRegionData> & m_vRegions` (`:815`) and the rest from `:815` on. The constructor (`source/SMLib/src/SmBrepData.cpp:2135`) heap-allocates each one, e.g. `m_vRegions (*(new ... SmTArray<SmRegionData>(...)))` at `:2157`. The destructor (`:2224`-`2259`) deletes all 14 (`delete &m_vRegions;` at `:2244`, ...).
+  - `source/SMLib/inc/SmPolyBrepData.h:286` (`class SmPolyBrepData`) does the same with 8 reference members (`:297`-`304`), allocated in its constructor (`source/SMLib/src/SmPolyBrepData.cpp:27`, e.g. `:32`) and deleted in its destructor (`:47`, e.g. `:54`).
+  - Neither class declares a copy constructor. `SmBrepData` declares only its constructor (`SmBrepData.h:842`) and destructor (`:846`), and `SmPolyBrepData` the same (`SmPolyBrepData.h:309`-`310`).
+- **What happens:** the compiler-generated copy constructor copies the references, so a copy aliases the original's arrays. Destroying both deletes each array twice. The implicit copy assignment is deleted because of the reference members, so only copy construction is affected.
+- **Trigger:** any copy construction of an `SmBrepData` or `SmPolyBrepData`, e.g. by value or `SmBrepData b2(b1)`. No caller in `source/SMLib` or `source/SM_API` was found that copies either class, so this is a latent hazard for calling code, not reachable from file input.
+- **How found:** tangency-labs/solidcore#846 (source reading of 1.0.1). Re-read here at the pin.
+- **Confirmed:** no (read at c9c5979 `source/SMLib/inc/SmBrepData.h:794`, `:815`, `:842`, `:846`, `source/SMLib/src/SmBrepData.cpp:2157`, `:2244`, `source/SMLib/inc/SmPolyBrepData.h:286`, `:297`-`310` and `source/SMLib/src/SmPolyBrepData.cpp:32`, `:54`).
+- **Rust port:** not affected. `BrepData` (`crates/solidcore/src/topology/brep_data.rs:1201`) owns its arrays as `Vec` fields, so its derived `Clone` is a deep copy. `SmPolyBrepData` has no Rust type (`crates/solidcore/src/query/poly.rs:145`-`147`).
+- tangency-labs/solidcore#846.
