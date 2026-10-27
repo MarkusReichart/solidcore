@@ -1386,6 +1386,39 @@ fn enable_fix(k: &mut Kernel, name: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Probe (pin v1.0.1): `case`'s steps on solidcore with its `fixes`, returning the kernel
+/// and the `result` body unmeasured (the run of [`run_rust`] without its measurement).
+///
+/// # Errors
+///
+/// The failing step or a missing result, as text.
+pub(crate) fn probe_build(case: &Case) -> Result<(Kernel, Brep), String> {
+    let mut k = Kernel::default();
+    for fix in &case.fixes {
+        enable_fix(&mut k, fix)?;
+    }
+    let mut bodies = BTreeMap::new();
+    for (n, step) in case.steps.iter().enumerate() {
+        if let Err(stop) = step_rust(&mut k, &mut bodies, step) {
+            return Err(format!("step {} (`{}`): {stop:?}", n + 1, step.id()));
+        }
+    }
+    let body = bodies
+        .remove(RESULT)
+        .ok_or_else(|| format!("no body `{RESULT}`"))?;
+    Ok((k, body))
+}
+
+/// Probe (pin v1.0.1): the volume [`run_rust`] measures on `b` (`make_missing_nurbs`,
+/// then `brep_volume` at [`VOLUME_ACCURACY`]).
+///
+/// # Errors
+///
+/// Those of the measurement.
+pub(crate) fn probe_volume(k: &Kernel, b: &mut Brep) -> Result<f64, SolidError> {
+    measure(k, b).map(|m| m.volume)
+}
+
 /// Runs `case` on solidcore.
 pub fn run_rust(case: &Case) -> Run {
     let mut k = Kernel::default();

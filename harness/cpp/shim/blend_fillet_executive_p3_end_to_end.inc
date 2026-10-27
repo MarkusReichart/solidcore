@@ -172,6 +172,35 @@ int32_t fillet_and_record(SmBrep* body,const double* fillet,int64_t n,std::vecto
         primitive_record::point(box_record,brep_box.GetMax());
     }
     section(values,box_record);
+    // Diagnostic: per face (GetFaces order) its box (CalculateBoundingBox) and its precise
+    // properties (SM_OT_SAME, 1e-4, about the B-rep box midpoint, the SM_API area estimate,
+    // no thickness, every property): status, 6 box values, status, area, volume, 24 moment
+    // components; zeros where a status failed.
+    std::vector<double> face_record;
+    if (box_status == SM_SUCCESS) {
+        SmTArray<SmFace*> diag_faces; body->GetFaces(diag_faces);
+        for (ULONG i=0; i<diag_faces.GetSize(); ++i) {
+            SmExtent3d fb;
+            const SmStatus fs=diag_faces[i]->CalculateBoundingBox(fb);
+            face_record.push_back(status(fs));
+            if (fs == SM_SUCCESS) {
+                primitive_record::point(face_record,fb.GetMin());
+                primitive_record::point(face_record,fb.GetMax());
+            } else face_record.insert(face_record.end(),6,0.0);
+            const SmVector3d size=fb.GetSize();
+            const double d=smos_Max(size.z,smos_Max(size.x,size.y));
+            double fa=0,fv=0; SmTArray<SmVector3d> fm;
+            const SmStatus ps=fs == SM_SUCCESS
+                ? diag_faces[i]->ComputePreciseProperties(SM_OT_SAME,1e-4,brep_box.GetMid(),d*d/100.0,0.0,fa,fv,fm)
+                : SM_ERR;
+            face_record.push_back(status(ps));
+            if (ps == SM_SUCCESS && fm.GetSize() == 8) {
+                face_record.insert(face_record.end(),{fa,fv});
+                for (ULONG m=0; m<8; ++m) primitive_record::point(face_record,fm[m]);
+            } else face_record.insert(face_record.end(),26,0.0);
+        }
+    }
+    section(values,face_record);
     return SC_OK;
 }
 }

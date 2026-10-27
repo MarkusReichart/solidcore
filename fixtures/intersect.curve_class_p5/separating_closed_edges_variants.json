@@ -1,0 +1,443 @@
+{
+ "cases": [
+  {
+   "name": "sep_closed_sheet_circle_off_centre",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:2653 my_test_separating_closed_edges (v1.0.1): variant of case 0 (circle away from the sheet centre) [variant]",
+   "inputs": {
+    "op": 8,
+    "face_merge": {
+     "test_brep": {
+      "kind": "xy_sheet",
+      "size": 20.0
+     },
+     "face": 0,
+     "curve": {
+      "kind": "circle",
+      "center": [
+       5.0,
+       14.0,
+       0.0
+      ],
+      "x_axis": [
+       1.0,
+       0.0,
+       0.0
+      ],
+      "y_axis": [
+       0.0,
+       1.0,
+       0.0
+      ],
+      "start_deg": 0.0,
+      "end_deg": 360.0,
+      "radius": 2.0
+     }
+    }
+   }
+  },
+  {
+   "name": "sep_closed_sheet_circle_tangent_edge",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:2653 my_test_separating_closed_edges (v1.0.1): variant of case 0 (circle tangent to the sheet edge x = 0) [variant]",
+   "inputs": {
+    "op": 8,
+    "face_merge": {
+     "test_brep": {
+      "kind": "xy_sheet",
+      "size": 20.0
+     },
+     "face": 0,
+     "curve": {
+      "kind": "circle",
+      "center": [
+       2.0,
+       10.0,
+       0.0
+      ],
+      "x_axis": [
+       1.0,
+       0.0,
+       0.0
+      ],
+      "y_axis": [
+       0.0,
+       1.0,
+       0.0
+      ],
+      "start_deg": 0.0,
+      "end_deg": 360.0,
+      "radius": 2.0
+     }
+    }
+   }
+  },
+  {
+   "name": "sep_closed_sheet_circle_crossing_edge",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:2653 my_test_separating_closed_edges (v1.0.1): variant of case 0 (circle crossing the sheet edge x = 0) [variant]",
+   "inputs": {
+    "op": 8,
+    "face_merge": {
+     "test_brep": {
+      "kind": "xy_sheet",
+      "size": 20.0
+     },
+     "face": 0,
+     "curve": {
+      "kind": "circle",
+      "center": [
+       1.0,
+       10.0,
+       0.0
+      ],
+      "x_axis": [
+       1.0,
+       0.0,
+       0.0
+      ],
+      "y_axis": [
+       0.0,
+       1.0,
+       0.0
+      ],
+      "start_deg": 0.0,
+      "end_deg": 360.0,
+      "radius": 2.0
+     }
+    }
+   }
+  },
+  {
+   "name": "sep_closed_sheet_circle_tiny",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:2653 my_test_separating_closed_edges (v1.0.1): variant of case 0 (circle of radius 1e-3) [variant]",
+   "inputs": {
+    "op": 8,
+    "face_merge": {
+     "test_brep": {
+      "kind": "xy_sheet",
+      "size": 20.0
+     },
+     "face": 0,
+     "curve": {
+      "kind": "circle",
+      "center": [
+       10.0,
+       10.0,
+       0.0
+      ],
+      "x_axis": [
+       1.0,
+       0.0,
+       0.0
+      ],
+      "y_axis": [
+       0.0,
+       1.0,
+       0.0
+      ],
+      "start_deg": 0.0,
+      "end_deg": 360.0,
+      "radius": 0.001
+     }
+    }
+   }
+  },
+  {
+   "name": "sep_closed_sheet_circle_at_corner",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:2653 my_test_separating_closed_edges (v1.0.1): variant of case 0 (circle centred on the sheet corner) [variant]",
+   "inputs": {
+    "op": 8,
+    "face_merge": {
+     "test_brep": {
+      "kind": "xy_sheet",
+      "size": 20.0
+     },
+     "face": 0,
+     "curve": {
+      "kind": "circle",
+      "center": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "x_axis": [
+       1.0,
+       0.0,
+       0.0
+      ],
+      "y_axis": [
+       0.0,
+       1.0,
+       0.0
+      ],
+      "start_deg": 0.0,
+      "end_deg": 360.0,
+      "radius": 2.0
+     }
+    }
+   }
+  },
+  {
+   "name": "sep_closed_sheet_arc_open",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:2653 my_test_separating_closed_edges (v1.0.1): variant of case 0 (an open 270 degree arc, not separating) [variant]",
+   "inputs": {
+    "op": 8,
+    "face_merge": {
+     "test_brep": {
+      "kind": "xy_sheet",
+      "size": 20.0
+     },
+     "face": 0,
+     "curve": {
+      "kind": "circle",
+      "center": [
+       10.0,
+       10.0,
+       0.0
+      ],
+      "x_axis": [
+       1.0,
+       0.0,
+       0.0
+      ],
+      "y_axis": [
+       0.0,
+       1.0,
+       0.0
+      ],
+      "start_deg": 0.0,
+      "end_deg": 270.0,
+      "radius": 2.0
+     }
+    }
+   }
+  },
+  {
+   "name": "sep_closed_sheet_circle_above",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:2653 my_test_separating_closed_edges (v1.0.1): variant of case 0 (circle 1 above the sheet plane: no intersection) [variant]",
+   "inputs": {
+    "op": 8,
+    "face_merge": {
+     "test_brep": {
+      "kind": "xy_sheet",
+      "size": 20.0
+     },
+     "face": 0,
+     "curve": {
+      "kind": "circle",
+      "center": [
+       10.0,
+       10.0,
+       1.0
+      ],
+      "x_axis": [
+       1.0,
+       0.0,
+       0.0
+      ],
+      "y_axis": [
+       0.0,
+       1.0,
+       0.0
+      ],
+      "start_deg": 0.0,
+      "end_deg": 360.0,
+      "radius": 2.0
+     }
+    }
+   }
+  },
+  {
+   "name": "sep_closed_cone_f0_quarter_v",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:2653 my_test_separating_closed_edges (v1.0.1): variant of case 1 (the UV line at a quarter of V) [variant (one of faces 0..2 is the lateral face; which one is not asserted)]",
+   "inputs": {
+    "op": 8,
+    "face_merge": {
+     "cone": {
+      "height": 4.0,
+      "base_radius": 2.0,
+      "top_radius": 2.0,
+      "start_deg": 0.0,
+      "end_deg": 360.0
+     },
+     "face": 0,
+     "curve": {
+      "kind": "uv_line",
+      "u0": 0.0,
+      "v0": 0.25,
+      "u1": 1.0,
+      "v1": 0.25
+     }
+    }
+   }
+  },
+  {
+   "name": "sep_closed_cone_f0_partial_u",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:2653 my_test_separating_closed_edges (v1.0.1): variant of case 1 (a mid-V UV line over part of U: not separating) [variant (one of faces 0..2 is the lateral face; which one is not asserted)]",
+   "inputs": {
+    "op": 8,
+    "face_merge": {
+     "cone": {
+      "height": 4.0,
+      "base_radius": 2.0,
+      "top_radius": 2.0,
+      "start_deg": 0.0,
+      "end_deg": 360.0
+     },
+     "face": 0,
+     "curve": {
+      "kind": "uv_line",
+      "u0": 0.2,
+      "v0": 0.5,
+      "u1": 0.8,
+      "v1": 0.5
+     }
+    }
+   }
+  },
+  {
+   "name": "sep_closed_cone_f1_quarter_v",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:2653 my_test_separating_closed_edges (v1.0.1): variant of case 1 (the UV line at a quarter of V) [variant (one of faces 0..2 is the lateral face; which one is not asserted)]",
+   "inputs": {
+    "op": 8,
+    "face_merge": {
+     "cone": {
+      "height": 4.0,
+      "base_radius": 2.0,
+      "top_radius": 2.0,
+      "start_deg": 0.0,
+      "end_deg": 360.0
+     },
+     "face": 1,
+     "curve": {
+      "kind": "uv_line",
+      "u0": 0.0,
+      "v0": 0.25,
+      "u1": 1.0,
+      "v1": 0.25
+     }
+    }
+   }
+  },
+  {
+   "name": "sep_closed_cone_f1_partial_u",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:2653 my_test_separating_closed_edges (v1.0.1): variant of case 1 (a mid-V UV line over part of U: not separating) [variant (one of faces 0..2 is the lateral face; which one is not asserted)]",
+   "inputs": {
+    "op": 8,
+    "face_merge": {
+     "cone": {
+      "height": 4.0,
+      "base_radius": 2.0,
+      "top_radius": 2.0,
+      "start_deg": 0.0,
+      "end_deg": 360.0
+     },
+     "face": 1,
+     "curve": {
+      "kind": "uv_line",
+      "u0": 0.2,
+      "v0": 0.5,
+      "u1": 0.8,
+      "v1": 0.5
+     }
+    }
+   }
+  },
+  {
+   "name": "sep_closed_cone_f2_quarter_v",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:2653 my_test_separating_closed_edges (v1.0.1): variant of case 1 (the UV line at a quarter of V) [variant (one of faces 0..2 is the lateral face; which one is not asserted)]",
+   "inputs": {
+    "op": 8,
+    "face_merge": {
+     "cone": {
+      "height": 4.0,
+      "base_radius": 2.0,
+      "top_radius": 2.0,
+      "start_deg": 0.0,
+      "end_deg": 360.0
+     },
+     "face": 2,
+     "curve": {
+      "kind": "uv_line",
+      "u0": 0.0,
+      "v0": 0.25,
+      "u1": 1.0,
+      "v1": 0.25
+     }
+    }
+   }
+  },
+  {
+   "name": "sep_closed_cone_f2_partial_u",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:2653 my_test_separating_closed_edges (v1.0.1): variant of case 1 (a mid-V UV line over part of U: not separating) [variant (one of faces 0..2 is the lateral face; which one is not asserted)]",
+   "inputs": {
+    "op": 8,
+    "face_merge": {
+     "cone": {
+      "height": 4.0,
+      "base_radius": 2.0,
+      "top_radius": 2.0,
+      "start_deg": 0.0,
+      "end_deg": 360.0
+     },
+     "face": 2,
+     "curve": {
+      "kind": "uv_line",
+      "u0": 0.2,
+      "v0": 0.5,
+      "u1": 0.8,
+      "v1": 0.5
+     }
+    }
+   }
+  },
+  {
+   "name": "sep_closed_cone_u_periodic_quarter_v",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:2653 my_test_separating_closed_edges (v1.0.1): variant of case 1 (the UV line at a quarter of V) on upstream's face (face_by u_periodic) [variant]",
+   "inputs": {
+    "op": 8,
+    "face_merge": {
+     "cone": {
+      "height": 4.0,
+      "base_radius": 2.0,
+      "top_radius": 2.0,
+      "start_deg": 0.0,
+      "end_deg": 360.0
+     },
+     "face_by": "u_periodic",
+     "face": 0,
+     "curve": {
+      "kind": "uv_line",
+      "u0": 0.0,
+      "v0": 0.25,
+      "u1": 1.0,
+      "v1": 0.25
+     }
+    }
+   }
+  },
+  {
+   "name": "sep_closed_cone_u_periodic_partial_u",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:2653 my_test_separating_closed_edges (v1.0.1): variant of case 1 (a mid-V UV line over part of U: not separating) on upstream's face (face_by u_periodic) [variant]",
+   "inputs": {
+    "op": 8,
+    "face_merge": {
+     "cone": {
+      "height": 4.0,
+      "base_radius": 2.0,
+      "top_radius": 2.0,
+      "start_deg": 0.0,
+      "end_deg": 360.0
+     },
+     "face_by": "u_periodic",
+     "face": 0,
+     "curve": {
+      "kind": "uv_line",
+      "u0": 0.2,
+      "v0": 0.5,
+      "u1": 0.8,
+      "v1": 0.5
+     }
+    }
+   }
+  }
+ ]
+}

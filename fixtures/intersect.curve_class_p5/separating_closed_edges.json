@@ -1,0 +1,135 @@
+{
+ "cases": [
+  {
+   "name": "sep_closed_xy_sheet_circle",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:2653 my_test_separating_closed_edges (v1.0.1), upstream configuration, case 0",
+   "inputs": {
+    "op": 8,
+    "face_merge": {
+     "test_brep": {
+      "kind": "xy_sheet",
+      "size": 20.0
+     },
+     "face": 0,
+     "curve": {
+      "kind": "circle",
+      "center": [
+       10.0,
+       10.0,
+       0.0
+      ],
+      "x_axis": [
+       1.0,
+       0.0,
+       0.0
+      ],
+      "y_axis": [
+       0.0,
+       1.0,
+       0.0
+      ],
+      "start_deg": 0.0,
+      "end_deg": 360.0,
+      "radius": 2.0
+     }
+    }
+   }
+  },
+  {
+   "name": "sep_closed_cone_u_periodic_mid_v",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:2653 my_test_separating_closed_edges (v1.0.1), upstream configuration, case 1",
+   "inputs": {
+    "op": 8,
+    "face_merge": {
+     "cone": {
+      "height": 4.0,
+      "base_radius": 2.0,
+      "top_radius": 2.0,
+      "start_deg": 0.0,
+      "end_deg": 360.0
+     },
+     "curve": {
+      "kind": "uv_line",
+      "u0": 0.0,
+      "v0": 0.5,
+      "u1": 1.0,
+      "v1": 0.5
+     },
+     "face_by": "u_periodic"
+    }
+   }
+  },
+  {
+   "name": "sep_closed_cone_f0_mid_v",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:2653 my_test_separating_closed_edges (v1.0.1), case 1 geometry: variant (one of faces 0..2 is the lateral face; which one is not asserted)",
+   "inputs": {
+    "op": 8,
+    "face_merge": {
+     "cone": {
+      "height": 4.0,
+      "base_radius": 2.0,
+      "top_radius": 2.0,
+      "start_deg": 0.0,
+      "end_deg": 360.0
+     },
+     "face": 0,
+     "curve": {
+      "kind": "uv_line",
+      "u0": 0.0,
+      "v0": 0.5,
+      "u1": 1.0,
+      "v1": 0.5
+     }
+    }
+   }
+  },
+  {
+   "name": "sep_closed_cone_f1_mid_v",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:2653 my_test_separating_closed_edges (v1.0.1), case 1 geometry: variant (one of faces 0..2 is the lateral face; which one is not asserted)",
+   "inputs": {
+    "op": 8,
+    "face_merge": {
+     "cone": {
+      "height": 4.0,
+      "base_radius": 2.0,
+      "top_radius": 2.0,
+      "start_deg": 0.0,
+      "end_deg": 360.0
+     },
+     "face": 1,
+     "curve": {
+      "kind": "uv_line",
+      "u0": 0.0,
+      "v0": 0.5,
+      "u1": 1.0,
+      "v1": 0.5
+     }
+    }
+   }
+  },
+  {
+   "name": "sep_closed_cone_f2_mid_v",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:2653 my_test_separating_closed_edges (v1.0.1), case 1 geometry: variant (one of faces 0..2 is the lateral face; which one is not asserted)",
+   "inputs": {
+    "op": 8,
+    "face_merge": {
+     "cone": {
+      "height": 4.0,
+      "base_radius": 2.0,
+      "top_radius": 2.0,
+      "start_deg": 0.0,
+      "end_deg": 360.0
+     },
+     "face": 2,
+     "curve": {
+      "kind": "uv_line",
+      "u0": 0.0,
+      "v0": 0.5,
+      "u1": 1.0,
+      "v1": 0.5
+     }
+    }
+   }
+  }
+ ]
+}

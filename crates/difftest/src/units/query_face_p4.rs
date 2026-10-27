@@ -260,7 +260,7 @@ pub(super) enum BrepIn {
     Natural { surface: AnySrf },
     /// The seam topology of `prog_test` `my_test_seam_touch_incidence` (one iteration of
     /// its `lKind`, `lRotation`, `lReversed` loops; see the FFI wrapper).
-    SeamTouch { kind: u8, rotation: u8, reversed: u8 },
+    SeamTouch { seam_kind: u8, rotation: u8, reversed: u8 },
     /// `prog_test` `my_test_failed_loop_containment`'s overlapping cylinder loops.
     FailedContainment,
     /// One iteration of `prog_test` `my_test_pole_crossing_endpoint_tolerances`.
@@ -345,10 +345,15 @@ pub(super) fn brep_input(
             push_any(&mut v, surface)?;
         }
         BrepIn::SeamTouch {
-            kind,
+            seam_kind,
             rotation,
             reversed,
-        } => v.extend([6.0, f64::from(*kind), f64::from(*rotation), f64::from(*reversed)]),
+        } => v.extend([
+            6.0,
+            f64::from(*seam_kind),
+            f64::from(*rotation),
+            f64::from(*reversed),
+        ]),
         BrepIn::FailedContainment => v.push(7.0),
         BrepIn::PoleCrossing { end, case } => {
             v.extend([8.0, f64::from(*end), f64::from(*case)]);
@@ -1234,7 +1239,7 @@ fn props_cases() -> Vec<(String, Inputs)> {
 fn seam_cases() -> Vec<(String, Inputs)> {
     let case = |kind: u8, rotation: u8, reversed: u8, sample: u32| Inputs {
         brep: BrepIn::SeamTouch {
-            kind,
+            seam_kind: kind,
             rotation,
             reversed,
         },

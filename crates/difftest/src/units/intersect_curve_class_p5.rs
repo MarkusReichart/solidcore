@@ -31,6 +31,8 @@ use solidcore::surface::volume::Volume;
 use solidcore::{Result as ScResult, SolidError};
 use solidcore_ffi::units::intersect_curve_class_p5 as ffi;
 
+#[path = "intersect_curve_class_p5/face.rs"]
+mod face;
 #[path = "intersect_curve_class_p5/topo.rs"]
 mod topo;
 
@@ -97,6 +99,10 @@ struct Input {
     /// A B-rep case (module `topo`); the fields above are then unused.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     topo: Option<topo::TopoIn>,
+    /// A face-merge case (module `face`, prog_test `my_test_separating_closed_edges`;
+    /// `op` 8); the fields above are then unused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    face_merge: Option<face::FaceMergeIn>,
 }
 
 impl Input {
@@ -663,6 +669,9 @@ impl UnitDiff for Runner {
         if let Some(t) = &i.topo {
             return topo::cpp(t);
         }
+        if let Some(f) = &i.face_merge {
+            return face::cpp(f);
+        }
         ffi::run(&i.flat())
             .map(|v| Output::new().values("out", v))
             .map_err(|e| HarnessError::new(e.to_string()))
@@ -671,6 +680,9 @@ impl UnitDiff for Runner {
         let i: Input = case.parse()?;
         if let Some(t) = &i.topo {
             return topo::rust(t);
+        }
+        if let Some(f) = &i.face_merge {
+            return face::rust(f);
         }
         ffi::validate(&i.flat()).map_err(|e| HarnessError::new(e.to_string()))?;
         rust(&i).map_err(|e| HarnessError::new(e.to_string()))

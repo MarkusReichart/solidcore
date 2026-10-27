@@ -68,6 +68,15 @@ mod sys {
             cap: i64,
             out_len: *mut i64,
         ) -> i32;
+        pub fn sc_intersect_curve_class_p5_face(
+            op: i32,
+            path: *const std::ffi::c_char,
+            input: *const f64,
+            n_in: i64,
+            out: *mut f64,
+            cap: i64,
+            out_len: *mut i64,
+        ) -> i32;
         pub fn sc_intersect_curve_class_p5_run(
             input: *const f64,
             n: i64,
@@ -308,6 +317,119 @@ pub fn topo(op: TopoOp, path: &str, input: &[f64]) -> Result<Vec<f64>, FfiError>
         // for out.len() writes and the shim honours the capacity; len is valid.
         unsafe {
             sys::sc_intersect_curve_class_p5_topo(
+                op as i32,
+                cpath.as_ptr(),
+                input.as_ptr(),
+                input.len() as i64,
+                out.as_mut_ptr(),
+                out.len() as i64,
+                len,
+            )
+        }
+    })
+}
+
+/// The face-merge ops of [`face`] (shim `harness/cpp/shim/intersect_curve_class_p5_face.cpp`,
+/// prog_test `my_test_separating_closed_edges`).
+///
+/// The input starts with a source: `0` and a B-rep block of the shared topology fixture
+/// (unit `topology.vertexuse`'s blocks, e.g. `12 size` `sm_make_xy_sheet`), or `1 height
+/// base top a0 a1` (`SmPrimitiveCreation::CreateCone(height, base, top, a0, a1,
+/// SmAxis2Placement())` into a new B-rep). The B-rep's editing is enabled and its
+/// non-exported analytic geometry is replaced by plain B-splines before the op.
+///
+/// | [`FaceOp`] | arguments | output after `0` |
+/// |------------|-----------|------------------|
+/// | `Export`   | none      | the B-rep's export (unit `topology.vertexuse`'s layout) |
+/// | `Merge`    | `face_by face kind curve... do_point_classify has_big_gaps check_3d uv_space_okay` | `status n (min max (class kind index)*3)*n`, then on success `merge_status` and, when the merge succeeds, `n_faces n_edges n_vertices faces edges vertices valid` |
+///
+/// `face_by 0`: `face` is taken modulo the face count; `face_by 1`: the one face whose
+/// surface `IsPeriodic(natural UV domain, SM_SP_U)` (the test's pick; `face` unused; `-4`
+/// alone when there is none, `-5` when there are several). `kind 0 C[3] X[3] Y[3] a0 a1 r` is an
+/// `SmCircle` (dimension 3); `kind 1 fu0 fv0 fu1 fv1` an `SmCrvOnSurf` (owner flag 2) of the
+/// `SmLine` between those fractions of the face surface's natural UV domain. The
+/// classification is `SmCurveClassification(curve, natural interval, NULL, brep tolerance,
+/// 0, NULL, FALSE, TRUE, face surface)`, then `CurveOnClassify` with the four flags and,
+/// when it succeeds, `MergeIntervals(&faces, &edges, &vertices, face)`. An object `kind` is
+/// 3 face, 7 edge, 9 vertex (export index before the merge), 100 the curve, 101 a surface,
+/// -1 none, -2 other. `valid` is `ValidatePointers` and `AssertValid` (both `SM_LEVEL_2`)
+/// clean. `-1 status` is a failed build, `-3` a B-rep without faces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FaceOp {
+    /// Export the source B-rep.
+    Export = 0,
+    /// `CurveOnClassify` then `MergeIntervals`.
+    Merge = 1,
+}
+
+/// Validates a face-merge input of [`face`] without running it.
+///
+/// # Errors
+///
+/// [`FfiError::InvalidArgument`] for a malformed input.
+pub fn validate_face(op: FaceOp, path: &str, input: &[f64]) -> Result<(), FfiError> {
+    let mut rd = Reader { input, at: 0 };
+    match rd.index(1)? {
+        0 => {
+            let rest = input.get(1..).ok_or_else(|| bad("input too short"))?;
+            rd.at = 1 + super::topology_vertexuse::brep_block_at(rest, path)?;
+        }
+        _ => {
+            let c = rd.finites(5)?;
+            let (Some(&h), Some(&r0), Some(&r1)) = (c.first(), c.get(1), c.get(2)) else {
+                return Err(bad("cone parameters"));
+            };
+            if !(h > 0.0 && h <= 1e6 && (0.0..=1e6).contains(&r0) && (0.0..=1e6).contains(&r1)) {
+                return Err(bad("cone height or radius out of range"));
+            }
+            if c.iter().skip(3).any(|a| a.abs() > 720.0) {
+                return Err(bad("cone angle out of range"));
+            }
+        }
+    }
+    if op == FaceOp::Merge {
+        rd.index(1)?;
+        rd.index(usize::MAX >> 12)?;
+        match rd.index(1)? {
+            0 => {
+                let c = rd.finites(12)?;
+                if c.iter().any(|x| x.abs() > 1e6) {
+                    return Err(bad("circle out of range"));
+                }
+                let (Some(&a0), Some(&a1), Some(&r)) = (c.get(9), c.get(10), c.get(11)) else {
+                    return Err(bad("circle"));
+                };
+                if !(r > 0.0 && a0 < a1 && a1 - a0 <= 360.0 && a0 >= -360.0 && a1 <= 360.0) {
+                    return Err(bad("circle radius or angular domain"));
+                }
+            }
+            _ => {
+                if rd.finites(4)?.iter().any(|f| f.abs() > 10.0) {
+                    return Err(bad("UV line fraction out of range"));
+                }
+            }
+        }
+        for _ in 0..4 {
+            rd.flag()?;
+        }
+    }
+    rd.done()
+}
+
+/// Runs a face-merge op (see [`FaceOp`]).
+///
+/// # Errors
+///
+/// [`FfiError::InvalidArgument`] for a malformed input; the shim's failures.
+pub fn face(op: FaceOp, path: &str, input: &[f64]) -> Result<Vec<f64>, FfiError> {
+    validate_face(op, path, input)?;
+    let cpath = std::ffi::CString::new(path).map_err(|_| bad("path has a NUL byte"))?;
+    call_with_buffer(4096, |out, len| {
+        // SAFETY: cpath is a valid NUL-terminated string; input is valid for
+        // input.len() reads and holds what the shim reads (validated above); out is valid
+        // for out.len() writes and the shim honours the capacity; len is valid.
+        unsafe {
+            sys::sc_intersect_curve_class_p5_face(
                 op as i32,
                 cpath.as_ptr(),
                 input.as_ptr(),

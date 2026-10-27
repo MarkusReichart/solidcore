@@ -743,3 +743,99 @@ impl UnitDiff for Runner {
         None
     }
 }
+
+#[cfg(all(test, feature = "cpp"))]
+mod probe_tests {
+    use super::{ffi, key_of, measure_rust, Measured};
+    use crate::solidcraft::{self, VOLUME_ACCURACY};
+    use solidcore::geom::attribute::{AttributeStore, ObjectKey};
+    use solidcore::topology::brep_data::BrepData;
+    use solidcore::topology::brep_data_write::FromBrepEnv;
+    use solidcore::topology::database_io::FileType;
+    use solidcore::geom::object::ObjectRef;
+    use solidcore::topology::{EdgeId, EdgeuseId, FaceId};
+    use solidcore::EntityRef;
+    use std::path::Path;
+
+    /// Probe (pin v1.0.1): the SolidCraft cases of #3303 and #451 that newly fail with
+    /// `mass::integrator` 1001. Each `result` body is built in Rust with the case's steps,
+    /// written with the Rust ASCII B-rep writer to `$PROBE_DIR/<file>__<case>.smb`, and
+    /// its volume computed from that file on both sides at SolidCraft's accuracy:
+    /// C++ `SmApiBrepComputeVolume` (corpus_parity's `measure`, upstream's reader) and
+    /// Rust (the same reader and `brep_volume`), next to the volume the SolidCraft runner
+    /// measures on the in-memory body. Prints one block per case; asserts nothing.
+    #[test]
+    #[ignore = "probe: pin v1.0.1 SolidCraft volume 1001s"]
+    fn probe_solidcraft_volume_1001() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let out_dir = std::env::var("PROBE_DIR").unwrap_or_else(|_| {
+            "/tmp/claude-1000/-home-brenn-github-solidcore/2666939c-0232-4a08-b80f-775365474917/scratchpad/f8/sc-bodies".into()
+        });
+        std::fs::create_dir_all(&out_dir).expect("probe dir");
+        let dir = solidcraft::cases_dir(&root);
+        for glob in ["3303-*", "451-*"] {
+            for loaded in solidcraft::load(&dir, Some(glob)).expect("cases") {
+                println!("== {} (fixes {:?})", loaded.id, loaded.case.fixes);
+                let (k, mut body) = match solidcraft::probe_build(&loaded.case) {
+                    Ok(built) => built,
+                    Err(e) => {
+                        println!("  build: {e}");
+                        continue;
+                    }
+                };
+                // The Rust B-rep writer, as corpus_parity's round trip uses it. A face
+                // writes its surface only when it owns it (`surface_owners`), so a face
+                // is named by its surface's owner: these bodies were built by the kernel,
+                // not imported, and do not use corpus_parity's arena keys.
+                let face_owner: std::collections::BTreeMap<FaceId, ObjectRef> = body
+                    .faces()
+                    .iter()
+                    .filter_map(|(f, face)| {
+                        face.surface.as_ref().and_then(|s| s.owner()).map(|o| (f, o))
+                    })
+                    .collect();
+                let key = |e: EntityRef| match e {
+                    EntityRef::Face(f) => face_owner
+                        .get(&f)
+                        .copied()
+                        .unwrap_or_else(|| key_of(0, e)),
+                    _ => key_of(0, e),
+                };
+                let attributes = AttributeStore::default();
+                let records = std::collections::BTreeMap::new();
+                let env = FromBrepEnv {
+                    attributes: &attributes,
+                    key_of: &key,
+                    records: &records,
+                    curve_key: &|_: EdgeId| ObjectKey(0),
+                    uv_curve_key: &|_: EdgeuseId| ObjectKey(0),
+                    surface_key: &|_: FaceId| ObjectKey(0),
+                };
+                let mut all = Vec::new();
+                let written = BrepData::from_brep(&body, &env, &mut all)
+                    .and_then(|mut data| data.write_to_file_with_nurbs(&k, FileType::Ascii));
+                let path = format!("{out_dir}/{}.smb", loaded.id.replace('/', "__"));
+                match written {
+                    Ok(bytes) => std::fs::write(&path, bytes).expect("write body"),
+                    Err(e) => println!("  write: {e:?}"),
+                }
+                println!(
+                    "  rust in-memory (SolidCraft): {:?}",
+                    solidcraft::probe_volume(&k, &mut body)
+                );
+                if !Path::new(&path).exists() {
+                    continue;
+                }
+                println!("  file: {path}");
+                match measure_rust(Path::new(&path), VOLUME_ACCURACY) {
+                    Measured::Values(v) => println!("  rust from file: {v:?}"),
+                    other => println!("  rust from file: {other:?}"),
+                }
+                println!(
+                    "  c++ from file:  {:?}",
+                    ffi::measure(&path, VOLUME_ACCURACY)
+                );
+            }
+        }
+    }
+}

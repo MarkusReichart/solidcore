@@ -428,10 +428,24 @@ fn output(mut values: &[f64]) -> Result<Output, HarnessError> {
     // Optional diagnostic section: the B-rep box (status, then min and max on success).
     if !tail.is_empty() {
         let brep_box = take_section(&mut tail)?;
+        out.values.insert("brep_box".into(), brep_box.to_vec());
+        // the same box bit for bit (ints compare exactly; the values within 1e-9)
+        out.ints.insert(
+            "brep_box_bits".into(),
+            brep_box.iter().map(|v| v.to_bits() as i64).collect(),
+        );
+        // and the per-face diagnostic, values and bits
+        if !tail.is_empty() {
+            let faces = take_section(&mut tail)?;
+            out.values.insert("face_diag".into(), faces.to_vec());
+            out.ints.insert(
+                "face_diag_bits".into(),
+                faces.iter().map(|v| v.to_bits() as i64).collect(),
+            );
+        }
         if !tail.is_empty() {
             return Err(HarnessError::new("invalid mass record"));
         }
-        out.values.insert("brep_box".into(), brep_box.to_vec());
     }
     out.ints
         .insert("mass_status".into(), vec![mass_status as i64]);
@@ -698,19 +712,73 @@ fn run_rust(k: &mut Kernel, body: SolidResult<Brep>, input: &RealSolid) -> Solid
     // Diagnostic (pin v1.0.1, rollover-404): the B-rep box whose midpoint
     // `brep_mass_properties` integrates about (`SmBrep::CalculateBoundingBox`).
     let mut box_record = Vec::new();
-    match solidcore::query::brep::calculate_bounding_box(
+    let brep_box = solidcore::query::brep::calculate_bounding_box(
         k,
         &body,
         solidcore::query::brep::BoundingBoxOptions::default(),
-    ) {
+    );
+    match &brep_box {
         Ok(b) => {
             box_record.push(0.0);
             point(&mut box_record, b.min());
             point(&mut box_record, b.max());
         }
-        Err(error) => box_record.push(status(error)?),
+        Err(error) => box_record.push(status(error.clone())?),
     }
     section(&mut values, &box_record);
+    // Diagnostic: per face (list order) its box and its precise properties (SAME, 1e-4,
+    // about the B-rep box midpoint, the SM_API area estimate, no thickness, every
+    // property), as the C++ side records them.
+    let mut face_record = Vec::new();
+    if let Ok(bb) = &brep_box {
+        let mid = bb.mid();
+        for f in p1::faces(&body, None)? {
+            let fb = solidcore::query::face::p1::calculate_bounding_box(k, &body, f, false);
+            match &fb {
+                Ok(e) => {
+                    face_record.push(0.0);
+                    point(&mut face_record, e.min());
+                    point(&mut face_record, e.max());
+                }
+                Err(error) => {
+                    face_record.push(status(error.clone())?);
+                    face_record.extend([0.0; 6]);
+                }
+            }
+            let props = match &fb {
+                Ok(e) => {
+                    let size = e.size();
+                    let d = if size.x > size.y { size.x } else { size.y };
+                    let d = if size.z > d { size.z } else { d };
+                    solidcore::mass::integrator::properties::face_properties(
+                        k,
+                        &mut body,
+                        f,
+                        solidcore::nurbs::b_spline_surface_n_lib::p2::OrientType::Same,
+                        1e-4,
+                        mid,
+                        d * d / 100.0,
+                        0.0,
+                        solidcore::topology::face::p2::PPF_ALL,
+                    )
+                }
+                Err(_) => Err(SolidError::sm_err("diagnostic face box")),
+            };
+            match props {
+                Ok(p) => {
+                    face_record.extend([0.0, p.area, p.volume]);
+                    for m in p.moments {
+                        point(&mut face_record, m);
+                    }
+                }
+                Err(error) => {
+                    face_record.push(status(error)?);
+                    face_record.extend([0.0; 26]);
+                }
+            }
+        }
+    }
+    section(&mut values, &face_record);
     Ok(values)
 }
 fn apply(k: &mut Kernel, body: &mut Brep, edges: &[EdgeId], input: &RealSolid) -> SolidResult<()> {
