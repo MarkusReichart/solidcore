@@ -14,7 +14,8 @@
 //! end classes and objects), the merge status, the new face, edge and vertex counts, the
 //! B-rep's counts after it and whether the B-rep is valid (C++: `ValidatePointers` and
 //! `AssertValid`; Rust: [`solidcore::topology::integrity::check`] after
-//! [`Brep::refresh_cached_topology`], as a public API return refreshes it).
+//! [`Brep::refresh_cached_topology`], as a public API return refreshes it, plus the loop
+//! orientation tests of `SmTrimmingTools::CheckFace` that the C++ validators run).
 
 use serde::{Deserialize, Serialize};
 
@@ -663,8 +664,46 @@ pub(super) fn rust(i: &FaceMergeIn) -> Result<Output, HarnessError> {
     // MergeIntervals is internal: the cached topology is refreshed only at public API
     // returns (#1239), so refresh it before checking, as such a return would
     b.refresh_cached_topology();
-    out.push(f64::from(u8::from(
-        solidcore::topology::integrity::check(&b).is_ok(),
-    )));
+    let valid = solidcore::topology::integrity::check(&b).is_ok() && loops_oriented(&k, &b)?;
+    out.push(f64::from(u8::from(valid)));
     Ok(Output::new().values("out", out))
+}
+
+/// `SmTrimmingTools::CheckFace`'s loop orientation tests (2-4), which the C++ side's
+/// `ValidatePointers` / `AssertValid` run on every face: for a face whose edge uses all
+/// have UV trim curves, each loop's `ComputeLoopOrientation` (no bounds, UV first)
+/// succeeds and is `SM_OT_SAME` for the first loop and `SM_OT_OPPOSITE` for the others
+/// (never `SM_OT_UNKNOWN`, a zero-area loop such as a slit). Rust's
+/// [`solidcore::topology::integrity::check`] has no such test. Computed on a copy so the
+/// recorded B-rep is untouched.
+fn loops_oriented(k: &Kernel, b: &Brep) -> Result<bool, HarnessError> {
+    use solidcore::nurbs::b_spline_surface_n_lib::p2::OrientType;
+    let mut b = b.clone();
+    let faces = solidcore::topology::brep::p1::faces(&b, None)
+        .map_err(|e| harness(format!("faces: {e}")))?;
+    for f in faces {
+        let present = solidcore::topology::trimming_tools::face_uv_curves_present(&b, f)
+            .map_err(|e| harness(format!("uv curves present: {e}")))?;
+        if !present {
+            continue;
+        }
+        let loops = solidcore::topology::face::p2::loops(&b, f, false, None)
+            .map_err(|e| harness(format!("loops: {e}")))?;
+        for (ii, l) in loops.into_iter().enumerate() {
+            let Ok(orient) = solidcore::topology::face::p3::compute_loop_orientation(
+                k, &mut b, f, l, None, false,
+            ) else {
+                return Ok(false);
+            };
+            let expected = if ii == 0 {
+                OrientType::Same
+            } else {
+                OrientType::Opposite
+            };
+            if orient != expected {
+                return Ok(false);
+            }
+        }
+    }
+    Ok(true)
 }
