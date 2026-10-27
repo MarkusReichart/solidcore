@@ -1294,6 +1294,46 @@ fn dump(h: &HealData<H>, b: &Brep, o: &mut Vec<f64>) -> Result<(), SolidError> {
     Ok(())
 }
 
+/// Names the imported geometry by its owning edge and face under
+/// `NamingScheme::Arena`, as upstream's geometry points at its edge and face. The
+/// import leaves edge curves unowned and keys an owned face surface `1 + index`, which
+/// no naming scheme resolves, so the library's own queries of the B-rep
+/// (`BrepQuery::of_brep`, e.g. `FindInfiniteRegion`'s ray fires) built an empty cache
+/// and hit nothing.
+fn arena_owners(b: &mut Brep) -> Result<(), HarnessError> {
+    use solidcore::geom::attribute::ObjectKey;
+    use solidcore::geom::object::ObjectRef;
+    use solidcore::topology::brep_cache::{arena_identity, CacheObject};
+    use solidcore::topology::NamingScheme;
+    let edges: Vec<EdgeId> = b.edges().ids().collect();
+    for e in edges {
+        let edge = b.edge_mut(e).map_err(|e| harness(e.to_string()))?;
+        if let Some(curve) = edge.curve.as_mut().filter(|c| c.owner().is_none()) {
+            curve.set_owner(Some(arena_identity(CacheObject::Edge(e))), None);
+        }
+    }
+    let faces: Vec<FaceId> = b.faces().ids().collect();
+    for f in faces {
+        let imported = ObjectRef {
+            type_code: solidcore::topology::face::p2::TYPE,
+            key: ObjectKey(1 + u64::from(f.index())),
+        };
+        let face = b.face_mut(f).map_err(|e| harness(e.to_string()))?;
+        if let Some(surface) = face
+            .surface
+            .as_mut()
+            .filter(|s| s.owner() == Some(imported))
+        {
+            surface.set_owner(Some(arena_identity(CacheObject::Face(f))));
+            // a new owner drops the surface's cached face tolerance
+            b.sync_face_surface_tolerance(f)
+                .map_err(|e| harness(e.to_string()))?;
+        }
+    }
+    b.set_naming(NamingScheme::Arena);
+    Ok(())
+}
+
 /// Restores what the import cannot carry: each vertex's vertex use order and the
 /// cached gap records of every edge use and vertex use (see the shim's
 /// `put_cached_gaps`).
@@ -1473,6 +1513,7 @@ fn rust_heal(
     // each vertex's vertex use order and the cached gaps, as upstream has them
     let extra = ffi::vertex_lists(&path, &block).map_err(|e| harness(format!("c++ lists: {e}")))?;
     restore(&mut b, &extra, c)?;
+    arena_owners(&mut b)?;
 
     let mut k = Kernel::default();
     let mut marks = Marks::default();
