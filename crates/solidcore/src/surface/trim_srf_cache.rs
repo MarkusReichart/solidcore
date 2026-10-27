@@ -354,7 +354,8 @@ impl<O: Copy + PartialEq> TrimSrfCache<O> {
     /// finds out.
     #[must_use]
     pub fn new(surface: Surface, opts: SurfaceCacheOptions) -> Self {
-        let domain = surface.natural_uv_domain();
+        // (kernel-free: a lazy analytic answers its NURB-less base's empty domain)
+        let domain = surface.natural_uv_domain_if_built();
         let mut base = SurfaceCache::new(surface, domain, opts);
 
         // set state bits anticipating a Trim Surface cache with UVTrimCurves.
@@ -780,9 +781,10 @@ impl<O: Copy + PartialEq> TrimSrfCache<O> {
         }
 
         // set SurfaceCacheDomain as SurfaceNaturalDomain/FaceDomain intersection
-        let surface_domain = face
-            .natural_uv_domain()?
-            .unwrap_or_else(|| self.base.surface().natural_uv_domain());
+        let surface_domain = match face.natural_uv_domain()? {
+            Some(d) => d,
+            None => self.base.surface().natural_uv_domain_with_nurb(k)?,
+        };
         let domain = surface_domain.intersect(&face_domain)?;
         self.base.set_uv_domain(domain);
 
@@ -901,7 +903,7 @@ impl<O: Copy + PartialEq> TrimSrfCache<O> {
 
         // set up for poles
         let (poles, u_ivl, v_ivl, u_tol, v_tol) = {
-            let uv_domain = self.base.surface().natural_uv_domain();
+            let uv_domain = self.base.surface().natural_uv_domain_with_nurb(k)?;
 
             // save natural domain sizes
             let u_ivl = uv_domain.u_interval();
@@ -1317,7 +1319,7 @@ impl<O: Copy + PartialEq> TrimSrfCache<O> {
         );
 
         // expand the UV tolerances when near surface poles
-        let uv_domain = self.base.surface().natural_uv_domain();
+        let uv_domain = self.base.surface().natural_uv_domain_with_nurb(k)?;
         let u_ivl = uv_domain.u_interval();
         let v_ivl = uv_domain.v_interval();
         let u_tol = u_ivl.length() / 100.0;
@@ -1773,7 +1775,7 @@ mod tests {
         let mut brep = Brep::new();
         let surface = plane();
         let mut face = Face::new(ShellId::from_index(0));
-        face.uv_domain = surface.natural_uv_domain();
+        face.uv_domain = surface.natural_uv_domain_if_built();
         face.surface = Some(surface);
         face.tolerance = 2.5e-4;
         let face = brep.add_face_record(face).unwrap();
@@ -1926,7 +1928,7 @@ mod tests {
         assert_eq!(mapped.face(), 100);
         assert_eq!(
             mapped.natural_uv_domain().unwrap(),
-            Some(plane().natural_uv_domain())
+            Some(plane().natural_uv_domain_if_built())
         );
         assert_eq!(mapped.zone_tol_3d(&Kernel::default(), 100).unwrap(), 2.5e-4);
         // Even if the reverse mapping accepts this alias, the forward mapping
@@ -1937,7 +1939,7 @@ mod tests {
     #[test]
     fn base_fallback_keeps_untrimmed_dispatch() {
         let surface = plane();
-        let domain = surface.natural_uv_domain();
+        let domain = surface.natural_uv_domain_if_built();
         let mut base: SurfaceCache<i64> =
             SurfaceCache::new(surface, domain, SurfaceCacheOptions::default());
         base.point_test_enabled = true;

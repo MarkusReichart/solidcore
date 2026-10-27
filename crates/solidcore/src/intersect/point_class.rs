@@ -778,7 +778,7 @@ impl<O: ClassObject> PointClassification<O> {
 
         // else - in surface gaps
         // Get Object Point
-        let uv_domain = surface.natural_uv_domain();
+        let uv_domain = surface.natural_uv_domain_with_nurb(k)?;
         let obj_pt_3d = ignored(self.find_obj_point_3d(k, geometry))?.unwrap_or(Vec3::UNDEF);
         let obj_zone_tol_3d = self.obj_zone_tol_3d(k, geometry)?;
 
@@ -1276,7 +1276,7 @@ impl<O: ClassObject> PointClassification<O> {
             PointClassType::Surface => {
                 let s = self.surface_of(geometry, OP_COMPUTE)?;
                 let o = self.object.ok_or_else(|| null_object(OP_COMPUTE))?;
-                obj_surface = Some((DropTarget::Surface(o), s.natural_uv_domain()));
+                obj_surface = Some((DropTarget::Surface(o), s.natural_uv_domain_with_nurb(k)?));
             }
             PointClassType::Volume => {
                 obj_volume = Some(

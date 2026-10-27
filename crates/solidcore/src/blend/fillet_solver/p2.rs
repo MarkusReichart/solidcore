@@ -635,7 +635,7 @@ impl FilletSolver {
         let cylinder = cone_patch.copy_and_add_analytics(k)?;
 
         // get cylinder u parameter range
-        let uv_domain = cylinder.natural_uv_domain();
+        let uv_domain = cylinder.natural_uv_domain_with_nurb(k)?;
         let rail_crv_ivl = Extent1d::from_min_max(uv_domain.min.x, uv_domain.max.x);
 
         // Calc Rail0, Rail1 - set their extent = cylinder u parameter range
@@ -780,7 +780,7 @@ impl FilletSolver {
         let mut cone = Surface::from(cone);
         ignore_status(cone.swap_uv(k))?;
 
-        let uv_domain = cone.natural_uv_domain();
+        let uv_domain = cone.natural_uv_domain_with_nurb(k)?;
         let ivl = Extent1d::from_min_max(uv_domain.min.x, uv_domain.max.x);
 
         // Calc rail0
@@ -1154,7 +1154,7 @@ impl FilletSolver {
         let torus = Surface::from(torus);
 
         // Calc rails: the min and max SM_SP_V isoParameter curves
-        let uv_domain = torus.natural_uv_domain();
+        let uv_domain = torus.natural_uv_domain_with_nurb(k)?;
         let rail_crv0 = torus
             .create_iso_parametric_curve(k, SurfParamType::V, uv_domain.min.y, 0.0, None, false)?
             .curve;
@@ -1166,6 +1166,176 @@ impl FilletSolver {
 
         Ok(FilletGeomParts {
             surface: torus,
+            rails: [rail_crv0, rail_crv1],
+            rail_intervals: [Some(crv_ivl0), Some(crv_ivl1)],
+            center_line: None,
+        })
+    }
+
+    /// `CalcSphereFilletGeom(rTsectPnts, pFilletGeom)` (a fork addition, not in the pinned
+    /// upstream; opt-in `Kernel::fixes.fillet_corner_ball_patch`, WR-420): builds the
+    /// corner ball's patch ([`FilletSolver::sphere_fillet_geom_parts`]) and stores it
+    /// into `fillet_geom` (`m_vFilletGeoms[0]` for `None`) of the pseudo B-rep `pseudo`.
+    ///
+    /// # Errors
+    ///
+    /// Those of [`FilletSolver::sphere_fillet_geom_parts`] and of
+    /// [`FilletSolver::calc_cylinder_fillet_geom`]'s store.
+    pub fn calc_sphere_fillet_geom(
+        ops: &mut dyn FilletSolverOps,
+        k: &Kernel,
+        b: &Brep,
+        pseudo: &mut FilletBrep,
+        tsects: &[TsectPnt],
+        fillet_geom: Option<FilletGeomId>,
+    ) -> Result<()> {
+        let parts = Self::sphere_fillet_geom_parts(ops, k, b, tsects)?;
+        store_parts(ops.solver(), pseudo, fillet_geom, parts)
+    }
+
+    /// The geometry of [`FilletSolver::calc_sphere_fillet_geom`]: where the fillet's
+    /// centre curve collapses to a point (a circular round of an edge between two
+    /// cylinders as wide as the round, whose axes meet at `P`), each cylinder's offset
+    /// by the radius is its axis, so every ball touching both is centred at `P` and
+    /// touches each cylinder along the circle about `P` square to its axis. The patch is
+    /// the arc of the first contact circle from the edge's start to its end, turned about
+    /// the line through `P` square to both axes onto the second circle (v from rail 0 to
+    /// rail 1), and its v-min and v-max iso curves are the rails.
+    ///
+    /// # Errors
+    ///
+    /// `SM_ERR` when the generator is not circular, a base surface is not a cylinder,
+    /// the radius is tiny, changes or differs from a cylinder's, the points' centres are
+    /// not one point on both axes, the axes are parallel, the edge ends lie on an axis or
+    /// the turn between the contact circles is not within (0, pi); those of
+    /// `SetupOffsetValues`, the evaluations and the constructors.
+    pub fn sphere_fillet_geom_parts(
+        ops: &mut dyn FilletSolverOps,
+        k: &Kernel,
+        b: &Brep,
+        tsects: &[TsectPnt],
+    ) -> Result<FilletGeomParts> {
+        use crate::surface::surface::SurfaceKind;
+
+        let s = ops.solver();
+        if !is_circular_fsg(s)? || tsects.is_empty() {
+            return Err(sm_err());
+        }
+
+        // both base surfaces cylinders: (origin, z axis, radius)
+        let mut cylinders = [(Point3::ZERO, Vec3::ZERO, 0.0); 2];
+        for (rail, slot) in cylinders.iter_mut().enumerate() {
+            let offset = s
+                .surface(rail)?
+                .ok_or_else(|| invalid("no offset surface"))?;
+            let SurfaceKind::Cone(cone) = offset.surface.base_surface().kind() else {
+                return Err(sm_err());
+            };
+            if !cone.is_cylinder() {
+                return Err(sm_err());
+            }
+            let frame = cone.canonical().origin;
+            *slot = (frame.origin(), frame.z_axis(), cone.bot_radius());
+        }
+
+        // constant radius, as wide as both cylinders
+        let tol = s.approx_tol_3d;
+        let (t_first, t_last) = first_last(tsects)?;
+        let radius = offset_radius(ops, t_first)?.abs();
+        let radius1 = offset_radius(ops, t_last)?.abs();
+        if radius < EFF_ZERO
+            || (radius1.abs() - radius).abs() > EFF_ZERO
+            || cylinders.iter().any(|c| (c.2 - radius).abs() > tol)
+        {
+            return Err(sm_err());
+        }
+
+        // the ball's centre: every TsectPnt's, where the axes meet
+        let center = eval_offset(k, ops.solver_mut(), 0, t_first.uv_pos(SrfIndex::First))?;
+        for t in tsects {
+            let c0 = eval_offset(k, ops.solver_mut(), 0, t.uv_pos(SrfIndex::First))?;
+            let c1 = eval_offset(k, ops.solver_mut(), 1, t.uv_pos(SrfIndex::Second))?;
+            if c0.distance(center) > tol || c1.distance(center) > tol {
+                return Err(sm_err());
+            }
+        }
+        let axes = [cylinders[0].1.unitize()?, cylinders[1].1.unitize()?];
+        for (c, axis) in cylinders.iter().zip(axes) {
+            let off = center - c.0;
+            if (off - axis * off.dot(axis)).length() > tol {
+                return Err(sm_err());
+            }
+        }
+        let mut turn_axis = axes[0].cross(axes[1]);
+        if turn_axis.length() < EFF_ZERO_SQRT {
+            return Err(sm_err()); // parallel cylinders: the centres fill a line, not this case
+        }
+        turn_axis = turn_axis.unitize()?;
+
+        // the edge's ends, and where the ball touches each cylinder in their cross-sections
+        let e = filleted_edge(ops.solver(), b)?;
+        let curve = edge::curve(b, e)?.ok_or_else(|| SolidError::null_pointer(OP))?;
+        let ivl = edge::interval(b, e)?;
+        let ends = [
+            curve_pv(k, curve, ivl.min())?.0,
+            curve_pv(k, curve, ivl.max())?.0,
+        ];
+        let touch = |axis: Vec3, end: Point3| -> Result<Point3> {
+            let off = end - center;
+            let rad = off - axis * off.dot(axis);
+            if rad.length() < tol {
+                return Err(sm_err());
+            }
+            Ok(center + rad.unitize()? * radius)
+        };
+        let contact = [
+            [touch(axes[0], ends[0])?, touch(axes[0], ends[1])?],
+            [touch(axes[1], ends[0])?, touch(axes[1], ends[1])?],
+        ];
+
+        // the turn from the first circle to the second, less than half a turn, measured at
+        // the edge's end where the contacts lie farther apart (at the other they may meet on
+        // the turn's axis, where the edge runs into the corner ball's pole)
+        let [[from0, from1], [to0, to1]] = contact;
+        let (from, to) = if to1.distance(from1) > to0.distance(from0) {
+            (from1 - center, to1 - center)
+        } else {
+            (from0 - center, to0 - center)
+        };
+        let mut turn = turn_axis.ccw_angle_between(from, to)?;
+        if turn < 0.0 {
+            turn_axis = -turn_axis;
+            turn = -turn;
+        }
+        if turn < ANG_TOL_RAD || turn > PI - ANG_TOL_RAD {
+            return Err(sm_err());
+        }
+
+        // the first circle's arc from the edge's start to its end, turned onto the second
+        let arc =
+            BSplineCurve::create_arc_from_points(center, from0, from1, NurbCircleParam::Quadratic)?;
+        let mut sphere =
+            SurfOfRevolution::create_canonical(k, Curve::from(arc), center, turn_axis, true)?;
+        let mut step_domain = sphere.step_uv_domain();
+        let mut uv_max = step_domain.max;
+        uv_max.x = rad_to_deg(turn);
+        step_domain = Extent2d::from_points(step_domain.min, uv_max);
+        sphere.adjust_step_uv_domain(k, &step_domain)?;
+        let sphere = Surface::from(sphere);
+
+        // rails: the patch's v = min and v = max isoparameter curves
+        let uv_domain = sphere.natural_uv_domain_with_nurb(k)?;
+        let rail_crv0 = sphere
+            .create_iso_parametric_curve(k, SurfParamType::V, uv_domain.min.y, 0.0, None, false)?
+            .curve;
+        let crv_ivl0 = rail_crv0.natural_interval();
+        let rail_crv1 = sphere
+            .create_iso_parametric_curve(k, SurfParamType::V, uv_domain.max.y, 0.0, None, false)?
+            .curve;
+        let crv_ivl1 = rail_crv1.natural_interval();
+
+        Ok(FilletGeomParts {
+            surface: sphere,
             rails: [rail_crv0, rail_crv1],
             rail_intervals: [Some(crv_ivl0), Some(crv_ivl1)],
             center_line: None,
@@ -1346,7 +1516,7 @@ impl FilletSolver {
             .solver_surface(rail_index)?
             .map(|surface| surface.base_surface().clone())
             .ok_or_else(|| invalid("no offset surface"))?;
-        let mut domain = base.natural_uv_domain();
+        let mut domain = base.natural_uv_domain_with_nurb(k)?;
         // virtual SetupOffsetExtension: dispatched on the solver's kind
         ops.setup_offset_extension(k, &base, &mut domain)?;
         set_interval(
@@ -1496,7 +1666,7 @@ impl FilletSolver {
             .surface(rail_index)?
             .map(|slot| slot.surface.base_surface().clone())
             .ok_or_else(|| invalid("no offset surface"))?;
-        let mut domain = base.natural_uv_domain();
+        let mut domain = base.natural_uv_domain_with_nurb(k)?;
         // virtual SetupOffsetExtension: dispatched on the solver's kind
         ops.setup_offset_extension(k, &base, &mut domain)?;
         let mut intervals = ExtentNd::new(jacobian_size);
@@ -1768,7 +1938,7 @@ impl FilletSolver {
             let solutions = side.global_curve_intersect(
                 k,
                 [CliffHandle::Curve, CliffHandle::Surface],
-                &side.natural_uv_domain(),
+                &side.natural_uv_domain_with_nurb(k)?,
                 &cs_curve,
                 &trim_ivl,
                 self.approx_tol_3d,
@@ -2037,7 +2207,7 @@ impl FilletSolver {
         let mut fil_edges: Vec<EdgeId> = Vec::new();
         for g in self.fillet_geoms() {
             let this_geom = pseudo.geom(g)?;
-            if this_geom.fillet_surface()?.is_some() && !fil_surfs.contains(&g) {
+            if this_geom.has_fillet_surface() && !fil_surfs.contains(&g) {
                 fil_surfs.push(g);
             }
             if this_geom.center_line_curve().is_some() && !fil_curvs.contains(&g) {
@@ -2283,7 +2453,9 @@ pub fn find_rollover_side_edge<O: ClassObject>(
                     .and_then(|row| row.get(1))
                     .copied()
                     .ok_or_else(|| invalid("short surface evaluation"))?;
-                let center_uv = orig_fillet.natural_uv_domain().evaluate(0.5, 0.5);
+                let center_uv = orig_fillet
+                    .natural_uv_domain_with_nurb(k)?
+                    .evaluate(0.5, 0.5);
                 if uv.y > center_uv.y {
                     bin_vec = -bin_vec;
                 }

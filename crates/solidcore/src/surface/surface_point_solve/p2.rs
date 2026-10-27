@@ -154,12 +154,12 @@ impl SurfPtGlobalSolver<'_> {
         // Similar for just a few control points.
         let surface = self.base.surface();
         let num_cpts =
-            i32::try_from(surface.number_control_points(SurfParamType::U)).unwrap_or(i32::MAX);
+            i32::try_from(surface.number_control_points(k, SurfParamType::U)).unwrap_or(i32::MAX);
         if num_cpts < grid_size_u && num_cpts > 0 {
             grid_size_u = num_cpts;
         }
         let num_cpts =
-            i32::try_from(surface.number_control_points(SurfParamType::V)).unwrap_or(i32::MAX);
+            i32::try_from(surface.number_control_points(k, SurfParamType::V)).unwrap_or(i32::MAX);
         if num_cpts < grid_size_v && num_cpts > 0 {
             grid_size_v = num_cpts;
         }
@@ -1605,7 +1605,7 @@ impl SurfPtSolveStepper<'_> {
         if prev.is_singular()?.0 && op != SolverOperation::Signed3dDirectedMaximize {
             // Near singularity, use the surface's own domain. [B50]
             let surface = self.base.surface();
-            let srf_domain = surface.natural_uv_domain();
+            let srf_domain = surface.natural_uv_domain_with_nurb(k)?;
 
             match surface.invert_point_near_singularity(
                 k,
