@@ -2206,6 +2206,18 @@ fn last_index(size: usize) -> Result<usize> {
     })
 }
 
+/// The vertex a seam classification's end names (upstream's `GetVertexObject`): the B-rep
+/// vertex its handle names, as `MergeIntervals` resolves the classification's handles
+/// ([`merge_intervals`]: the B-rep's own objects first, then the caller's `resolve`). The
+/// ends `HasSeamProblem` classifies to vertices hold the B-rep's own handles, which the
+/// caller's `resolve` need not know.
+fn seam_vertex<O: LoopObject>(o: O, resolve: &dyn Fn(O) -> Option<EntityRef>) -> Option<VertexId> {
+    match o.as_topology().or_else(|| resolve(o)) {
+        Some(EntityRef::Vertex(v)) => Some(v),
+        _ => None,
+    }
+}
+
 /// The merges of [`split_at_seam_depth`] (`merge` = `(bMergeU, bMergeV)`), with the
 /// B-rep's editing and the context's Boolean flag set; then, for a closed surface that
 /// had only vertex loops, the inserted seams' loop becomes the outer loop.
@@ -2226,9 +2238,8 @@ fn split_at_seam_merges<O: LoopObject>(
     let mut out = SeamSplit::default();
     let mut this_new = SeamSplit::default();
     if merge_u {
-        fp2::remove_suspect_split_at_seam_uv_trim_curves(b, crv_class_u, |o| match resolve(o) {
-            Some(EntityRef::Vertex(v)) => Some(v),
-            _ => None,
+        fp2::remove_suspect_split_at_seam_uv_trim_curves(b, crv_class_u, |o| {
+            seam_vertex(o, resolve)
         })?;
         this_new = merge_intervals(k, crv_class_u, Sp::U, b, f, resolve)?;
         if !merge_v {
@@ -2316,9 +2327,8 @@ fn split_at_seam_merges<O: LoopObject>(
             out.edges.extend_from_slice(&this_new.edges);
             out.vertices.extend_from_slice(&this_new.vertices);
         }
-        fp2::remove_suspect_split_at_seam_uv_trim_curves(b, crv_class_v, |o| match resolve(o) {
-            Some(EntityRef::Vertex(v)) => Some(v),
-            _ => None,
+        fp2::remove_suspect_split_at_seam_uv_trim_curves(b, crv_class_v, |o| {
+            seam_vertex(o, resolve)
         })?;
         this_new = merge_intervals(k, crv_class_v, Sp::V, b, f, resolve)?;
         out.faces.extend_from_slice(&this_new.faces);
