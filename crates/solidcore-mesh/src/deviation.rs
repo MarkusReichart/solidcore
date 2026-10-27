@@ -217,7 +217,9 @@ pub fn deviation(k: &Kernel, b: &Brep, mesh: &Mesh, tolerance: f64) -> Result<De
         let Some(p) = mesh.triangle_points(*t) else {
             continue;
         };
-        let domain = s.natural_uv_domain();
+        // the domain upstream's GetNaturalUVDomain gives: a lazy analytic face reads the
+        // NURB its MakeNurb builds (made once, kept on the surface)
+        let domain = s.natural_uv_domain_with_nurb(k)?;
         let period = *periods.entry(*f).or_insert_with(|| {
             let along = |u: bool| {
                 let width = if u {
