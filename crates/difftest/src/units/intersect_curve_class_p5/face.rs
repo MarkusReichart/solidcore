@@ -13,7 +13,8 @@
 //! compare the classification after `CurveOnClassify` (intervals and the start, mid and
 //! end classes and objects), the merge status, the new face, edge and vertex counts, the
 //! B-rep's counts after it and whether the B-rep is valid (C++: `ValidatePointers` and
-//! `AssertValid`; Rust: [`solidcore::topology::integrity::check`]).
+//! `AssertValid`; Rust: [`solidcore::topology::integrity::check`] after
+//! [`Brep::refresh_cached_topology`], as a public API return refreshes it).
 
 use serde::{Deserialize, Serialize};
 
@@ -659,6 +660,9 @@ pub(super) fn rust(i: &FaceMergeIn) -> Result<Output, HarnessError> {
     out.push(count(
         solidcore::topology::brep::p1::vertices(&b, None).map(|v| v.len()),
     )?);
+    // MergeIntervals is internal: the cached topology is refreshed only at public API
+    // returns (#1239), so refresh it before checking, as such a return would
+    b.refresh_cached_topology();
     out.push(f64::from(u8::from(
         solidcore::topology::integrity::check(&b).is_ok(),
     )));
