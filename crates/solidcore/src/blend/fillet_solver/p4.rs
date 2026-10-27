@@ -306,7 +306,8 @@ impl CalcState {
         geom0: FilletGeomId,
         split_original_fillet: bool,
     ) -> Self {
-        let domain = base_surfaces[0].natural_uv_domain();
+        // (kernel-free: a lazy analytic answers its NURB-less base's empty domain)
+        let domain = base_surfaces[0].natural_uv_domain_if_built();
         Self {
             edge_curve,
             ivl,
@@ -1894,6 +1895,18 @@ fn c3_try_analytic(
 
     // try making a torus fillet to store in m_vFilletGeoms[0]; quit when this succeeds
     match calc_torus_fillet_geom(ops, cx, &mut st.store, &st.tsect_pnts) {
+        Ok(()) => return Ok(true),
+        Err(e) if e.is_unported() => return Err(e),
+        Err(_) => {}
+    }
+
+    // WR-420 (fork addition, opt-in): where the centre line collapses to a point, the
+    // corner ball's patch
+    if !cx.k.fixes.fillet_corner_ball_patch {
+        return Ok(false);
+    }
+    let tsects = st.store.snapshot(cx.fillets, &st.tsect_pnts)?;
+    match FilletSolver::calc_sphere_fillet_geom(ops, cx.k, cx.target, cx.fillets, &tsects, None) {
         Ok(()) => Ok(true),
         Err(e) if e.is_unported() => Err(e),
         Err(_) => Ok(false),
@@ -1929,8 +1942,8 @@ fn c3_trace_setup(
     st: &mut CalcState,
 ) -> Result<[Surface; 2]> {
     // get fillet baseSurface domains
-    let mut domain1 = st.base_surfaces[0].natural_uv_domain();
-    let mut domain2 = st.base_surfaces[1].natural_uv_domain();
+    let mut domain1 = st.base_surfaces[0].natural_uv_domain_if_built();
+    let mut domain2 = st.base_surfaces[1].natural_uv_domain_if_built();
 
     // extend baseSurface domains by m_dSurfaceExtensionFactor * rDomain.GetSize();
     // don't extend in periodic directions nor through singular boundaries
@@ -2045,7 +2058,7 @@ mod tests_c3 {
     fn analytic_planes() -> (Surface, Surface) {
         use crate::geom::vector2d::Vec2;
         use crate::surface::plane::Plane;
-        let domain = planes().0.natural_uv_domain();
+        let domain = planes().0.natural_uv_domain_if_built();
         let plane = |x: [f64; 3], y: [f64; 3]| {
             Surface::from(Plane::new(
                 Vec3::new(0.0, 0.0, 0.0),
@@ -2206,8 +2219,8 @@ mod tests_c3 {
         let mut st = state(line(), [a.clone(), b.clone()]);
         let surfaces = with_cx(&k, |cx| c3_trace_setup(&mut fs, cx, &mut st)).unwrap();
 
-        let mut d1 = a.natural_uv_domain();
-        let mut d2 = b.natural_uv_domain();
+        let mut d1 = a.natural_uv_domain_if_built();
+        let mut d2 = b.natural_uv_domain_if_built();
         fs.solver.setup_offset_extension(&k, &a, &mut d1).unwrap();
         fs.solver.setup_offset_extension(&k, &b, &mut d2).unwrap();
         assert_eq!(st.trace.domains[0].min, d1.min);
@@ -3084,7 +3097,7 @@ fn c5_undo_reversal(ops: &mut dyn FilletSolverOps, cx: &mut Cx<'_>) -> Result<()
 
         let k = cx.k;
         let geom = cx.fillets.geom_mut(g)?;
-        if geom.center_line_curve.is_none() || geom.fillet_surface()?.is_none() {
+        if geom.center_line_curve.is_none() || !geom.has_fillet_surface() {
             return Err(SolidError::null_pointer(OP));
         }
         if let Some(center_line) = geom.center_line_curve.as_mut() {
@@ -3529,13 +3542,18 @@ fn c6_compute_point_values(
         // :3600
         compute_uv_vectors(point)?;
 
-        // :3604 static double sdStaticStep = TANGENT ? 1e-3 : 1e-5 (latched once)
-        let mut step =
-            k.latch_fillet_point_step(if point.point_type == IntersectionPointType::TangentPoint {
-                1.0e-3
-            } else {
-                1.0e-5
-            });
+        // :3604 static double sdStaticStep = TANGENT ? 1e-3 : 1e-5 (latched once; with
+        // `fixes.fillet_point_step_per_point` chosen for this point, ND-3)
+        let first = if point.point_type == IntersectionPointType::TangentPoint {
+            1.0e-3
+        } else {
+            1.0e-5
+        };
+        let mut step = if k.fixes.fillet_point_step_per_point {
+            first
+        } else {
+            k.latch_fillet_point_step(first)
+        };
 
         // :3615 forward step (StepSolve may shorten `dStep`, passed by reference)
         let mut step_forw = TsectPnt::new();
@@ -3933,6 +3951,43 @@ mod tests_c6 {
         }
         assert!((moves[0] - 1.0).abs() < 1.0e-9, "{moves:?}");
         assert!((moves[1] - 100.0).abs() < 1.0e-6, "{moves:?}");
+    }
+
+    /// #1173 (ND-3): the first finite-difference guess lies one step from the point. With the
+    /// fix that step is the point's own whatever an earlier blend latched; without it the
+    /// latched step is used. The latch itself is neither read nor written with the fix.
+    #[test]
+    fn per_point_step_ignores_the_latch_with_the_fix() {
+        let (a, b) = (xy(0.0), xy(1.0));
+        let mut prev = TsectPnt::new();
+        *prev.crv_deriv_mut() = Vec3::new(0.0, 3.0, 0.0);
+        // distance of the first guess from the point's uv, for the fix on/off and a latch
+        let first_guess = |fixed: bool, latched: Option<f64>| {
+            let mut k = Kernel::default();
+            k.fixes.fillet_point_step_per_point = fixed;
+            k.fillet_point_step.set(latched);
+            let mut ops = Probe {
+                inner: Variable(solver(&k, &a, &b)),
+                guesses: Vec::new(),
+            };
+            let _ = run(&mut ops, &k, 1.0, &mut TsectPnt::new(), Some(&prev));
+            assert_eq!(
+                k.fillet_point_step.get(),
+                if fixed {
+                    latched
+                } else {
+                    latched.or(Some(1.0e-3))
+                }
+            );
+            let g = ops.guesses.first().expect("a finite-difference solve ran");
+            (g[0] - 0.5).hypot(g[1] - 0.25)
+        };
+        let (fresh, preset) = (first_guess(true, None), first_guess(true, Some(1.0e-5)));
+        assert!(fresh > 0.0);
+        assert_eq!(fresh, preset);
+        // without the fix the preset latch changes the step
+        assert!(first_guess(false, Some(1.0e-5)) < fresh / 10.0);
+        assert_eq!(first_guess(false, None), fresh);
     }
 
     #[test]
@@ -4647,7 +4702,7 @@ impl crate::blend::fillet_solver::curve_blend_sih::SmoothingSolver for Intersect
     fn base_natural_uv_domain(&self, rail: usize) -> Result<Extent2d> {
         Ok(offset_surface(&*self.ops, rail)?
             .base_surface()
-            .natural_uv_domain())
+            .natural_uv_domain_if_built())
     }
 
     fn rail_surface(&self, rail: usize) -> Result<Surface> {

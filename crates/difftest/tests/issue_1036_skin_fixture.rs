@@ -5,7 +5,12 @@
 //! interpolant, written as its NURB stores it (degree, control points, knots), so both
 //! sides of the runner build bit-identical curves. Run with `--ignored` to rewrite the
 //! fixture; `serde_json`'s `float_roundtrip` keeps every value exact.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing
+)]
 
 use serde_json::{json, Value};
 use solidcore::math::Point3;

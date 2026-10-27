@@ -72,12 +72,14 @@ use crate::primitive::primitive_creation::p1::{self, PrimitiveCreation};
 use crate::surface::cone::Cone;
 use crate::surface::plane::Plane;
 use crate::surface::torus::{Torus, TorusOptions};
+use crate::sweep::topology_sweep::access::SweepAccess;
 use crate::topology::brep::p2::ArenaNotifyState;
 use crate::topology::{Brep, EdgeId, FaceId};
 
 const OP_BOX: &str = "primitive::api_primitives::create_box";
 const OP_SPHERE: &str = "primitive::api_primitives::create_sphere";
 const OP_CYLINDER: &str = "primitive::api_primitives::create_cylinder_surface";
+const OP_CYLINDER_SOLID: &str = "primitive::api_primitives::create_cylinder";
 const OP_CONE: &str = "primitive::api_primitives::create_cone";
 const OP_CONE_SURFACE: &str = "primitive::api_primitives::create_cone_surface";
 const OP_PYRAMID: &str = "primitive::api_primitives::create_pyramid";
@@ -222,14 +224,26 @@ pub fn create_sphere(k: &mut Kernel, origin: Point3, radius: f64) -> Result<Brep
 }
 
 /// The solid cylinder of `radius` from the base circle centred at `origin` to
-/// `height` along Z (`SmApiCreateCylinder`, `SmBrep*&` overload: [`create_cone`] with
-/// equal radii).
+/// `height` along Z (`SmApiCreateCylinder`, `SmBrep*&` overload:
+/// `CreateCylinder(height, radius, frame)`).
 ///
 /// # Errors
 ///
-/// Those of [`create_cone`].
+/// [`SolidError::InvalidInput`] unless the radius and height are finite and above
+/// `SM_EFF_ZERO`; those of [`PrimitiveCreation::create_cylinder`].
 pub fn create_cylinder(k: &mut Kernel, origin: Point3, radius: f64, height: f64) -> Result<Brep> {
-    create_cone(k, origin, radius, radius, height)
+    if !is_positive_dim(radius) || !is_positive_dim(height) {
+        return Err(SolidError::invalid_input(
+            OP_CYLINDER_SOLID,
+            "non-positive radius or height",
+        ));
+    }
+    let frame = xy_frame(origin);
+    let (mut pc, mut brep) = new_primitive(k)?;
+    pc.create_cylinder(k, &mut brep, height, radius, &frame)?;
+    // (not upstream: the port's cached topology fields, true for the caller)
+    brep.refresh_cached_topology();
+    Ok(brep)
 }
 
 /// The cylinder surface (no caps) of `radius` about the Z axis through `origin`,
@@ -635,7 +649,10 @@ fn partial_cone(
             start_angle_deg,
             end_angle_deg,
             &frame,
-        )
+        )?;
+        // CreateCone leaves edit mode on, in which face caches ignore the trim loops
+        model.set_editing(PrimitiveModel::MAIN, false)?;
+        Ok(())
     })
 }
 
@@ -967,8 +984,26 @@ mod tests {
         assert!(crate::topology::brep::p2::is_manifold_solid(&sphere).unwrap());
         let cylinder = create_partial_cylinder(k, o(), 5.0, 10.0, 0.0, 90.0).unwrap();
         assert!(crate::topology::brep::p2::is_manifold_solid(&cylinder).unwrap());
-        let torus = create_partial_torus(k, o(), 10.0, 2.0, 0.0, 90.0).unwrap();
-        assert!(crate::topology::brep::p2::is_manifold_solid(&torus).unwrap());
+        // with `fixes.revolve_analytic_profile_faces` (WR-448, #545) the swept face is
+        // an analytic torus; upstream's is a B-spline surface
+        for (fix, expected) in [(false, 0), (true, 1)] {
+            k.fixes.revolve_analytic_profile_faces = fix;
+            let torus = create_partial_torus(k, o(), 10.0, 2.0, 0.0, 90.0).unwrap();
+            assert!(crate::topology::brep::p2::is_manifold_solid(&torus).unwrap());
+            let tori = torus
+                .face_list()
+                .iter()
+                .filter(|&&f| {
+                    let surface = torus.face(f).unwrap().surface.as_ref().unwrap();
+                    matches!(
+                        surface.kind(),
+                        crate::surface::surface::SurfaceKind::Torus(_)
+                    )
+                })
+                .count();
+            assert_eq!(tori, expected, "{fix}");
+        }
+        k.fixes.revolve_analytic_profile_faces = false;
         // edges without an edge use on their face
         let mut brep = Brep::new_with_infinite_region().unwrap();
         let (edge, face) = (EdgeId::from_index(0), FaceId::from_index(0));

@@ -24,7 +24,7 @@
 //! | [`Surface::create_extended_surface`], [`Surface::create_extended_surface_dir`] | `CreateExtendedSurface` (both) |
 //! | [`Surface::drop_point_fast`]                      | `DropPointFast`                                  |
 //! | [`Surface::evaluate`], [`Surface::evaluate_point`] | `Evaluate`, `EvaluatePoint`                     |
-//! | [`Surface::natural_uv_domain`], [`Surface::step_uv_domain`] | `GetNaturalUVDomain`, `GetSTEPUVDomain` |
+//! | [`Surface::natural_uv_domain_if_built`], [`Surface::step_uv_domain`] | `GetNaturalUVDomain`, `GetSTEPUVDomain` |
 //! | [`Surface::degree`], [`Surface::number_control_points`] | `GetDegree`, `GetNumberControlPoints`       |
 //! | [`Surface::max_analytic_domain`]                  | `GetMaxAnalyticDomain`                           |
 //! | [`Surface::is_bilinear`], [`Surface::is_parallel_to_vector`] | `IsBilinear`, `IsParallelToVector`    |
@@ -185,11 +185,11 @@
 //!   NURB (`GetOrCreateGwNurbPointer`); [`Surface::degree`] and [`Surface::knots`] read
 //!   the stored base, so a lazy extrusion, cone, sphere or torus answers `0` / the
 //!   NURB-less base. [`Surface::degree_with_nurb`] and [`Surface::knots_with_nurb`] answer
-//!   as upstream and serve the callers that hold a kernel. Callers without one still
-//!   read the stored base: `Surface::domain_with_continuity_using`,
-//!   `Surface::snap_to_knots`, `SurfaceCache::surface_continuity`, the offset surface's
-//!   and the surface-in-volume's `knots`, and `IsoCurve::knots` (a kernel would change
-//!   their signatures).
+//!   as upstream and serve the callers that hold a kernel. `SurfaceEvaluate::knots`,
+//!   `Surface::snap_to_knots` and `Surface::domain_with_continuity_from_cache` take the
+//!   kernel for it. Callers without one still read the stored base:
+//!   `SurfaceCache::surface_continuity`, the offset surface's and the surface-in-volume's
+//!   inherent `knots`, and `IsoCurve::knots` (a kernel would change their signatures).
 //! - **Made NURB.** An analytic kind without a NURB makes one for `const` queries; the
 //!   surface keeps the made kind (`NurbMemo`, [`Surface::kind_with_nurb`]) for later
 //!   queries, emptied by any mutable access to the kind and absent on copies. A
@@ -1660,12 +1660,14 @@ impl Surface {
 
     // ---- simple queries -------------------------------------------------------------
 
-    /// The natural parameter domain (`GetNaturalUVDomain`), without a kernel: unlike
-    /// upstream, which makes a missing NURB first, a lazy cone, sphere, torus or surface
-    /// of revolution (no NURB yet) answers its NURB-less base's empty domain. Callers
-    /// that hold a kernel use [`Surface::natural_uv_domain_with_nurb`].
+    /// The natural parameter domain (`GetNaturalUVDomain`) as far as it is built, without
+    /// a kernel: unlike upstream, which makes a missing NURB first, a lazy cone, sphere,
+    /// torus or surface of revolution (no NURB yet) answers its NURB-less base's empty
+    /// domain. Callers that hold a kernel use [`Surface::natural_uv_domain_with_nurb`];
+    /// this is for surfaces known to be built (B-splines, planes, made NURBs) and for
+    /// kernel-free code.
     #[must_use]
-    pub fn natural_uv_domain(&self) -> Extent2d {
+    pub fn natural_uv_domain_if_built(&self) -> Extent2d {
         match &self.kind {
             SurfaceKind::BSpline(s) => s.natural_uv_domain(),
             SurfaceKind::CurveBounded(s) => s.natural_uv_domain(),
@@ -1753,7 +1755,7 @@ impl Surface {
     /// The number of control points in `param`'s direction
     /// (`GetNumberControlPoints`).
     #[must_use]
-    pub fn number_control_points(&self, param: SurfParamType) -> usize {
+    pub fn number_control_points(&self, k: &Kernel, param: SurfParamType) -> usize {
         match &self.kind {
             SurfaceKind::BSpline(s) => s.number_control_points(param),
             SurfaceKind::CurveBounded(_)
@@ -1763,7 +1765,10 @@ impl Surface {
             SurfaceKind::Plane(s) => s.base_for_query().number_control_points(param),
             SurfaceKind::Cone(s) => s.rev().base().number_control_points(param),
             SurfaceKind::SurfOfRevolution(s) => s.base().number_control_points(param),
-            SurfaceKind::SurfOfExtrusion(s) => s.base().number_control_points(param),
+            // (GetOrCreateGwNurbPointer; a failed make leaves no NURB, so 0)
+            SurfaceKind::SurfOfExtrusion(s) => s
+                .base_with_nurb_or_base(k)
+                .map_or(0, |b| b.number_control_points(param)),
             SurfaceKind::Sphere(s) => s.base().base().number_control_points(param),
             SurfaceKind::Torus(s) => s.base().base().number_control_points(param),
         }
@@ -1791,7 +1796,7 @@ impl Surface {
 
     /// Whether the surface is bilinear (`IsBilinear`).
     #[must_use]
-    pub fn is_bilinear(&self) -> bool {
+    pub fn is_bilinear(&self, k: &Kernel) -> bool {
         match &self.kind {
             SurfaceKind::BSpline(s) => s.is_bilinear(),
             SurfaceKind::CurveBounded(_)
@@ -1801,7 +1806,10 @@ impl Surface {
             SurfaceKind::Plane(s) => s.base_for_query().is_bilinear(),
             SurfaceKind::Cone(s) => s.rev().base().is_bilinear(),
             SurfaceKind::SurfOfRevolution(s) => s.base().is_bilinear(),
-            SurfaceKind::SurfOfExtrusion(s) => s.base().is_bilinear(),
+            // (GetNumberControlPoints makes a missing NURB)
+            SurfaceKind::SurfOfExtrusion(s) => {
+                s.base_with_nurb_or_base(k).is_ok_and(|b| b.is_bilinear())
+            }
             SurfaceKind::Sphere(s) => s.base().base().is_bilinear(),
             SurfaceKind::Torus(s) => s.base().base().is_bilinear(),
         }
@@ -1812,7 +1820,7 @@ impl Surface {
     /// # Errors
     ///
     /// Those of the kind's override.
-    pub fn is_parallel_to_vector(&self, vector: Vec3) -> Result<bool> {
+    pub fn is_parallel_to_vector(&self, k: &Kernel, vector: Vec3) -> Result<bool> {
         match &self.kind {
             SurfaceKind::BSpline(s) => s.is_parallel_to_vector(vector),
             SurfaceKind::CurveBounded(_)
@@ -1823,7 +1831,9 @@ impl Surface {
             // (not a plane: the SmBSplineSurface net test)
             SurfaceKind::Cone(s) => s.rev().base().is_parallel_to_vector(vector),
             SurfaceKind::SurfOfRevolution(s) => s.base().is_parallel_to_vector(vector),
-            SurfaceKind::SurfOfExtrusion(s) => s.base().is_parallel_to_vector(vector),
+            SurfaceKind::SurfOfExtrusion(s) => {
+                s.base_with_nurb_or_base(k)?.is_parallel_to_vector(vector)
+            }
             SurfaceKind::Sphere(s) => s.base().base().is_parallel_to_vector(vector),
             SurfaceKind::Torus(s) => s.base().base().is_parallel_to_vector(vector),
         }
@@ -3451,8 +3461,9 @@ pub trait SurfaceEvaluate {
         guess: Option<Point2>,
     ) -> Result<Option<(Point2, f64)>>;
 
-    /// `GetNaturalUVDomain`.
-    fn natural_uv_domain(&self) -> Extent2d;
+    /// `GetNaturalUVDomain` without a kernel (a lazy analytic [`Surface`] answers its
+    /// NURB-less base's empty domain, see [`Surface::natural_uv_domain_if_built`]).
+    fn natural_uv_domain_if_built(&self) -> Extent2d;
 
     /// `Evaluate` (see [`Surface::evaluate`]).
     ///
@@ -3482,13 +3493,18 @@ pub trait SurfaceEvaluate {
     /// Those of the comparison.
     fn surface_approx_eq(&self, k: &Kernel, other: &Self) -> Result<bool>;
 
-    /// `GetKnots`.
+    /// `GetKnots`, virtual: a lazy surface makes its NURB first
+    /// ([`Surface::knots_with_nurb`]).
     ///
     /// # Errors
     ///
     /// Those of the knot query.
-    fn knots(&self, param: SurfParamType, ivl: Option<&Extent1d>)
-        -> Result<(Vec<f64>, Vec<usize>)>;
+    fn knots(
+        &self,
+        k: &Kernel,
+        param: SurfParamType,
+        ivl: Option<&Extent1d>,
+    ) -> Result<(Vec<f64>, Vec<usize>)>;
 
     /// `IsKindOf`.
     ///
@@ -3572,8 +3588,9 @@ impl SurfaceEvaluate for Surface {
         self.approx_eq(k, other)
     }
 
-    fn natural_uv_domain(&self) -> Extent2d {
-        Self::natural_uv_domain(self)
+    fn natural_uv_domain_if_built(&self) -> Extent2d {
+        // (kernel-free: a lazy analytic answers its NURB-less base's empty domain)
+        Surface::natural_uv_domain_if_built(self)
     }
 
     fn evaluate(
@@ -3593,10 +3610,11 @@ impl SurfaceEvaluate for Surface {
 
     fn knots(
         &self,
+        k: &Kernel,
         param: SurfParamType,
         ivl: Option<&Extent1d>,
     ) -> Result<(Vec<f64>, Vec<usize>)> {
-        Self::knots(self, param, ivl)
+        Self::knots_with_nurb(self, k, param, ivl)
     }
 
     fn is_kind_of(&self, t: i64) -> Result<bool> {
@@ -3681,8 +3699,8 @@ impl SurfaceEvaluate for BSplineSurface {
         Ok(self.approx_eq(other))
     }
 
-    fn natural_uv_domain(&self) -> Extent2d {
-        Self::natural_uv_domain(self)
+    fn natural_uv_domain_if_built(&self) -> Extent2d {
+        BSplineSurface::natural_uv_domain(self)
     }
 
     fn evaluate(
@@ -3702,6 +3720,7 @@ impl SurfaceEvaluate for BSplineSurface {
 
     fn knots(
         &self,
+        _k: &Kernel,
         param: SurfParamType,
         ivl: Option<&Extent1d>,
     ) -> Result<(Vec<f64>, Vec<usize>)> {
@@ -3760,7 +3779,8 @@ pub const fn base_natural_uv_domain() -> Extent2d {
 /// `SmSurface::GetSTEPUVDomain`: the natural domain of `surface`.
 #[must_use]
 pub fn base_step_uv_domain(surface: &Surface) -> Extent2d {
-    surface.natural_uv_domain()
+    // (kernel-free: a lazy analytic answers its NURB-less base's empty domain)
+    surface.natural_uv_domain_if_built()
 }
 
 /// `SmSurface::GetDegree`: reports `SM_ERR` and returns `SM_ERR` (1001) as the
@@ -6743,7 +6763,7 @@ mod tests {
         assert_eq!(s.type_code(), B_SPLINE_SURFACE_TYPE);
         assert!(s.is_kind_of(TYPE).unwrap());
         assert!(s.owner().is_none());
-        let d = s.natural_uv_domain();
+        let d = s.natural_uv_domain_if_built();
         assert_eq!(s.step_uv_domain().min(), d.min());
         assert_eq!(s.degree(SurfParamType::U), 1);
         let p = s.evaluate_point(k, Point2::new(1.0, 1.0)).unwrap();
@@ -6768,8 +6788,8 @@ mod tests {
         let (a, b) = s
             .split_at(&Kernel::default(), 0.5, SurfParamType::U)
             .unwrap();
-        assert!(a.natural_uv_domain().u_max() <= 0.5 + 1e-12);
-        assert!(b.natural_uv_domain().u_min() >= 0.5 - 1e-12);
+        assert!(a.natural_uv_domain_if_built().u_max() <= 0.5 + 1e-12);
+        assert!(b.natural_uv_domain_if_built().u_min() >= 0.5 - 1e-12);
         assert_eq!(
             s.convert_uv_from_step_to_nurbs(&Kernel::default(), Point2::new(0.1, 0.2))
                 .unwrap(),
@@ -7206,7 +7226,7 @@ mod kernel_dispatch_tests {
                 surface.type_code(),
                 if cylinder { CYLINDER_TYPE } else { CONE_TYPE }
             );
-            let uv = surface.natural_uv_domain().evaluate(0.25, 0.5);
+            let uv = surface.natural_uv_domain_if_built().evaluate(0.25, 0.5);
             let expected = cone.evaluate_point(&kernel, uv).unwrap();
             assert_eq!(surface.evaluate_point(&kernel, uv).unwrap(), expected);
             assert_eq!(surface.copy(k).unwrap().type_code(), surface.type_code());

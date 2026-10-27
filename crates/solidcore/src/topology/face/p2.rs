@@ -972,15 +972,22 @@ fn is_singularity(
 
 /// `SmOffsetSurface(dOffset, rSurface).EvaluateSimple(uv, 1, 1, TRUE, TRUE, TRUE, ..)`:
 /// a temporary offset (not owning, default singularities, so its constructor runs the
-/// surface's `IsPeriodic` and `GetSingularities`) over a copy of `surface` that keeps
-/// its owner (upstream shares it).
+/// surface's `IsPeriodic` and `GetSingularities`) over an exact evaluation copy of
+/// `surface` that keeps its owner (upstream shares it; [`Surface`]'s `Clone` would run
+/// the copy constructor's knot fix-up).
 fn offset_evaluate_simple(
     k: &Kernel,
     surface: &Surface,
     offset: f64,
     uv: Point2,
 ) -> Result<Vec<Vec<Vec3>>> {
-    let off = OffsetSurface::new(k, offset, surface.clone_keeping_owner(), false, SS_UNKNOWN)?;
+    let off = OffsetSurface::new(
+        k,
+        offset,
+        surface.clone_for_evaluation()?,
+        false,
+        SS_UNKNOWN,
+    )?;
     off.evaluate_simple(k, uv, 1, 1, simple_flags())
 }
 
@@ -2735,7 +2742,7 @@ pub fn fix_uv_trim_curves_notified(
     let vertex_point = b.vertex(vertex)?.point;
     let curr_face =
         eu1::face(b, eu_current)?.ok_or_else(|| null("FixUVTrimCurves: edge use without face"))?;
-    let _ = surface_deref(b, curr_face)?.natural_uv_domain();
+    let _ = surface_deref(b, curr_face)?.natural_uv_domain_with_nurb(k)?;
 
     let curr_edge = edge_deref(b, eu_current)?;
     let prev_edge = edge_deref(b, eu_previous)?;

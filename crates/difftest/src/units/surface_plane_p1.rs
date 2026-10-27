@@ -948,21 +948,21 @@ fn rust_op(k: &Kernel, op: &OpIn, a: &mut Plane, o: &mut Vec<f64>) -> Result<(),
         OpIn::Inherited { v } => {
             let s = Surface::from(a.clone());
             o.push(0.0);
-            put_dom(o, &s.natural_uv_domain());
+            put_dom(o, &s.natural_uv_domain_with_nurb(k).map_err(|e| HarnessError::new(e.to_string()))?);
             let max = s
                 .max_analytic_domain(k)
                 .map_err(|e| harness(format!("max analytic domain: {e}")))?;
             put_dom(o, &max);
-            o.push(b(s.is_bilinear()));
+            o.push(b(s.is_bilinear(k)));
             let par = s
-                .is_parallel_to_vector(v3(*v))
+                .is_parallel_to_vector(k, v3(*v))
                 .map_err(|e| harness(format!("parallel: {e}")))?;
             o.push(b(par));
             o.extend([
                 s.degree(SurfParamType::U) as f64,
                 s.degree(SurfParamType::V) as f64,
-                s.number_control_points(SurfParamType::U) as f64,
-                s.number_control_points(SurfParamType::V) as f64,
+                s.number_control_points(k, SurfParamType::U) as f64,
+                s.number_control_points(k, SurfParamType::V) as f64,
             ]);
         }
         OpIn::Reverse { v_dir } => {

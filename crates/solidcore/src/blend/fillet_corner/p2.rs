@@ -1798,7 +1798,7 @@ impl FilletCorner {
         // Then determine the orientation of pFilletSurface. But first, drop two end
         // points of pOppositeEdge onto pOppositeFillet
         let mut offset_orientation2 = 1.0;
-        let uv_domain = opposite_fillet.natural_uv_domain();
+        let uv_domain = opposite_fillet.natural_uv_domain_with_nurb(env.k)?;
         let drop_uv = |p: Point3| -> Result<Point2> {
             let sols = opposite_fillet.global_point_solve::<ObjectHandle>(
                 env.k,

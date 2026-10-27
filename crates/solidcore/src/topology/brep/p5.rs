@@ -2138,8 +2138,8 @@ pub fn remove_topological_with_notifications(
                     .face(keep)?
                     .surface
                     .as_ref()
-                    .ok_or_else(|| null_at("topology::brep::p5::remove_topological_with_notifications/keep.surface", Some(EntityRef::Face(keep))))?
-                    .natural_uv_domain();
+                    .ok_or_else(|| SolidError::null_pointer(OP))?
+                    .natural_uv_domain_with_nurb(k)?;
                 crate::topology::face::p2::set_uv_domain(b, keep, &domain)?;
                 let tolerance = b.face(keep)?.tolerance;
                 if topological.dist_between > tolerance / 10.0 {

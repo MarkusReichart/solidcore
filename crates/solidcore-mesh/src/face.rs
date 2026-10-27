@@ -449,7 +449,8 @@ impl FaceState {
     pub(crate) fn new(k: &Kernel, b: &Brep, f: FaceId, model_size: f64) -> Result<Self> {
         let surface = surface_of(b, f)?;
         let sense = outward_sense(b, f)?;
-        let natural = surface.natural_uv_domain();
+        // (a lazy analytic face reads the domain of the NURB its MakeNurb builds)
+        let natural = surface.natural_uv_domain_with_nurb(k)?;
         let mut domain = b.face(f)?.uv_domain;
         if !(domain.u_min() < domain.u_max() && domain.v_min() < domain.v_max()) {
             domain = natural;

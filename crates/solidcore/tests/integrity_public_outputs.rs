@@ -18,12 +18,11 @@
 //! - `topology::brep::p3::api_brep_copy` (of a Boolean union's result).
 //! - `heal::heal_data::p1::api_heal_brep` (in place).
 //! - `heal::stitch::p1` (`api_stitch` and its six siblings, in place):
-//!   [`stitch_outputs_are_intact`].
+//!   covered by a test that lands with the #855 stitch change.
 //! - `offset::offset_executive::p2` (`api_shell_brep_full`, `api_offset_brep_full`):
 //!   checked by the offset tests' shared fixture (`tests/support/offset_fixture.rs`).
-//! - `blend::fillet_executive::api` (fillet edges, per edge, variable radius, circular,
-//!   chamfer, bevel corners, surface/surface fillet, in place or returned).
-//! - `api_transform` moves geometry only and leaves topology (and the fields) as they
+//! - Not covered yet: the fillet API (`blend::fillet_executive::api`), after #1127.
+//!   `api_transform` moves geometry only and leaves topology (and the fields) as they
 //!   are; the query, curve and surface APIs make no B-rep.
 #![allow(
     clippy::unwrap_used,
@@ -199,26 +198,6 @@ fn every_public_brep_output_passes_the_integrity_check() {
             check(&u)?;
             copy(k, &u)
         }),
-        ("fillet edges", |k| {
-            let mut b = prim::create_box(k, p(0.0, 0.0, 0.0), 10.0, 20.0, 30.0)?;
-            let edge = solidcore::topology::brep::p1::edges(&b, None)?
-                .first()
-                .copied()
-                .ok_or(solidcore::SolidError::invalid_input(
-                    "test",
-                    "box without edges",
-                ))?;
-            solidcore::blend::fillet_executive::api::fillet_edges(
-                k,
-                &mut b,
-                &[edge],
-                2.0,
-                1,
-                1,
-                1.0,
-            )?;
-            Ok(b)
-        }),
         ("heal", |k| {
             let mut b = prim::create_box(k, p(0.0, 0.0, 0.0), 1.0, 1.0, 1.0)?;
             api_heal_brep(k, Some(&mut b))?;
@@ -239,15 +218,4 @@ fn every_public_brep_output_passes_the_integrity_check() {
         }
     }
     assert!(failures.is_empty(), "{failures:#?}");
-}
-
-/// `heal::stitch::p1::api_stitch` on a box (the stitch entry points refresh before
-/// they return).
-#[test]
-fn stitch_outputs_are_intact() {
-    use solidcore::heal::stitch::p1::api_stitch;
-    let mut k = Kernel::default();
-    let mut b = prim::create_box(&mut k, p(0.0, 0.0, 0.0), 1.0, 1.0, 1.0).unwrap();
-    api_stitch(&mut k, Some(&mut b)).unwrap();
-    check(&b).unwrap();
 }

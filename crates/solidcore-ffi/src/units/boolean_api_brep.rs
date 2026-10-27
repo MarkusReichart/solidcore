@@ -166,7 +166,7 @@ pub struct SkinCurve {
 /// knots, finite 3D points, uniformly rational (positive weights) or non-rational.
 fn check_skin_curve(c: &SkinCurve) -> Result<(), FfiError> {
     let n1 = c.cpts.len();
-    if n1 < 2 || n1 > MAX_SKIN_POINTS || c.p < 1 || c.p > 17 || c.p >= n1 {
+    if !(2..=MAX_SKIN_POINTS).contains(&n1) || !(1..=17).contains(&c.p) || c.p >= n1 {
         return Err(bad(
             "skin curve: need 1 <= p <= n, p <= 17, 2 to 512 points",
         ));
@@ -174,15 +174,17 @@ fn check_skin_curve(c: &SkinCurve) -> Result<(), FfiError> {
     if c.knots.len() != n1 + c.p + 1 {
         return Err(bad("skin curve: need m = n + p + 1"));
     }
-    if c.knots.iter().any(|k| !k.is_finite()) || c.knots.windows(2).any(|w| w[0] > w[1]) {
+    if c.knots.iter().any(|k| !k.is_finite())
+        || c.knots.windows(2).any(|w| matches!(w, [a, b] if a > b))
+    {
         return Err(bad("skin curve: knots must be finite and non-decreasing"));
     }
-    let rational = c.cpts.first().is_some_and(|q| q[3] != NOW);
-    for q in &c.cpts {
-        if !(q[0].is_finite() && q[1].is_finite() && q[2].is_finite()) || q[2] == NOZ {
+    let rational = c.cpts.first().is_some_and(|&[_, _, _, w]| w != NOW);
+    for &[x, y, z, w] in &c.cpts {
+        if !(x.is_finite() && y.is_finite() && z.is_finite()) || z == NOZ {
             return Err(bad("skin curve: control points must be finite and 3D"));
         }
-        if (q[3] != NOW) != rational || (rational && !(q[3].is_finite() && q[3] > 0.0)) {
+        if (w != NOW) != rational || (rational && !(w.is_finite() && w > 0.0)) {
             return Err(bad(
                 "skin curve: mixed rationality or a non-positive weight",
             ));
@@ -386,10 +388,10 @@ fn check_spec(s: &BrepSpec, depth: usize) -> Result<(), FfiError> {
             degree,
             cap: _,
         } => {
-            if counts.len() < 2 || counts.len() > MAX_SKIN_CURVES {
+            if !(2..=MAX_SKIN_CURVES).contains(&counts.len()) {
                 return Err(bad("skin: need 2 to 16 profiles"));
             }
-            if curves.len() > MAX_SKIN_CURVES || counts.iter().any(|&c| c == 0) {
+            if curves.len() > MAX_SKIN_CURVES || counts.contains(&0) {
                 return Err(bad("skin: at most 16 curves, at least 1 per profile"));
             }
             if counts.iter().sum::<u64>() != curves.len() as u64 {

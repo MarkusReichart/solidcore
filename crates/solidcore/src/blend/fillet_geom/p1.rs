@@ -290,6 +290,11 @@ pub enum FilletErrorType {
     BadTrim = 6,
     /// `SM_FILERR_BAD_MERGE`.
     BadMerge = 7,
+    /// Not an upstream code (the pin's enum ends at `SM_FILERR_BAD_MERGE`). The "blend does not
+    /// fit its faces" refusal of the SolidCraft opt-ins (the `fixes.fillet_refuse_*` flags that
+    /// refuse a blend larger than its faces). Only those opt-ins record it; with them off the port
+    /// reports pin codes only.
+    NoRoom = 8,
 }
 
 /// `SmFilletCornerType`: the kind of corner where fillets meet.
@@ -1309,6 +1314,13 @@ impl FilletGeom {
         self.center_line_curve.as_ref()
     }
 
+    /// `GetFilletSurface() != NULL`: whether the geometry has a fillet surface, owned
+    /// here or already transferred into a face (the pointer upstream keeps either way).
+    #[must_use]
+    pub const fn has_fillet_surface(&self) -> bool {
+        self.fillet_surface.is_some()
+    }
+
     /// Borrow the original surface before it is transferred into a face.
     ///
     /// # Errors
@@ -1317,7 +1329,7 @@ impl FilletGeom {
         match self.fillet_surface.as_ref() {
             None => Ok(None),
             Some(FilletSurfaceStorage::Owned(surface)) => Ok(Some(surface)),
-            // UNPORTED(blend.fillet_geom_p1): actual owning body is required after transfer.
+            // UNPORTED(blend.fillet_geom_p1): SmFilletGeom::GetFilletSurface after MakeFilletFace needs the owning intermediate body (plan/findings/blend.fillet_solver_p1--the-geometry-for-the-surfaces--addendum-2026-10-27-lent-surfaces.md)
             Some(FilletSurfaceStorage::ManagedFace { .. }) => Err(SolidError::unported(
                 "SmFilletGeom::GetFilletSurface (managed face context)",
                 "blend.fillet_geom_p1",
@@ -1333,7 +1345,7 @@ impl FilletGeom {
         match self.fillet_surface.as_mut() {
             None => Ok(None),
             Some(FilletSurfaceStorage::Owned(surface)) => Ok(Some(surface)),
-            // UNPORTED(blend.fillet_geom_p1): actual owning body is required after transfer.
+            // UNPORTED(blend.fillet_geom_p1): SmFilletGeom::GetFilletSurface after MakeFilletFace needs the owning intermediate body (plan/findings/blend.fillet_solver_p1--the-geometry-for-the-surfaces--addendum-2026-10-27-lent-surfaces.md)
             Some(FilletSurfaceStorage::ManagedFace { .. }) => Err(SolidError::unported(
                 "SmFilletGeom::GetFilletSurface (managed face context)",
                 "blend.fillet_geom_p1",
@@ -2455,7 +2467,8 @@ impl SolutionObject for CliffHandle<'_> {
     fn natural_uv_domain(&self) -> Option<Extent2d> {
         match self {
             Self::Curve(_) => None,
-            Self::Surface(s) => Some(s.natural_uv_domain()),
+            // (kernel-free: a lazy analytic answers its NURB-less base's empty domain)
+            Self::Surface(s) => Some(s.natural_uv_domain_if_built()),
         }
     }
 }
@@ -2483,7 +2496,8 @@ impl SolutionObject for SurfaceHandle<'_> {
     }
 
     fn natural_uv_domain(&self) -> Option<Extent2d> {
-        Some(self.0.natural_uv_domain())
+        // (kernel-free: a lazy analytic answers its NURB-less base's empty domain)
+        Some(self.0.natural_uv_domain_if_built())
     }
 }
 
@@ -3903,7 +3917,8 @@ pub fn check_seam_out(surf: &Surface, uv: &mut Point2, tol: f64, closure: SurfPa
         return false;
     }
 
-    let dom = surf.natural_uv_domain();
+    // (kernel-free: a lazy analytic answers its NURB-less base's empty domain)
+    let dom = surf.natural_uv_domain_if_built();
 
     if dom.contains_point(*uv, tol) {
         return false;
@@ -3950,7 +3965,8 @@ pub fn check_seam_on(surf: &Surface, uv: &mut Point2, tol: f64, closure: SurfPar
         return false;
     }
 
-    let dom = surf.natural_uv_domain();
+    // (kernel-free: a lazy analytic answers its NURB-less base's empty domain)
+    let dom = surf.natural_uv_domain_if_built();
 
     let mut ret = false;
 
@@ -4097,7 +4113,7 @@ mod tests {
     fn surface_closure_of_an_open_patch_is_neither() {
         let k = &Kernel::default();
         let s = bilinear_patch();
-        let closure = set_surface_closure(k, &s, &s.natural_uv_domain()).unwrap();
+        let closure = set_surface_closure(k, &s, &s.natural_uv_domain_if_built()).unwrap();
         assert_eq!(closure, SurfParamType::Neither);
     }
 

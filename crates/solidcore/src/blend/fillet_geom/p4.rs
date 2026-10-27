@@ -1403,7 +1403,7 @@ impl FilletBrep {
             .fillet_edgeuse(prim)?
             .fillet_geom()
             .ok_or_else(|| SolidError::null_pointer(OP_EXT))?;
-        if self.geom(fillet_geom)?.fillet_surface()?.is_none() {
+        if !self.geom(fillet_geom)?.has_fillet_surface() {
             // Need fillet surface, will process it later
             return Ok(());
         }
@@ -1705,7 +1705,7 @@ impl FilletBrep {
             .geom(g)?
             .fillet_surface()?
             .ok_or_else(nul)?
-            .natural_uv_domain();
+            .natural_uv_domain_with_nurb(k)?;
         let (geom_type, solver_id, rails, other_rails1, other_rails2, side_eus) = {
             let geom = self.geom(g)?;
             (
@@ -2539,7 +2539,7 @@ mod tests {
     fn uv_curve_on_plane_is_a_line() {
         let k = kernel();
         let srf = plane_patch(1.0);
-        let dom = srf.natural_uv_domain();
+        let dom = srf.natural_uv_domain_if_built();
         let a = srf.evaluate_point(&k, dom.evaluate(0.2, 0.3)).unwrap();
         let b = srf.evaluate_point(&k, dom.evaluate(0.2, 0.9)).unwrap();
         let (fb, v) = fb_with_points(&k, &[a, b]);
@@ -2560,7 +2560,7 @@ mod tests {
     fn uv_curve_diagonal_without_vertexuse_falls_back_to_line() {
         let k = kernel();
         let srf = plane_patch(1.0);
-        let dom = srf.natural_uv_domain();
+        let dom = srf.natural_uv_domain_if_built();
         let a = srf.evaluate_point(&k, dom.evaluate(0.1, 0.1)).unwrap();
         let b = srf.evaluate_point(&k, dom.evaluate(0.8, 0.7)).unwrap();
         let (fb, v) = fb_with_points(&k, &[a, b]);
