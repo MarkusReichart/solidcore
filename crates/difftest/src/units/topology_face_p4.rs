@@ -57,6 +57,7 @@ use solidcore_ffi::units::topology_vertexuse as fixture;
 
 use super::topology_vertexuse::{self as shared, BrepIn};
 use crate::case::CaseContext;
+use crate::util::test_brep::{self, TestBrepIn};
 use crate::runner::default_cases;
 use crate::{Case, HarnessError, Output, Rng, UnitDiff};
 
@@ -151,10 +152,18 @@ enum OpIn {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Inputs {
+    #[serde(default = "network")]
     brep: BrepIn,
+    /// An upstream `smTestBrep.cpp` fixture block replacing `brep` (`util::test_brep`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    test_brep: Option<TestBrepIn>,
     face: i64,
     #[serde(flatten)]
     op: OpIn,
+}
+
+fn network() -> BrepIn {
+    BrepIn::Network
 }
 
 fn flag(b: bool) -> f64 {
@@ -165,8 +174,12 @@ fn flag(b: bool) -> f64 {
     }
 }
 
-/// The B-rep block (`validate_only` and `init_gaps` off).
-fn brep_block(b: &BrepIn) -> Result<Vec<f64>, HarnessError> {
+/// The B-rep block (`validate_only` and `init_gaps` off): the `smTestBrep.cpp` fixture
+/// when there is one, else `b`.
+fn brep_block(b: &BrepIn, test: Option<&TestBrepIn>) -> Result<Vec<f64>, HarnessError> {
+    if let Some(t) = test {
+        return Ok(test_brep::block(t, false, false));
+    }
     let mut out = Vec::new();
     match b {
         BrepIn::File { rebuild, .. } => out.extend([0.0, flag(*rebuild)]),
@@ -267,9 +280,9 @@ thread_local! {
 }
 
 /// The export of a B-rep.
-fn export_of(brep: &BrepIn) -> Result<Rc<Vec<f64>>, HarnessError> {
+fn export_of(brep: &BrepIn, test: Option<&TestBrepIn>) -> Result<Rc<Vec<f64>>, HarnessError> {
     let path = shared::path_of(brep)?;
-    let block = brep_block(brep)?;
+    let block = brep_block(brep, test)?;
     let bits: Vec<u64> = block.iter().map(|x| x.to_bits()).collect();
     if let Some(e) = EXPORTS.with(|c| {
         c.borrow()
@@ -304,7 +317,7 @@ fn face_edges(ex: &[f64], f: FaceId) -> Result<Vec<EdgeId>, HarnessError> {
 }
 
 fn resolve(i: &Inputs) -> Result<Resolved, HarnessError> {
-    let ex = export_of(&i.brep)?;
+    let ex = export_of(&i.brep, i.test_brep.as_ref())?;
     let Some(c) = fixture::counts(&ex) else {
         return Ok(Err(Output::new().values("out", ex.to_vec())));
     };
@@ -365,7 +378,7 @@ fn input_of(i: &Inputs) -> Result<(Op, String, Vec<f64>), HarnessError> {
     let (op, args) = op_args(&i.op);
     let mut v = vec![i.face as f64];
     v.extend(args);
-    v.extend(brep_block(&i.brep)?);
+    v.extend(brep_block(&i.brep, i.test_brep.as_ref())?);
     Ok((op, shared::path_of(&i.brep)?, v))
 }
 
@@ -960,7 +973,12 @@ fn gen_inputs(rng: &mut Rng) -> Inputs {
         tol: None,
     });
     let op = rng.choose(&ops).cloned().unwrap_or(OpIn::Brep);
-    Inputs { brep, face: s, op }
+    Inputs {
+        brep,
+        test_brep: None,
+        face: s,
+        op,
+    }
 }
 
 impl UnitDiff for Runner {
@@ -996,6 +1014,7 @@ impl UnitDiff for Runner {
                                 file: file.to_string(),
                                 rebuild,
                             },
+                            test_brep: None,
                             face: s,
                             op,
                         };
@@ -1029,6 +1048,7 @@ impl UnitDiff for Runner {
                                     file: file.to_string(),
                                     rebuild: false,
                                 },
+                                test_brep: None,
                                 face: s,
                                 op: OpIn::Line {
                                     p,

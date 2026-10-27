@@ -1,0 +1,148 @@
+{
+ "cases": [
+  {
+   "name": "torus_vertex_loop_case10_split_at_seam",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:3530 my_test_torus_seam_insertion_with_vertex_loops (v1.0.1) case 10: tests/prog_test/src/smTestBrep.cpp:337 sm_InsertTorusVertexLoopSeams mode 1 (HasSeamProblem then SplitAtSeam on sm_MakeTorusVertexLoopCase fixture 0, run with DoingBoolean set as upstream)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 0
+    },
+    "face": 0,
+    "op": "split_at_seam"
+   }
+  },
+  {
+   "name": "torus_vertex_loop_case11_split_at_seam",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:3530 my_test_torus_seam_insertion_with_vertex_loops (v1.0.1) case 11: tests/prog_test/src/smTestBrep.cpp:337 sm_InsertTorusVertexLoopSeams mode 1 (HasSeamProblem then SplitAtSeam on sm_MakeTorusVertexLoopCase fixture 1, run with DoingBoolean set as upstream)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 1
+    },
+    "face": 0,
+    "op": "split_at_seam"
+   }
+  },
+  {
+   "name": "torus_vertex_loop_case12_split_at_seam",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:3530 my_test_torus_seam_insertion_with_vertex_loops (v1.0.1) case 12: tests/prog_test/src/smTestBrep.cpp:337 sm_InsertTorusVertexLoopSeams mode 1 (HasSeamProblem then SplitAtSeam on sm_MakeTorusVertexLoopCase fixture 2, run with DoingBoolean set as upstream)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 2
+    },
+    "face": 0,
+    "op": "split_at_seam"
+   }
+  },
+  {
+   "name": "torus_vertex_loop_case13_split_at_seam",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:3530 my_test_torus_seam_insertion_with_vertex_loops (v1.0.1) case 13: tests/prog_test/src/smTestBrep.cpp:337 sm_InsertTorusVertexLoopSeams mode 1 (HasSeamProblem then SplitAtSeam on sm_MakeTorusVertexLoopCase fixture 3, run with DoingBoolean set as upstream)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 3
+    },
+    "face": 0,
+    "op": "split_at_seam"
+   }
+  },
+  {
+   "name": "torus_vertex_loop_case14_split_at_seam",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:3530 my_test_torus_seam_insertion_with_vertex_loops (v1.0.1) case 14: tests/prog_test/src/smTestBrep.cpp:337 sm_InsertTorusVertexLoopSeams mode 1 (HasSeamProblem then SplitAtSeam on sm_MakeTorusVertexLoopCase fixture 4, run with DoingBoolean set as upstream)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 4
+    },
+    "face": 0,
+    "op": "split_at_seam"
+   }
+  },
+  {
+   "name": "torus_vertex_loop_case15_split_at_seam",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:3530 my_test_torus_seam_insertion_with_vertex_loops (v1.0.1) case 15: tests/prog_test/src/smTestBrep.cpp:337 sm_InsertTorusVertexLoopSeams mode 1 (HasSeamProblem then SplitAtSeam on sm_MakeTorusVertexLoopCase fixture 5, run with DoingBoolean set as upstream)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 5
+    },
+    "face": 0,
+    "op": "split_at_seam"
+   }
+  },
+  {
+   "name": "torus_vertex_loop_case16_split_at_seam",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:3530 my_test_torus_seam_insertion_with_vertex_loops (v1.0.1) case 16: tests/prog_test/src/smTestBrep.cpp:337 sm_InsertTorusVertexLoopSeams mode 1 (HasSeamProblem then SplitAtSeam on sm_MakeTorusVertexLoopCase fixture 6, run with DoingBoolean set as upstream)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 6
+    },
+    "face": 0,
+    "op": "split_at_seam"
+   }
+  },
+  {
+   "name": "torus_vertex_loop_case17_split_at_seam",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:3530 my_test_torus_seam_insertion_with_vertex_loops (v1.0.1) case 17: tests/prog_test/src/smTestBrep.cpp:337 sm_InsertTorusVertexLoopSeams mode 1 (HasSeamProblem then SplitAtSeam on sm_MakeTorusVertexLoopCase fixture 7, run with DoingBoolean set as upstream)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 7
+    },
+    "face": 0,
+    "op": "split_at_seam"
+   }
+  },
+  {
+   "name": "torus_vertex_loop_case18_split_at_seam",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:3530 my_test_torus_seam_insertion_with_vertex_loops (v1.0.1) case 18: tests/prog_test/src/smTestBrep.cpp:337 sm_InsertTorusVertexLoopSeams mode 1 (HasSeamProblem then SplitAtSeam on sm_MakeTorusVertexLoopCase fixture 8, run with DoingBoolean set as upstream)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 8
+    },
+    "face": 0,
+    "op": "split_at_seam"
+   }
+  },
+  {
+   "name": "torus_vertex_loop_case19_split_at_seam",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:3530 my_test_torus_seam_insertion_with_vertex_loops (v1.0.1) case 19: tests/prog_test/src/smTestBrep.cpp:337 sm_InsertTorusVertexLoopSeams mode 1 (HasSeamProblem then SplitAtSeam on sm_MakeTorusVertexLoopCase fixture 9, run with DoingBoolean set as upstream)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 9
+    },
+    "face": 0,
+    "op": "split_at_seam"
+   }
+  },
+  {
+   "name": "loop_orientation_case8_split_at_seam",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(8) (two CW holes or a CCW loop with a hole: \"Two disjoint CW holes require seams\")",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 8
+    },
+    "face": 0,
+    "op": "split_at_seam"
+   }
+  },
+  {
+   "name": "loop_orientation_case9_split_at_seam",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(9) (two CW holes or a CCW loop with a hole: \"Two disjoint CW holes require seams\")",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 9
+    },
+    "face": 0,
+    "op": "split_at_seam"
+   }
+  }
+ ]
+}

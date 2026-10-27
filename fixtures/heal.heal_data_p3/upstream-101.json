@@ -1,0 +1,760 @@
+{
+ "cases": [
+  {
+   "name": "infinite_region_void_flags_swap",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:21 my_test_heal_infinite_region_with_plausible_void_flags (v1.0.1)",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "box",
+     "size": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "none",
+     "e": "none",
+     "f": "none"
+    },
+    "steps": [
+     {
+      "step": "reset_infinite_region",
+      "sel": 1
+     },
+     {
+      "step": "region_snapshot"
+     },
+     {
+      "step": "brep_heal_brep",
+      "op": 26
+     },
+     {
+      "step": "region_snapshot"
+     },
+     {
+      "step": "brep_heal_brep",
+      "op": 26
+     },
+     {
+      "step": "region_snapshot"
+     }
+    ]
+   }
+  },
+  {
+   "name": "closed_face_containment_repeated_sphere",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:453 my_test_closed_face_containment_repeated (v1.0.1)",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "prim_sphere",
+     "radius": 2.0,
+     "angles": [
+      0.0,
+      360.0
+     ]
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "none",
+     "e": "none",
+     "f": "none"
+    },
+    "steps": [
+     {
+      "step": "fresh_heal_brep",
+      "op": 26
+     },
+     {
+      "step": "region_snapshot"
+     },
+     {
+      "step": "fresh_heal_brep",
+      "op": 26
+     },
+     {
+      "step": "region_snapshot"
+     }
+    ]
+   }
+  },
+  {
+   "name": "closed_face_containment_repeated_torus",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:453 my_test_closed_face_containment_repeated (v1.0.1)",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "prim_torus",
+     "radii": [
+      3.0,
+      1.0
+     ],
+     "angles": [
+      0.0,
+      360.0
+     ]
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "none",
+     "e": "none",
+     "f": "none"
+    },
+    "steps": [
+     {
+      "step": "fresh_heal_brep",
+      "op": 26
+     },
+     {
+      "step": "region_snapshot"
+     },
+     {
+      "step": "fresh_heal_brep",
+      "op": 26
+     },
+     {
+      "step": "region_snapshot"
+     }
+    ]
+   }
+  },
+  {
+   "name": "tracks_changed_objects_set_point_none",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:256 my_test_tracks_changed_objects (v1.0.1: UpdateTargetLists(SM_HO_NONE) after a tracked SetPoint)",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "box",
+     "size": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "none",
+     "e": "none",
+     "f": "none"
+    },
+    "steps": [
+     {
+      "step": "tracked_set_point",
+      "sel": 0,
+      "op": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "squeeze_edge_tracks_removal",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:215 my_test_squeeze_edge_tracks_removal (v1.0.1)",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "box",
+     "size": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "none",
+     "e": {
+      "list": [
+       0
+      ]
+     },
+     "f": "none"
+    },
+    "steps": [
+     {
+      "step": "tracked_squeeze_edge",
+      "sel": 0,
+      "op": 7
+     }
+    ]
+   }
+  },
+  {
+   "name": "torus_seams_with_vertex_loops_case20",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1288 my_test_torus_seams_with_vertex_loops (v1.0.1) case 20: the first HealBrep(SM_HO_ALL, all targets, make UV trims) on tests/prog_test/src/smTestBrep.cpp sm_MakeTorusVertexLoopCase fixture 0 (the trim rebuild and second heal are not covered)",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "torus_vertex_loop",
+     "case": 0
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "torus_seams_with_vertex_loops_case21",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1288 my_test_torus_seams_with_vertex_loops (v1.0.1) case 21: the first HealBrep(SM_HO_ALL, all targets, make UV trims) on tests/prog_test/src/smTestBrep.cpp sm_MakeTorusVertexLoopCase fixture 1 (the trim rebuild and second heal are not covered)",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "torus_vertex_loop",
+     "case": 1
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "torus_seams_with_vertex_loops_case22",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1288 my_test_torus_seams_with_vertex_loops (v1.0.1) case 22: the first HealBrep(SM_HO_ALL, all targets, make UV trims) on tests/prog_test/src/smTestBrep.cpp sm_MakeTorusVertexLoopCase fixture 2 (the trim rebuild and second heal are not covered)",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "torus_vertex_loop",
+     "case": 2
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "torus_seams_with_vertex_loops_case23",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1288 my_test_torus_seams_with_vertex_loops (v1.0.1) case 23: the first HealBrep(SM_HO_ALL, all targets, make UV trims) on tests/prog_test/src/smTestBrep.cpp sm_MakeTorusVertexLoopCase fixture 3 (the trim rebuild and second heal are not covered)",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "torus_vertex_loop",
+     "case": 3
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "torus_seams_with_vertex_loops_case24",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1288 my_test_torus_seams_with_vertex_loops (v1.0.1) case 24: the first HealBrep(SM_HO_ALL, all targets, make UV trims) on tests/prog_test/src/smTestBrep.cpp sm_MakeTorusVertexLoopCase fixture 4 (the trim rebuild and second heal are not covered)",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "torus_vertex_loop",
+     "case": 4
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "torus_seams_with_vertex_loops_case25",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1288 my_test_torus_seams_with_vertex_loops (v1.0.1) case 25: the first HealBrep(SM_HO_ALL, all targets, make UV trims) on tests/prog_test/src/smTestBrep.cpp sm_MakeTorusVertexLoopCase fixture 5 (the trim rebuild and second heal are not covered)",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "torus_vertex_loop",
+     "case": 5
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "torus_seams_with_vertex_loops_case26",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1288 my_test_torus_seams_with_vertex_loops (v1.0.1) case 26: the first HealBrep(SM_HO_ALL, all targets, make UV trims) on tests/prog_test/src/smTestBrep.cpp sm_MakeTorusVertexLoopCase fixture 6 (the trim rebuild and second heal are not covered)",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "torus_vertex_loop",
+     "case": 6
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "torus_seams_with_vertex_loops_case27",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1288 my_test_torus_seams_with_vertex_loops (v1.0.1) case 27: the first HealBrep(SM_HO_ALL, all targets, make UV trims) on tests/prog_test/src/smTestBrep.cpp sm_MakeTorusVertexLoopCase fixture 7 (the trim rebuild and second heal are not covered)",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "torus_vertex_loop",
+     "case": 7
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "torus_seams_with_vertex_loops_case28",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1288 my_test_torus_seams_with_vertex_loops (v1.0.1) case 28: the first HealBrep(SM_HO_ALL, all targets, make UV trims) on tests/prog_test/src/smTestBrep.cpp sm_MakeTorusVertexLoopCase fixture 8 (the trim rebuild and second heal are not covered)",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "torus_vertex_loop",
+     "case": 8
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "torus_seams_with_vertex_loops_case29",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1288 my_test_torus_seams_with_vertex_loops (v1.0.1) case 29: the first HealBrep(SM_HO_ALL, all targets, make UV trims) on tests/prog_test/src/smTestBrep.cpp sm_MakeTorusVertexLoopCase fixture 9 (the trim rebuild and second heal are not covered)",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "torus_vertex_loop",
+     "case": 9
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "loop_orientation_case0_heal_brep",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1) on tests/prog_test/src/smTestBrep.cpp sm_MakeLoopOrientationCase(0); HealBrep(SM_HO_ALL, all targets, make UV trims) directly on the fixture. Not upstream's configuration: upstream heals only cases 7, 8 (after splitting the edge into four arcs with MakeVertexSplitEdge) and 10..12",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "loop_orientation",
+     "case": 0
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "loop_orientation_case1_heal_brep",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1) on tests/prog_test/src/smTestBrep.cpp sm_MakeLoopOrientationCase(1); HealBrep(SM_HO_ALL, all targets, make UV trims) directly on the fixture. Not upstream's configuration: upstream heals only cases 7, 8 (after splitting the edge into four arcs with MakeVertexSplitEdge) and 10..12",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "loop_orientation",
+     "case": 1
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "loop_orientation_case2_heal_brep",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1) on tests/prog_test/src/smTestBrep.cpp sm_MakeLoopOrientationCase(2); HealBrep(SM_HO_ALL, all targets, make UV trims) directly on the fixture. Not upstream's configuration: upstream heals only cases 7, 8 (after splitting the edge into four arcs with MakeVertexSplitEdge) and 10..12",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "loop_orientation",
+     "case": 2
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "loop_orientation_case3_heal_brep",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1) on tests/prog_test/src/smTestBrep.cpp sm_MakeLoopOrientationCase(3); HealBrep(SM_HO_ALL, all targets, make UV trims) directly on the fixture. Not upstream's configuration: upstream heals only cases 7, 8 (after splitting the edge into four arcs with MakeVertexSplitEdge) and 10..12",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "loop_orientation",
+     "case": 3
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "loop_orientation_case4_heal_brep",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1) on tests/prog_test/src/smTestBrep.cpp sm_MakeLoopOrientationCase(4); HealBrep(SM_HO_ALL, all targets, make UV trims) directly on the fixture. Not upstream's configuration: upstream heals only cases 7, 8 (after splitting the edge into four arcs with MakeVertexSplitEdge) and 10..12",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "loop_orientation",
+     "case": 4
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "loop_orientation_case5_heal_brep",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1) on tests/prog_test/src/smTestBrep.cpp sm_MakeLoopOrientationCase(5); HealBrep(SM_HO_ALL, all targets, make UV trims) directly on the fixture. Not upstream's configuration: upstream heals only cases 7, 8 (after splitting the edge into four arcs with MakeVertexSplitEdge) and 10..12",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "loop_orientation",
+     "case": 5
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "loop_orientation_case6_heal_brep",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1) on tests/prog_test/src/smTestBrep.cpp sm_MakeLoopOrientationCase(6); HealBrep(SM_HO_ALL, all targets, make UV trims) directly on the fixture. Not upstream's configuration: upstream heals only cases 7, 8 (after splitting the edge into four arcs with MakeVertexSplitEdge) and 10..12",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "loop_orientation",
+     "case": 6
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "loop_orientation_case7_heal_brep",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1) on tests/prog_test/src/smTestBrep.cpp sm_MakeLoopOrientationCase(7); HealBrep(SM_HO_ALL, all targets, make UV trims) directly on the fixture. Not upstream's configuration: upstream heals only cases 7, 8 (after splitting the edge into four arcs with MakeVertexSplitEdge) and 10..12",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "loop_orientation",
+     "case": 7
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "loop_orientation_case8_heal_brep",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1) on tests/prog_test/src/smTestBrep.cpp sm_MakeLoopOrientationCase(8); HealBrep(SM_HO_ALL, all targets, make UV trims) directly on the fixture. Not upstream's configuration: upstream heals only cases 7, 8 (after splitting the edge into four arcs with MakeVertexSplitEdge) and 10..12",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "loop_orientation",
+     "case": 8
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "loop_orientation_case9_heal_brep",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1) on tests/prog_test/src/smTestBrep.cpp sm_MakeLoopOrientationCase(9); HealBrep(SM_HO_ALL, all targets, make UV trims) directly on the fixture. Not upstream's configuration: upstream heals only cases 7, 8 (after splitting the edge into four arcs with MakeVertexSplitEdge) and 10..12",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "loop_orientation",
+     "case": 9
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "loop_orientation_case10_heal_brep",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1) on tests/prog_test/src/smTestBrep.cpp sm_MakeLoopOrientationCase(10); HealBrep(SM_HO_ALL, all targets, make UV trims) directly on the fixture. Not upstream's configuration: upstream heals only cases 7, 8 (after splitting the edge into four arcs with MakeVertexSplitEdge) and 10..12",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "loop_orientation",
+     "case": 10
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "loop_orientation_case11_heal_brep",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1) on tests/prog_test/src/smTestBrep.cpp sm_MakeLoopOrientationCase(11); HealBrep(SM_HO_ALL, all targets, make UV trims) directly on the fixture. Not upstream's configuration: upstream heals only cases 7, 8 (after splitting the edge into four arcs with MakeVertexSplitEdge) and 10..12",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "loop_orientation",
+     "case": 11
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "loop_orientation_case12_heal_brep",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1) on tests/prog_test/src/smTestBrep.cpp sm_MakeLoopOrientationCase(12); HealBrep(SM_HO_ALL, all targets, make UV trims) directly on the fixture. Not upstream's configuration: upstream heals only cases 7, 8 (after splitting the edge into four arcs with MakeVertexSplitEdge) and 10..12",
+   "inputs": {
+    "case": "heal",
+    "brep": {
+     "kind": "loop_orientation",
+     "case": 12
+    },
+    "init_gaps": false,
+    "targets": {
+     "v": "all",
+     "e": "all",
+     "f": "all"
+    },
+    "steps": [
+     {
+      "step": "heal_brep",
+      "mode": 1,
+      "op": 26,
+      "make": true
+     }
+    ]
+   }
+  }
+ ]
+}

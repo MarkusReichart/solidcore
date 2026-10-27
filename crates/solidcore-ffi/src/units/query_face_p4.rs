@@ -12,6 +12,9 @@
 //! | `2 surface u0 v0 u1 v1 validate_only init_gaps` | `CreateFaceFromSurface(surface, dom)` (the `surface` block of [`super::query_face_p2`]) |
 //! | `4 copies face validate_only init_gaps`         | `MakeFaceWithCurves` of `face`, `copies` times |
 //! | `5 any_surface validate_only init_gaps`         | `CreateFaceInRegionFromSurface` over the natural domain |
+//! | `6 kind rotation reversed validate_only init_gaps` | the seam topology of `prog_test` `my_test_seam_touch_incidence` (`SmBrepConstructor`, see below) |
+//! | `7 validate_only init_gaps`                     | `prog_test` `my_test_failed_loop_containment`'s overlapping cylinder loops of `SmCrvOnSurf` edges |
+//! | `8 end case validate_only init_gaps`            | one iteration (`lEnd` `0..=1`, `lCase` `0..=2`) of `prog_test` `my_test_pole_crossing_endpoint_tolerances`: a hemisphere `SmSphere` with a two-edge `SmCircle` loop around the north pole and that iteration's tolerances |
 //!
 //! `any_surface` is a `surface` block or `kind scale a b c swap`: kind `10` `SmCylinder`
 //! (radius `scale*a`), `11` `SmSphere` (radius `scale*a`), `12` `SmTorus` (radii `scale*a`,
@@ -35,6 +38,24 @@
 //! |------------|---------|
 //! | `Export`   | the graph of [`super::topology_face_p2`] (an analytic face surface or an ellipse edge curve preceded by its exact record, `harness/cpp/shim/sc_analytic_export.h` / `sc_exact_curve_export.h`), the case block `rejected [face props loops]`, the case block's length |
 //! | `Classify` | `rejected [status loops classifiable not_yet n_io (loop type orient degen area containment)* start stop n_no_area idx* tree scratch_size]` |
+//! | `SeamTouches` | `rejected [stage2 [coc [n_ivl (min max start mid end)* loops touches_status [ptouches] crossings_status counts ptouches(raw) ptouches(done)]]]` (kind `6` only; `rejected` `1` for another B-rep) |
+//! | `SeamEdges` | `n (edge ax ay bx by)*`: the UV line `(ax, ay) -> (bx, by)` of each `SmCrvOnSurf` edge curve of a kind `6` or `7` B-rep (none for another B-rep) |
+//! | `Props` | `rejected [status not_yet has_tree bad_crossed_pole crossed_pole_edge crossed_pole_parameter no_vertex_poles bad_crossed_seam]` (kinds `7`, `8`; `rejected` `1` for another B-rep): fresh `SmFaceProps(ctx)`, then with face selector `3` `SetProps_Stage3(face, 0, SM_HO_ALL)`, else `SetProps_Stage2(face, 0, SM_HO_CACHE_FACEPROPS_2)`; the edge is its export index (`-1` none) |
+//!
+//! **Kind 6** (`kind` `0..=6`, `rotation` `0..=3`, `reversed` `0..=3` with `reversed` `2`
+//! and `3` only for kinds `2` and `4` at rotation `0`, the iterations upstream runs): one
+//! face on an `SmCylinder` of radius `0.5` over `v` in `[0, 3]` (kinds `0`, `2..=5`) or an
+//! `SmTorus` of radii `3`, `1` (kinds `1`, `6`), a hole loop then an enclosing loop of
+//! `SmCrvOnSurf` edges over 2D `SmLine`s in the natural domain, seam edges shared within
+//! the enclosing loop (kinds `0` and `1`). Its graph exports the `SmCrvOnSurf` edge curves as
+//! no curve (`-1`); `SeamEdges` gives their UV lines, which the Rust side rebuilds on the
+//! face's surface. `SeamTouches` reads the case block's face selector as the sample (`0`
+//! the UV line at mid-height with its UV curve, `1` the model-space circle at mid-height,
+//! `2` the corner diagonal from `(Umin, Vmax)` to `(Umax, Vmin)`), then runs the test's
+//! `SetProps_Stage2` (`stage2`, its status; nothing follows a failure), `CurveOnClassify`
+//! (`coc`, its status; nothing follows a failure), `GetLoopTouches` (nothing follows a
+//! failing `touches_status`) and `GetLoopCrossings` over the hole and the enclosing loop
+//! (`loops`, their export indices). A `ptouches` list is `n (loop dir loop_index param)*`.
 //!
 //! `props` is `stage face_index closed_u closed_v poles not_yet n_lp (cross_u wind_u
 //! cross_v wind_v)* class_u class_v done_u done_v zone_tol no_vertex_poles
@@ -77,6 +98,9 @@ const NOZ: f64 = f64::MAX;
 pub enum Op {
     Export = 0,
     Classify = 1,
+    SeamTouches = 2,
+    SeamEdges = 3,
+    Props = 4,
 }
 
 mod sys {
@@ -386,7 +410,7 @@ fn face_block(rd: &mut Reader<'_>) -> Result<(), FfiError> {
 
 /// A B-rep block.
 fn brep_block(rd: &mut Reader<'_>, path: &str) -> Result<(), FfiError> {
-    match rd.index(5)? {
+    match rd.index(8)? {
         0 => {
             let p = Path::new(path);
             if p.extension().and_then(|e| e.to_str()) != Some("smb") || !p.is_file() {
@@ -427,7 +451,23 @@ fn brep_block(rd: &mut Reader<'_>, path: &str) -> Result<(), FfiError> {
         5 => {
             any_surface(rd)?;
         }
-        _ => return Err(bad("B-rep kind: 0, 2, 4 or 5")),
+        6 => {
+            let kind = rd.index(6)?;
+            let rotation = rd.index(3)?;
+            let reversed = rd.index(3)?;
+            // the iterations my_test_seam_touch_incidence runs
+            if reversed >= 2 && (!(kind == 2 || kind == 4) || rotation != 0) {
+                return Err(bad(
+                    "seam touch B-rep: reversed 2 and 3 only for kinds 2 and 4 at rotation 0",
+                ));
+            }
+        }
+        7 => {}
+        8 => {
+            rd.index(1)?;
+            rd.index(2)?;
+        }
+        _ => return Err(bad("B-rep kind: 0, 2, 4, 5, 6, 7 or 8")),
     }
     rd.flag()?;
     rd.flag()?;

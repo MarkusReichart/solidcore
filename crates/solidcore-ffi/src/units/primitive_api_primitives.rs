@@ -267,6 +267,12 @@ mod sys {
             cap: i64,
             out_len: *mut i64,
         ) -> i32;
+        pub fn sc_probe_sphere_precise_props(
+            input: *const f64,
+            out: *mut f64,
+            cap: i64,
+            out_len: *mut i64,
+        ) -> i32;
     }
 }
 
@@ -408,6 +414,39 @@ pub fn run(op: Op, args: &[f64], arcs: Option<(&[Arc], &[Arc])>) -> Result<Vec<f
             sys::sc_primitive_api_primitives_run(
                 prog.as_ptr(),
                 prog.len() as i64,
+                buf.as_mut_ptr(),
+                buf.len() as i64,
+                &raw mut *len,
+            )
+        }
+    })
+}
+
+/// Probe (pin v1.0.1, not a difftest op): `SmBrep::ComputePreciseProperties` of a sphere
+/// about its bounding-box midpoint. `input` = `[cx, cy, cz, radius, no_pole, accuracy,
+/// tol]` (`no_pole` 0: `SmApiCreateSphere`; 1: an `SmBrep` with tolerance `tol` and
+/// `SmPrimitiveCreation::CreateSphereNoPole(.., tol, ..)`). Returns the create status,
+/// then the properties status, then area, volume and mass.
+///
+/// # Errors
+/// [`FfiError::InvalidArgument`] for non-finite input, a radius or accuracy that is not
+/// positive, `no_pole` other than 0 or 1, or a no-pole tolerance not above `SM_EFF_ZERO`.
+pub fn probe_sphere_precise_props(input: &[f64; 7]) -> Result<Vec<f64>, FfiError> {
+    let [_, _, _, radius, no_pole, accuracy, tol] = *input;
+    if !input.iter().all(|v| v.is_finite())
+        || radius <= 0.0
+        || accuracy <= 0.0
+        || (no_pole != 0.0 && no_pole != 1.0)
+        || (no_pole == 1.0 && tol <= 1e-12)
+    {
+        return Err(FfiError::InvalidArgument("sphere probe input".into()));
+    }
+    call_with_buffer(8, |buf, len| {
+        // SAFETY: input holds the seven values the shim reads; buf valid for buf.len()
+        // writes; len valid.
+        unsafe {
+            sys::sc_probe_sphere_precise_props(
+                input.as_ptr(),
                 buf.as_mut_ptr(),
                 buf.len() as i64,
                 &raw mut *len,

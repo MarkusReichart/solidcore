@@ -1,0 +1,368 @@
+{
+ "cases": [
+  {
+   "name": "knot_sampling_case0_do3d",
+   "upstream_ref": "tests/prog_test/src/smFaceTest.cpp:1879 my_test_loop_orientation_knot_sampling (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(0)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 0
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": false,
+    "do_3d": true
+   }
+  },
+  {
+   "name": "knot_sampling_case1_do3d",
+   "upstream_ref": "tests/prog_test/src/smFaceTest.cpp:1879 my_test_loop_orientation_knot_sampling (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(1)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 1
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": false,
+    "do_3d": true
+   }
+  },
+  {
+   "name": "knot_sampling_case2_do3d",
+   "upstream_ref": "tests/prog_test/src/smFaceTest.cpp:1879 my_test_loop_orientation_knot_sampling (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(2)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 2
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": false,
+    "do_3d": true
+   }
+  },
+  {
+   "name": "knot_sampling_case3_do3d",
+   "upstream_ref": "tests/prog_test/src/smFaceTest.cpp:1879 my_test_loop_orientation_knot_sampling (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(3)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 3
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": false,
+    "do_3d": true
+   }
+  },
+  {
+   "name": "knot_sampling_case4_do3d",
+   "upstream_ref": "tests/prog_test/src/smFaceTest.cpp:1879 my_test_loop_orientation_knot_sampling (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(4)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 4
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": false,
+    "do_3d": true
+   }
+  },
+  {
+   "name": "knot_sampling_case5_do3d",
+   "upstream_ref": "tests/prog_test/src/smFaceTest.cpp:1879 my_test_loop_orientation_knot_sampling (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(5)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 5
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": false,
+    "do_3d": true
+   }
+  },
+  {
+   "name": "knot_sampling_case6_do3d",
+   "upstream_ref": "tests/prog_test/src/smFaceTest.cpp:1879 my_test_loop_orientation_knot_sampling (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(6)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 6
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": false,
+    "do_3d": true
+   }
+  },
+  {
+   "name": "knot_sampling_case7_do3d",
+   "upstream_ref": "tests/prog_test/src/smFaceTest.cpp:1879 my_test_loop_orientation_knot_sampling (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(7)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 7
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": false,
+    "do_3d": true
+   }
+  },
+  {
+   "name": "knot_sampling_case8_do3d",
+   "upstream_ref": "tests/prog_test/src/smFaceTest.cpp:1879 my_test_loop_orientation_knot_sampling (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(8)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 8
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": false,
+    "do_3d": true
+   }
+  },
+  {
+   "name": "knot_sampling_case9_do3d",
+   "upstream_ref": "tests/prog_test/src/smFaceTest.cpp:1879 my_test_loop_orientation_knot_sampling (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(9)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 9
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": false,
+    "do_3d": true
+   }
+  },
+  {
+   "name": "knot_sampling_case10_do3d",
+   "upstream_ref": "tests/prog_test/src/smFaceTest.cpp:1879 my_test_loop_orientation_knot_sampling (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(10)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 10
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": false,
+    "do_3d": true
+   }
+  },
+  {
+   "name": "knot_sampling_case11_do3d",
+   "upstream_ref": "tests/prog_test/src/smFaceTest.cpp:1879 my_test_loop_orientation_knot_sampling (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(11)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 11
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": false,
+    "do_3d": true
+   }
+  },
+  {
+   "name": "knot_sampling_case12_do3d",
+   "upstream_ref": "tests/prog_test/src/smFaceTest.cpp:1879 my_test_loop_orientation_knot_sampling (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(12)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 12
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": false,
+    "do_3d": true
+   }
+  },
+  {
+   "name": "knot_sampling_case0_uv_trims",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(0), measured from the UV trims with bounds (the upstream test passes TRUE)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 0
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": true,
+    "do_3d": false
+   }
+  },
+  {
+   "name": "knot_sampling_case1_uv_trims",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(1), measured from the UV trims with bounds (the upstream test passes TRUE)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 1
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": true,
+    "do_3d": false
+   }
+  },
+  {
+   "name": "knot_sampling_case2_uv_trims",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(2), measured from the UV trims with bounds (the upstream test passes TRUE)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 2
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": true,
+    "do_3d": false
+   }
+  },
+  {
+   "name": "knot_sampling_case3_uv_trims",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(3), measured from the UV trims with bounds (the upstream test passes TRUE)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 3
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": true,
+    "do_3d": false
+   }
+  },
+  {
+   "name": "knot_sampling_case4_uv_trims",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(4), measured from the UV trims with bounds (the upstream test passes TRUE)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 4
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": true,
+    "do_3d": false
+   }
+  },
+  {
+   "name": "knot_sampling_case5_uv_trims",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(5), measured from the UV trims with bounds (the upstream test passes TRUE)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 5
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": true,
+    "do_3d": false
+   }
+  },
+  {
+   "name": "knot_sampling_case6_uv_trims",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(6), measured from the UV trims with bounds (the upstream test passes TRUE)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 6
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": true,
+    "do_3d": false
+   }
+  },
+  {
+   "name": "knot_sampling_case7_uv_trims",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(7), measured from the UV trims with bounds (the upstream test passes TRUE)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 7
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": true,
+    "do_3d": false
+   }
+  },
+  {
+   "name": "knot_sampling_case8_uv_trims",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(8), measured from the UV trims with bounds (the upstream test passes TRUE)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 8
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": true,
+    "do_3d": false
+   }
+  },
+  {
+   "name": "knot_sampling_case9_uv_trims",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(9), measured from the UV trims with bounds (the upstream test passes TRUE)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 9
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": true,
+    "do_3d": false
+   }
+  },
+  {
+   "name": "knot_sampling_case10_uv_trims",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(10), measured from the UV trims with bounds (the upstream test passes TRUE)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 10
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": true,
+    "do_3d": false
+   }
+  },
+  {
+   "name": "knot_sampling_case11_uv_trims",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(11), measured from the UV trims with bounds (the upstream test passes TRUE)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 11
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": true,
+    "do_3d": false
+   }
+  },
+  {
+   "name": "knot_sampling_case12_uv_trims",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(12), measured from the UV trims with bounds (the upstream test passes TRUE)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 12
+    },
+    "op": "loop_orient",
+    "face": 0,
+    "want_bounds": true,
+    "do_3d": false
+   }
+  }
+ ]
+}

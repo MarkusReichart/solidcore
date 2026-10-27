@@ -25,6 +25,10 @@
 //! `expect_rejected` is a regression case for the guard: both sides must reject it (the
 //! error `rejected`); the C++ is never called for it.
 //!
+//! Op 9 is `SmFace::IsClosedSurfaceWithVertexLoops` (new in 1.0.1), compared on the
+//! `closed_vertex_loops_*` cases (the generator does not draw it, so generated cases are
+//! unchanged).
+//!
 //! Deferred: closed faces (`SetProps_Stage2` reaches `SmFace::HasSeamProblem`,
 //! `topology.face_p4`) and every `SetProps_Stage3` (`SmFace::ClassifyLoops`, `query.face_p4`).
 //! The loop-props loop of Stage 3 is compared by op 8 instead, without the classification.
@@ -939,6 +943,14 @@ fn rust_props(f: &FaceIn, ops: &[[f64; 5]]) -> Result<Output, HarnessError> {
                 _ => status(p.set_props_stage3(&k, &b, face, o[3] as u64, heal)),
             },
             7 => Ok(f64::from(u8::from(p.is_periodic_u())) + 2.0 * f64::from(u8::from(p.is_periodic_v()))),
+            // SmFace::IsClosedSurfaceWithVertexLoops (new in 1.0.1)
+            9 => solidcore::topology::face::p3::is_closed_surface_with_vertex_loops(
+                &k,
+                &b,
+                face,
+                (o[1] != 0.0).then_some(&p),
+            )
+            .map(|c| f64::from(u8::from(c))),
             8 => match loop_snapshot(&k, &b, &p, face) {
                 Ok((n, snap)) => {
                     out.push(n);
@@ -1343,6 +1355,89 @@ fn gen_tree(rng: &mut Rng) -> CaseIn {
     }
 }
 
+/// `SmFace::IsClosedSurfaceWithVertexLoops` (new in 1.0.1; op 9) on whole closed
+/// surfaces bounded by a vertex loop (as `prog_test` `my_test_heal_vertex_only_closed_surface`:
+/// a sphere at its pole, a torus, either with swapped parameters) and on faces it rejects
+/// (an open sweep, a sphere cap with one pole, a cylinder, a plane, an edge loop), with
+/// fresh props and NULL (`_fresh`) and after `SetProps_Stage2` with and without its props
+/// (`_stage2`, the cached-closure branch).
+fn vertex_loop_cases() -> Vec<(String, CaseIn)> {
+    let rev = |gen: GenIn, swap: bool, sweep: f64| SurfIn::Revolution {
+        gen,
+        point: [0.0, 0.0, 0.0],
+        axis: [0.0, 0.0, 1.0],
+        swap,
+        sweep,
+    };
+    let circle = |c: [f64; 3], d: [f64; 2], r: f64| GenIn::Circle {
+        c,
+        x: [1.0, 0.0, 0.0],
+        y: [0.0, 0.0, 1.0],
+        d,
+        r,
+    };
+    let sphere = |swap: bool| rev(circle([0.0; 3], [-90.0, 90.0], 2.0), swap, 360.0);
+    let torus = |swap: bool, sweep: f64| {
+        rev(circle([3.0, 0.0, 0.0], [0.0, 360.0], 1.0), swap, sweep)
+    };
+    let vertex = |at: [f64; 3]| Some(LoopsIn::Vertex { at });
+    let faces: Vec<(&str, Option<SurfIn>, Option<LoopsIn>)> = vec![
+        ("sphere", Some(sphere(false)), vertex([0.0, 0.0, 2.0])),
+        ("sphere_swap", Some(sphere(true)), vertex([0.0, 0.0, 2.0])),
+        ("torus", Some(torus(false, 360.0)), vertex([4.0, 0.0, 0.0])),
+        ("torus_swap", Some(torus(true, 360.0)), vertex([4.0, 0.0, 0.0])),
+        ("torus_open", Some(torus(false, 270.0)), vertex([4.0, 0.0, 0.0])),
+        (
+            "sphere_cap",
+            Some(rev(circle([0.0; 3], [-30.0, 90.0], 2.0), false, 360.0)),
+            vertex([0.0, 0.0, 2.0]),
+        ),
+        (
+            "cylinder",
+            Some(rev(GenIn::Line { a: [1.0, 0.0, 0.0], b: [1.0, 0.0, 2.0] }, false, 360.0)),
+            vertex([1.0, 0.0, 1.0]),
+        ),
+        ("plane", None, vertex([0.5, 0.5, 0.0])),
+        (
+            "sphere_edges",
+            Some(sphere(false)),
+            Some(LoopsIn::Edges {
+                loops: vec![vec![[2.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 2.0]]],
+            }),
+        ),
+    ];
+    let mut out = Vec::new();
+    for (name, surf, loops) in faces {
+        let face = FaceIn {
+            tol: 1e-5,
+            o: [0.0, 0.0, 0.0],
+            x: [1.0, 0.0, 0.0],
+            y: [0.0, 1.0, 0.0],
+            domain: [0.0, 0.0, 1.0, 1.0],
+            surf,
+            loops,
+        };
+        let fresh = vec![[9.0, 0.0, 0.0, 0.0, 0.0], [9.0, 1.0, 0.0, 0.0, 0.0]];
+        // SetProps_Stage2 directly (op 6, which 2, SM_HO_ALL, index 0)
+        let stage2 = vec![
+            [6.0, 2.0, 26.0, 0.0, 0.0],
+            [9.0, 1.0, 0.0, 0.0, 0.0],
+            [9.0, 0.0, 0.0, 0.0, 0.0],
+        ];
+        for (suffix, ops) in [("fresh", fresh), ("stage2", stage2)] {
+            out.push((
+                format!("closed_vertex_loops_{name}_{suffix}"),
+                CaseIn::Props {
+                    face: face.clone(),
+                    ops,
+                    expect_rejected: false,
+                },
+            ));
+        }
+    }
+    out
+}
+
 impl UnitDiff for Runner {
     fn id(&self) -> &'static str {
         "heal.face_props"
@@ -1371,7 +1466,16 @@ impl UnitDiff for Runner {
             seeds: ctx.seeds.max(MIN_GENERATED),
             ..ctx.clone()
         };
-        default_cases(self, &ctx)
+        let mut cases = default_cases(self, &ctx)?;
+        for (name, c) in vertex_loop_cases() {
+            cases.push(Case {
+                unit: self.id().into(),
+                name,
+                source: crate::case::CaseSource::Inline,
+                inputs: serde_json::to_value(c).map_err(|e| harness(e.to_string()))?,
+            });
+        }
+        Ok(cases)
     }
 
     fn run_cpp(&self, case: &Case) -> Result<Output, HarnessError> {
@@ -1380,5 +1484,33 @@ impl UnitDiff for Runner {
 
     fn run_rust(&self, case: &Case) -> Result<Output, HarnessError> {
         rust(&case.parse()?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The closed vertex-loop cases pass the FFI guard, and the C++ answers as
+    /// `my_test_heal_vertex_only_closed_surface` expects: true for the whole sphere and
+    /// torus, false for the open, one-pole, singly periodic, planar and edge-loop faces.
+    #[test]
+    fn closed_vertex_loop_cases_answer() {
+        for (name, c) in vertex_loop_cases() {
+            let CaseIn::Props { face, ops, .. } = &c else {
+                panic!("{name}: not a props case");
+            };
+            assert!(ffi::validate(&ffi_face(face), &ffi_ops(ops)).is_ok(), "{name}");
+            if !name.ends_with("_fresh") {
+                continue;
+            }
+            let v = cpp(&c).unwrap().values.get("v").cloned().unwrap();
+            let closed = ["sphere_", "sphere_swap_", "torus_", "torus_swap_"]
+                .iter()
+                .any(|p| name == format!("closed_vertex_loops_{p}fresh"));
+            let want = if closed { 1.0 } else { 0.0 };
+            assert_eq!(v.first(), Some(&want), "{name}");
+            assert_eq!(v.get(1 + ffi::SNAP_LEN), Some(&want), "{name}");
+        }
     }
 }

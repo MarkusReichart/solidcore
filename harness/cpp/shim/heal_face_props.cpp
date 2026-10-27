@@ -132,6 +132,9 @@ int32_t run(Rd& rd, std::vector<double>& out)
             }
             break;
         }
+        case 9: // SmFace::IsClosedSurfaceWithVertexLoops (new in 1.0.1), the props when p0 != 0
+            res = (double)face->IsClosedSurfaceWithVertexLoops(p0 != 0.0 ? &props : NULL);
+            break;
         default: break;
         }
         (void)p3;

@@ -162,6 +162,16 @@ int32_t fillet_and_record(SmBrep* body,const double* fillet,int64_t n,std::vecto
         primitive_record::point(values,inertia);
         primitive_record::point(values,products);
     }
+    // Diagnostic (pin v1.0.1, rollover-404): the B-rep box whose midpoint
+    // SmApiBrepComputeMassProperties integrates about.
+    SmExtent3d brep_box;
+    const SmStatus box_status=body->CalculateBoundingBox(brep_box);
+    std::vector<double> box_record{status(box_status)};
+    if (box_status == SM_SUCCESS) {
+        primitive_record::point(box_record,brep_box.GetMin());
+        primitive_record::point(box_record,brep_box.GetMax());
+    }
+    section(values,box_record);
     return SC_OK;
 }
 }

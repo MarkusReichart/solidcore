@@ -3,6 +3,8 @@
 #[cfg(feature = "cpp")]
 pub(crate) mod exact_curve;
 pub mod primitive;
+#[cfg(feature = "cpp")]
+pub(crate) mod test_brep;
 
 use solidcore::geom::object::ObjectRef;
 use solidcore::math::{Point2, Vec3};

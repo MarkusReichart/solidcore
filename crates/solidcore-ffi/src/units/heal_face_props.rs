@@ -14,7 +14,8 @@
 //! `IsPoint3dOnPole`(p0, p1, p2), `5` seed field p0 (index p1, value p2; see [`SEED_FIELDS`]),
 //! `6` `SetProps_Gaps` / `Stage2` / `Stage3` directly (which p0 in 1..=3, heal op p1, index
 //! p2), `7` `IsPeriodicU` + 2 `IsPeriodicV`, `8` `SmLoopProps::SetProps` of every loop of the
-//! face (the loop-props loop of `SetProps_Stage3`, without its `ClassifyLoops`). Output per
+//! face (the loop-props loop of `SetProps_Stage3`, without its `ClassifyLoops`), `9`
+//! `SmFace::IsClosedSurfaceWithVertexLoops`(the props when p0 != 0, else `NULL`). Output per
 //! op: the result then [`SNAP_LEN`] snapshot values (for op `8` the first [`MAX_LOOP_SNAPS`]
 //! loops' props instead of the face snapshot).
 //!
@@ -482,7 +483,7 @@ pub fn validate(face: &FaceSpec, ops: &[Op]) -> Result<(), FfiError> {
             1 | 2 => (0.0..=6.0).contains(&o.p[0]),
             // the bit mask is cast to ULONG
             3 => o.p[0] >= 0.0,
-            4 | 7 | 8 => true,
+            4 | 7 | 8 | 9 => true,
             5 => {
                 (0.0..SEED_FIELDS as f64).contains(&o.p[0])
                     && o.p[0].fract() == 0.0

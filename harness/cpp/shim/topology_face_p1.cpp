@@ -352,6 +352,11 @@ void fp1_brep_op(int32_t op, Rd& rd, const char* path, std::vector<double>& o)
     walk(built.brep, g);
     fp1_normalise(g);
     const SmContext& ctx = the_context();
+    // prog_test runs its ops on the smTestBrep.cpp fixtures (blocks 10..12, the only ones
+    // that set crv_on_surf_records) with a Boolean in progress; the Rust side sets the
+    // kernel's flag for them as well
+    SmTemporaryChangeValue<SmBoolean> doing_bool(const_cast<SmContext&>(ctx).GetDoingBooleanRef(),
+                                                 crv_on_surf_records() ? TRUE : ctx.GetDoingBoolean());
     if (fi < 0 || fi >= (int64_t)g.faces.size())
     {
         o.push_back((double)SC_ERR_ARG);

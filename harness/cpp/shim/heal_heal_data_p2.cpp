@@ -96,7 +96,9 @@ void normalise(Graph& g)
     {
         SmCurve* c = e->*EdgePeek::curve();
         // Keep circles/ellipses that the shared exporter can carry exactly; the
-        // healer then sees the same native kind as the imported Rust B-rep.
+        // healer then sees the same native kind as the imported Rust B-rep. SmCrvOnSurf
+        // (the smTestBrep fixtures') is no B-spline kind, so plain_curve keeps it too and
+        // the export carries it as a -4 record.
         if (exact_curve(c))
             continue;
         SmBSplineCurve* nc = plain_curve(c);
@@ -129,12 +131,12 @@ void init_cached_gaps(SmBrep* brep)
         }
 }
 
-// Builds the B-rep of a block (kinds 0..3 by the fixture, 4 box, 5 sphere face, 6
-// single-vertex sphere, 10 primitive sphere, 11 primitive torus).
+// Builds the B-rep of a block (kinds 0..3 and 9..12 by the fixture, 4 box, 5 sphere
+// face, 6 single-vertex sphere, 13 primitive sphere, 14 primitive torus).
 SmBrep* build_any(Rd& rd, const char* path, SmStatus& status)
 {
     int64_t kind = (int64_t)rd.in[rd.at];
-    if (kind != 4 && kind != 5 && kind != 6 && kind != 10 && kind != 11)
+    if (kind != 4 && kind != 5 && kind != 6 && kind != 13 && kind != 14)
         return build(rd, path, status);
     rd.idx();
     const SmContext& ctx = the_context();
@@ -146,16 +148,16 @@ SmBrep* build_any(Rd& rd, const char* path, SmStatus& status)
         SmPrimitiveCreation prim(brep->GetInfiniteRegion());
         status = prim.CreateBox(dx, dy, dz, SmAxis2Placement());
     }
-    else if (kind == 10 || kind == 11)
+    else if (kind == 13 || kind == 14)
     {
         // SmPrimitiveCreation::CreateSphere / CreateTorus over an angle range, on a
         // B-rep of tolerance 1e-7 (prog_test my_test_closed_face_containment_repeated)
         double r1 = rd.num();
-        double r2 = kind == 11 ? rd.num() : 0.0;
+        double r2 = kind == 14 ? rd.num() : 0.0;
         double a0 = rd.num(), a1 = rd.num();
         brep->SetTolerance(1e-7, FALSE);
         SmPrimitiveCreation prim(brep->GetInfiniteRegion());
-        status = kind == 10 ? prim.CreateSphere(r1, a0, a1, SmAxis2Placement())
+        status = kind == 13 ? prim.CreateSphere(r1, a0, a1, SmAxis2Placement())
                             : prim.CreateTorus(r1, r2, a0, a1, SmAxis2Placement());
     }
     else
@@ -1682,7 +1684,7 @@ void run_heal(Rd& rd, const char* path, std::vector<double>& o)
             int64_t sel = rd.idx();
             SmHealerOpType op = (SmHealerOpType)rd.idx();
             SmEdge* e = g.edges.empty() ? nullptr : g.edges[(size_t)(sel % (int64_t)g.edges.size())];
-            if (e == nullptr)
+            if (e == nullptr || e->GetVertex() == nullptr)
             {
                 o.push_back(ST_NULL_DEREF);
                 stop = true;

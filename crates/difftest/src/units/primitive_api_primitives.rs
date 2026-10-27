@@ -1029,3 +1029,90 @@ impl UnitDiff for Runner {
         rust(&case.parse()?)
     }
 }
+
+#[cfg(all(test, feature = "cpp"))]
+mod probe_tests {
+    /// Probe (pin v1.0.1): `SmBrep::ComputePreciseProperties` of full spheres at tight
+    /// accuracies on the C++ (`ffi::probe_sphere_precise_props`) next to the Rust
+    /// `brep_properties` on the same spheres, as `crates/solidcore/tests/primitives_solid.rs`
+    /// builds them. Prints status and relative area/volume errors per row; asserts nothing.
+    #[test]
+    #[ignore = "probe: pin v1.0.1 sphere precise properties"]
+    fn probe_sphere_precise_props_accuracy() {
+        use solidcore::geom::attribute::{AttributeStore, ObjectKey};
+        use solidcore::mass::integrator::properties::{
+            brep_properties, MassPropertyBehavior, PropertyAttributes,
+        };
+        use solidcore::primitive::api_primitives::{
+            create_sphere, create_sphere_no_pole_with_tolerance,
+        };
+        use solidcore::query::brep::{calculate_bounding_box, BoundingBoxOptions};
+        use solidcore::{math::Vec3, Kernel};
+        use solidcore_ffi::units::primitive_api_primitives::probe_sphere_precise_props;
+
+        let pi = std::f64::consts::PI;
+        let rel = |a: f64, b: f64| (a - b).abs() / b;
+        for (c, r) in [
+            ([0.0, 0.0, 0.0], 3.0),
+            ([0.0, 0.0, 0.0], 2.0),
+            ([1.0, -2.0, 0.5], 5.0),
+        ] {
+            let (area, volume) = (4.0 * pi * r * r, 4.0 * pi * r * r * r / 3.0);
+            for no_pole in [false, true] {
+                let tol = if no_pole { 1e-9 } else { 0.0 };
+                for acc in [1e-10, 1e-9, 1e-8] {
+                    let input = [c[0], c[1], c[2], r, f64::from(u8::from(no_pole)), acc, tol];
+                    let cpp = match probe_sphere_precise_props(&input) {
+                        Ok(o) if o.len() >= 5 => format!(
+                            "ok area_rel={:.3e} vol_rel={:.3e}",
+                            rel(o[2], area),
+                            rel(o[3], volume)
+                        ),
+                        Ok(o) => format!("status {o:?}"),
+                        Err(e) => format!("ffi error {e}"),
+                    };
+                    let mut k = Kernel::default();
+                    let center = Vec3::new(c[0], c[1], c[2]);
+                    let made = if no_pole {
+                        create_sphere_no_pole_with_tolerance(&mut k, center, r, tol)
+                    } else {
+                        create_sphere(&mut k, center, r)
+                    };
+                    let rust = match made {
+                        Err(e) => format!("create error {e}"),
+                        Ok(mut b) => {
+                            let mid = calculate_bounding_box(&k, &b, BoundingBoxOptions::default())
+                                .map(|x| x.mid());
+                            match mid {
+                                Err(e) => format!("bbox error {e}"),
+                                Ok(mid) => {
+                                    let store = AttributeStore::default();
+                                    let key_of = |_| ObjectKey(0);
+                                    match brep_properties(
+                                        &k,
+                                        &mut b,
+                                        acc,
+                                        mid,
+                                        MassPropertyBehavior::default(),
+                                        &PropertyAttributes {
+                                            store: &store,
+                                            key_of: &key_of,
+                                        },
+                                    ) {
+                                        Ok(p) => format!(
+                                            "ok area_rel={:.3e} vol_rel={:.3e}",
+                                            rel(p.area, area),
+                                            rel(p.volume, volume)
+                                        ),
+                                        Err(e) => format!("error {e:?}"),
+                                    }
+                                }
+                            }
+                        }
+                    };
+                    println!("r={r} no_pole={no_pole} acc={acc:e}\n  cpp:  {cpp}\n  rust: {rust}");
+                }
+            }
+        }
+    }
+}

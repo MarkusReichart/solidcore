@@ -40,6 +40,30 @@
 //! (`topology_vertexuse::refill_gaps`), since the bisector's `CurveOnClassify` reads the
 //! edge/face gaps (plan/findings/query.face_p4--gen0360-macos-exact-records.md).
 //!
+//! **Seam touches** (`GetLoopTouches`, new in 1.0.1). The `seam_touch_*` cases rebuild
+//! `prog_test` `my_test_seam_touch_incidence`'s B-reps (`SmBrepConstructor`: a cylinder or
+//! torus face with a hole and an enclosing loop of `SmCrvOnSurf` UV-line edges, seam edges
+//! shared within that loop) and run its steps on both sides: `SetProps_Stage2`,
+//! `CurveOnClassify` of its mid-height UV line (or its circle, or its corner diagonal),
+//! `GetLoopTouches` and `GetLoopCrossings` over the two loops. The graph carries the
+//! `SmCrvOnSurf` edge curves as no curve; the Rust side rebuilds each from its exported UV
+//! line on the imported face surface. The Rust side classifies in place on that B-rep
+//! (`InPlace`, `curve_on_classify_mut` and the `_mut` loop touch queries), so the UV trim
+//! curves, gaps and tolerances the classification makes reach the later calls as they do
+//! on the C++ B-rep. Compared: the statuses, the classification's intervals and point
+//! classes, the target loops, the touch lists (with parameters) and the crossing counts.
+//! A test B-rep whose face surface or a non-rebuilt edge curve arrives only as its
+//! B-spline part is deferred (`harness:analytic-geometry-export`): a stand-in is never
+//! counted as coverage of the analytic branches.
+//!
+//! **Face props of test B-reps.** `failed_loop_containment` (`prog_test`
+//! `my_test_failed_loop_containment`: overlapping cylinder loops whose interleaved entries
+//! and exits `SetProps_Stage3` must reject, discarding its partial loop tree) and
+//! `pole_crossing_*` (`my_test_pole_crossing_endpoint_tolerances`: a hemisphere with a
+//! two-edge circle around the north pole under that test's vertex and face tolerances,
+//! `SetProps_Stage2`) compare the status, not-yet type, loop tree presence, crossed-pole
+//! flag, edge and parameter, no-vertex poles and crossed-seam direction.
+//!
 //! **Rejected** (both sides report `rejected`): the inputs the FFI wrapper documents,
 //! where `ClassifyLoops` would read outside its arrays.
 //!
@@ -234,6 +258,13 @@ pub(super) enum BrepIn {
     },
     /// `CreateFaceInRegionFromSurface` over the natural domain.
     Natural { surface: AnySrf },
+    /// The seam topology of `prog_test` `my_test_seam_touch_incidence` (one iteration of
+    /// its `lKind`, `lRotation`, `lReversed` loops; see the FFI wrapper).
+    SeamTouch { kind: u8, rotation: u8, reversed: u8 },
+    /// `prog_test` `my_test_failed_loop_containment`'s overlapping cylinder loops.
+    FailedContainment,
+    /// One iteration of `prog_test` `my_test_pole_crossing_endpoint_tolerances`.
+    PoleCrossing { end: u8, case: u8 },
 }
 
 pub(super) const fn one() -> u8 {
@@ -312,6 +343,15 @@ pub(super) fn brep_input(
         BrepIn::Natural { surface } => {
             v.push(5.0);
             push_any(&mut v, surface)?;
+        }
+        BrepIn::SeamTouch {
+            kind,
+            rotation,
+            reversed,
+        } => v.extend([6.0, f64::from(*kind), f64::from(*rotation), f64::from(*reversed)]),
+        BrepIn::FailedContainment => v.push(7.0),
+        BrepIn::PoleCrossing { end, case } => {
+            v.extend([8.0, f64::from(*end), f64::from(*case)]);
         }
     }
     v.extend([flag(validate_only), flag(init_gaps)]);
@@ -497,6 +537,11 @@ fn result_output(
 }
 
 fn cpp(i: &Inputs) -> Result<Output, HarnessError> {
+    match i.brep {
+        BrepIn::SeamTouch { .. } => return seam_cpp(i),
+        BrepIn::FailedContainment | BrepIn::PoleCrossing { .. } => return props_cpp(i),
+        _ => {}
+    }
     let o = run_ffi(Op::Classify, i)?;
     let mut rd = Rd { v: &o, at: 0 };
     if rd.num()? != 0.0 {
@@ -600,6 +645,11 @@ fn tri(code: i64) -> Result<Tri, HarnessError> {
 }
 
 fn rust(i: &Inputs) -> Result<Output, HarnessError> {
+    match i.brep {
+        BrepIn::SeamTouch { .. } => return seam_rust(i),
+        BrepIn::FailedContainment | BrepIn::PoleCrossing { .. } => return props_rust(i),
+        _ => {}
+    }
     let k = Kernel::default();
     let o = run_ffi(Op::Export, i)?;
     if o.first() != Some(&0.0) {
@@ -709,6 +759,510 @@ fn rust(i: &Inputs) -> Result<Output, HarnessError> {
         tree,
         scratch.size() as i64,
     ))
+}
+
+// ---- seam touches (GetLoopTouches, new in 1.0.1) ------------------------------------------
+
+/// The C++ side of a seam touch case: the shim's `SeamTouches` record after its leading `0`.
+fn seam_cpp(i: &Inputs) -> Result<Output, HarnessError> {
+    let o = run_ffi(Op::SeamTouches, i)?;
+    if o.first() != Some(&0.0) {
+        return Ok(Output::err(format!(
+            "build_failed: {}",
+            o.get(1).copied().unwrap_or(-9.0)
+        )));
+    }
+    if o.get(1) != Some(&0.0) {
+        return Ok(Output::err("rejected"));
+    }
+    Ok(Output::new().values("seam", o.get(2..).unwrap_or_default().to_vec()))
+}
+
+/// A Rust error as the `SmStatus` the shim records, or the output that ends the case
+/// (an unported callee defers it).
+fn seam_status(e: &SolidError) -> Result<f64, Box<Output>> {
+    if let Some(d) = Output::unported(e) {
+        return Err(Box::new(d));
+    }
+    match e {
+        SolidError::Upstream { code, .. } => Ok(f64::from(*code)),
+        _ => Err(Box::new(Output::err(format!("rust_error: {e}")))),
+    }
+}
+
+/// The export index of a touch's connection, as the shim's `topo_index`.
+fn seam_topo_index(h: Option<H>) -> f64 {
+    match h {
+        None => -1.0,
+        Some(H::Topo(EntityRef::Loop(l))) => f64::from(l.index()),
+        Some(H::Topo(EntityRef::Vertex(v))) => f64::from(v.index()),
+        Some(_) => -2.0,
+    }
+}
+
+/// A touch list with parameters, as the shim's `put_param_touches`.
+fn seam_touch_block(o: &mut Vec<f64>, l: &[TouchData<H>]) {
+    o.push(l.len() as f64);
+    for t in l {
+        o.extend([
+            seam_topo_index(t.connected_to),
+            f64::from(t.loop_dir.code()),
+            t.loop_index as f64,
+            t.param,
+        ]);
+    }
+}
+
+/// A test B-rep, its one face and that face's surface.
+type TestBrep = (
+    solidcore::topology::Brep,
+    FaceId,
+    solidcore::surface::surface::Surface,
+);
+
+/// The imported graph of a kind 6, 7 or 8 B-rep with its `SmCrvOnSurf` edge curves rebuilt
+/// from their exported UV lines on the face's surface (`SmCrvOnSurf(SmLine(a, b, 2),
+/// surface, NULL, 2)`), its one face and that face's surface; `Err` holds the output of a
+/// failed build.
+fn test_brep(k: &Kernel, i: &Inputs) -> Result<Result<TestBrep, Box<Output>>, HarnessError> {
+    use solidcore::curve::crv_on_surf::CrvOnSurf;
+    use solidcore::curve::curve::Curve;
+    use solidcore::curve::line::Line;
+
+    let o = run_ffi(Op::Export, i)?;
+    if o.first() != Some(&0.0) {
+        return Ok(Err(Box::new(Output::err(format!(
+            "build_failed: {}",
+            o.get(1).copied().unwrap_or(-9.0)
+        )))));
+    }
+    let (graph, _) = ffi::split_export(&o).ok_or_else(|| harness("bad export"))?;
+    let (mut b, exact) = import(graph)?;
+    let face = FaceId::from_index(0);
+    // a face surface imported as its B-spline part only is a stand-in: the analytic
+    // branches the test exercises would not be compared
+    if exact.faces.first() != Some(&true) {
+        return Ok(Err(Box::new(Output::deferred(
+            "harness:analytic-geometry-export",
+            concat!(
+                "test face surface exported as a B-spline stand-in; ",
+                "its analytic branches not compared"
+            ),
+        ))));
+    }
+    let surface = b
+        .face(face)
+        .map_err(|e| harness(e.to_string()))?
+        .surface
+        .clone()
+        .ok_or_else(|| harness("test face without surface"))?;
+    let edges = run_ffi(Op::SeamEdges, i)?;
+    let mut rd = Rd { v: &edges, at: 0 };
+    if rd.num()? != 0.0 {
+        return Err(harness("seam edges of a failed build"));
+    }
+    let n = rd.count()?;
+    let mut rebuilt = Vec::new();
+    for _ in 0..n {
+        let e = rd.int()?;
+        let (ax, ay, bx, by) = (rd.num()?, rd.num()?, rd.num()?, rd.num()?);
+        let line = Line::from_points(Point3::new(ax, ay, 0.0), Point3::new(bx, by, 0.0), 2);
+        let c = CrvOnSurf::new(k, Curve::from(line), surface.clone(), None, 2)
+            .map_err(|e| harness(format!("edge curve: {e}")))?;
+        let e = EdgeId::from_index(u32::try_from(e).map_err(|_| harness("bad edge"))?);
+        b.edge_mut(e).map_err(|e| harness(e.to_string()))?.curve = Some(Curve::from(c));
+        rebuilt.push(e.index() as usize);
+    }
+    // every other edge curve (the pole test's circles) must have arrived exactly too
+    for (i, &ex) in exact.edges.iter().enumerate() {
+        if !ex && !rebuilt.contains(&i) {
+            return Ok(Err(Box::new(Output::deferred(
+                "harness:analytic-geometry-export",
+                concat!(
+                    "test edge curve exported as a B-spline stand-in; ",
+                    "its analytic branches not compared"
+                ),
+            ))));
+        }
+    }
+    Ok(Ok((b, face, surface)))
+}
+
+/// The classification objects over the imported B-rep, in place: the face, its surface,
+/// the B-rep topology, edge curves and UV trim curves are the runner's handles, the
+/// classification curve and its UV curve `H::Curve(false)` and `H::Curve(true)`.
+/// `SmFace::CurveOnClassify` and the loop touch queries make UV trim curves, gap caches
+/// and tolerance growth on the face's own B-rep, which later calls read; this adapter
+/// keeps them on the one imported B-rep as the C++ side keeps them on its B-rep.
+struct InPlace<'b> {
+    b: &'b mut solidcore::topology::Brep,
+    f: FaceId,
+    curve: solidcore::curve::curve::Curve,
+    uv: Option<solidcore::curve::curve::Curve>,
+}
+
+impl solidcore::intersect::point_class::ClassGeometry<H> for InPlace<'_> {
+    fn curve(&self, o: H) -> Option<&solidcore::curve::curve::Curve> {
+        match o {
+            H::Curve(false) => Some(&self.curve),
+            H::Curve(true) => self.uv.as_ref(),
+            H::EdgeCurve(e) => self.b.edge(e).ok()?.curve.as_ref(),
+            H::Trim(eu) => {
+                solidcore::topology::edgeuse::p1::uv_trim_curve(&*self.b, eu).ok()?.0
+            }
+            _ => None,
+        }
+    }
+    fn surface(&self, o: H) -> Option<&solidcore::surface::surface::Surface> {
+        match o {
+            H::Surface(f) if f == self.f => self.b.face(f).ok()?.surface.as_ref(),
+            _ => None,
+        }
+    }
+    fn volume(&self, _o: H) -> Option<&solidcore::surface::volume::Volume> {
+        None
+    }
+    fn point(&self, _o: H) -> Option<Point3> {
+        None
+    }
+    fn classification_vertex_point(&self, vertex: H) -> Option<Point3> {
+        match vertex {
+            H::Topo(EntityRef::Vertex(v)) => self.b.vertex(v).ok().map(|v| v.point),
+            _ => None,
+        }
+    }
+    fn topology_zone_tol_3d(&self, object: H) -> Option<f64> {
+        match object {
+            H::Topo(EntityRef::Vertex(v)) => self.b.vertex(v).ok().map(|v| v.tolerance),
+            H::Topo(EntityRef::Edge(e)) => self.b.edge(e).ok().map(|e| e.tolerance),
+            H::Topo(EntityRef::Face(f)) => self.b.face(f).ok().map(|f| f.tolerance),
+            _ => None,
+        }
+    }
+    fn topology_entity(&self, object: H) -> Option<(&solidcore::topology::Brep, EntityRef)> {
+        match object {
+            H::Topo(t) => Some((&*self.b, t)),
+            _ => None,
+        }
+    }
+    fn topology_handle(&self, entity: EntityRef) -> Option<H> {
+        Some(H::Topo(entity))
+    }
+}
+
+impl solidcore::intersect::curve_class::p5::ClassGeometryMut<H> for InPlace<'_> {
+    fn curve_mut(&mut self, _o: H) -> Option<&mut solidcore::curve::curve::Curve> {
+        // the classification does not edit its curves (as LoopObjectCurves)
+        None
+    }
+    fn topology_entity_mut(
+        &mut self,
+        o: H,
+    ) -> Option<(&mut solidcore::topology::Brep, EntityRef)> {
+        match o {
+            H::Topo(t) => Some((&mut *self.b, t)),
+            _ => None,
+        }
+    }
+}
+
+impl solidcore::query::face::p2::CurveOnClassifyObjects<H> for InPlace<'_> {
+    fn face(&self, f: FaceId) -> H {
+        H::Topo(EntityRef::Face(f))
+    }
+    fn vertex(&self, v: VertexId) -> H {
+        H::Topo(EntityRef::Vertex(v))
+    }
+    fn edge(&self, e: EdgeId) -> H {
+        H::Topo(EntityRef::Edge(e))
+    }
+    fn vertexuse(&self, vu: solidcore::topology::VertexuseId) -> H {
+        H::Topo(EntityRef::Vertexuse(vu))
+    }
+    fn edgeuse(&self, eu: EdgeuseId) -> H {
+        H::Topo(EntityRef::Edgeuse(eu))
+    }
+    fn edge_curve(&self, e: EdgeId) -> H {
+        H::EdgeCurve(e)
+    }
+    fn trim_curve(&self, eu: EdgeuseId) -> H {
+        H::Trim(eu)
+    }
+    fn face_surface(&self, f: FaceId) -> Option<H> {
+        self.b
+            .face(f)
+            .ok()
+            .and_then(|r| r.surface.as_ref())
+            .map(|_| H::Surface(f))
+    }
+    fn loop_id(&self, tgt_loop: H) -> Option<LoopId> {
+        tgt_loop.as_loop()
+    }
+}
+
+impl solidcore::query::face::p2::FaceBrep for InPlace<'_> {
+    fn brep(&self) -> &solidcore::topology::Brep {
+        &*self.b
+    }
+}
+
+impl solidcore::query::face::p2::CurveOnClassifyBrep<H> for InPlace<'_> {
+    fn brep_mut(&mut self) -> &mut solidcore::topology::Brep {
+        &mut *self.b
+    }
+}
+
+/// The Rust side of a seam touch case: the imported graph with the `SmCrvOnSurf` edge
+/// curves rebuilt from their exported UV lines on the face's surface, then the shim's
+/// `seam_touches` steps on it, recorded in the same layout.
+fn seam_rust(i: &Inputs) -> Result<Output, HarnessError> {
+    use solidcore::curve::crv_on_surf::CrvOnSurf;
+    use solidcore::curve::curve::Curve;
+    use solidcore::curve::ellipse::{Ellipse, EllipseOptions};
+    use solidcore::curve::line::Line;
+    use solidcore::geom::extent1d::Extent1d;
+    use solidcore::heal::face_props::HealerOpType;
+    use solidcore::intersect::curve_class::p2::ResetOptions;
+    use solidcore::query::face::p2 as qf2;
+
+    let k = Kernel::default();
+    let (mut b, face, surface) = match test_brep(&k, i)? {
+        Ok(x) => x,
+        Err(stop) => return Ok(*stop),
+    };
+
+    let mut out: Vec<f64> = Vec::new();
+    let mut props: FaceProps<H> = FaceProps::new();
+    match props.set_props_stage2_mut(&k, &mut b, face, 0, HealerOpType::All) {
+        Ok(()) => out.push(0.0),
+        Err(e) => {
+            match seam_status(&e) {
+                Ok(s) => out.push(s),
+                Err(stop) => return Ok(*stop),
+            }
+            return Ok(Output::new().values("seam", out));
+        }
+    }
+
+    // the sample (the shim's `seam_touches`)
+    let dom = surface.natural_uv_domain();
+    let (curve, uv) = if i.face == 1 {
+        let circle = Ellipse::new_circle(
+            &k,
+            Point3::new(0.0, 0.0, 1.5),
+            Point3::new(1.0, 0.0, 0.0),
+            Point3::new(0.0, 1.0, 0.0),
+            Extent1d::from_min_max(0.0, 360.0),
+            0.5,
+            &EllipseOptions::default(),
+        )
+        .map_err(|e| harness(format!("circle: {e}")))?;
+        (Curve::from(circle), None)
+    } else {
+        let (p, q) = if i.face == 2 {
+            (dom.evaluate(0.0, 1.0), dom.evaluate(1.0, 0.0))
+        } else {
+            (dom.evaluate(0.0, 0.5), dom.evaluate(1.0, 0.5))
+        };
+        let uv = Curve::from(Line::from_points(
+            Point3::new(p.x, p.y, 0.0),
+            Point3::new(q.x, q.y, 0.0),
+            2,
+        ));
+        let sample = CrvOnSurf::new(&k, uv.clone(), surface.clone(), Some(dom), 0)
+            .map_err(|e| harness(format!("sample: {e}")))?;
+        (Curve::from(sample), Some(uv))
+    };
+    let interval = curve.natural_interval();
+    // the target loops (the face's, which the shim checked are the test's hole then
+    // enclosing loop)
+    let loops = solidcore::topology::face::p2::loops(&b, face, false, None)
+        .map_err(|e| harness(e.to_string()))?;
+    let targets: Vec<H> = loops.iter().map(|&l| H::Topo(EntityRef::Loop(l))).collect();
+    let uvh = uv.as_ref().map(|_| H::Curve(true));
+    // in place on the imported B-rep, as upstream's CurveOnClassify, GetLoopTouches and
+    // GetLoopCrossings edit the face's own B-rep (made UV trim curves, gaps, tolerances)
+    let mut objs = InPlace {
+        b: &mut b,
+        f: face,
+        curve,
+        uv,
+    };
+    let mut cc: CurveClassification<H> = CurveClassification::new(&k);
+    let options = ResetOptions {
+        curve: Some(H::Curve(false)),
+        interval: Some(interval),
+        uv_curve: uvh,
+        zone_tol_3d: props.zone_tol_3d,
+        ..ResetOptions::default()
+    };
+    cc.reset(&k, &options).map_err(|e| harness(format!("reset: {e}")))?;
+    match qf2::curve_on_classify_mut(&k, face, &mut objs, true, &mut cc, true, true, false) {
+        Ok(_) => out.push(0.0),
+        Err(e) => {
+            match seam_status(&e) {
+                Ok(s) => out.push(s),
+                Err(stop) => return Ok(*stop),
+            }
+            return Ok(Output::new().values("seam", out));
+        }
+    }
+    out.push(cc.size() as f64);
+    for iv in cc.intervals() {
+        out.extend([iv.interval.min(), iv.interval.max()]);
+        for pc in [&iv.start, &iv.mid, &iv.end] {
+            out.push(f64::from(pc.point_class().code()));
+        }
+    }
+    out.push(loops.len() as f64);
+    out.extend(loops.iter().map(|l| f64::from(l.index())));
+    // GetLoopTouches: a failing status alone
+    match cc.get_loop_touches_mut(&k, &mut objs, &targets, Some(&mut props)) {
+        Ok(touches) => {
+            out.push(0.0);
+            seam_touch_block(&mut out, &touches);
+        }
+        Err(e) => match seam_status(&e) {
+            Ok(s) => out.push(s),
+            Err(stop) => return Ok(*stop),
+        },
+    }
+    match cc.get_loop_crossings_mut(&k, &mut objs, &targets, Some(&mut props)) {
+        Ok(lc) => {
+            match lc.status.as_ref().map(seam_status) {
+                None => out.push(0.0),
+                Some(Ok(s)) => out.push(s),
+                Some(Err(stop)) => return Ok(*stop),
+            }
+            out.push(lc.crossing_counts.len() as f64);
+            out.extend(lc.crossing_counts.iter().map(|&c| c as f64));
+            seam_touch_block(&mut out, &lc.raw_touches);
+            seam_touch_block(&mut out, &lc.done_touches);
+        }
+        Err(e) => match seam_status(&e) {
+            // no arrays come back with this error: recorded empty
+            Ok(s) => out.extend([s, 0.0, 0.0, 0.0]),
+            Err(stop) => return Ok(*stop),
+        },
+    }
+    Ok(Output::new().values("seam", out))
+}
+
+/// The C++ side of a face props case: the shim's `Props` record after its leading `0`.
+fn props_cpp(i: &Inputs) -> Result<Output, HarnessError> {
+    let o = run_ffi(Op::Props, i)?;
+    if o.first() != Some(&0.0) {
+        return Ok(Output::err(format!(
+            "build_failed: {}",
+            o.get(1).copied().unwrap_or(-9.0)
+        )));
+    }
+    if o.get(1) != Some(&0.0) {
+        return Ok(Output::err("rejected"));
+    }
+    Ok(Output::new().values("props", o.get(2..).unwrap_or_default().to_vec()))
+}
+
+/// The Rust side of a face props case: fresh props, then `SetProps_Stage3(face, 0,
+/// SM_HO_ALL)` (face selector `3`) or `SetProps_Stage2(face, 0, SM_HO_CACHE_FACEPROPS_2)`,
+/// and the props the tests check, in the shim's layout.
+fn props_rust(i: &Inputs) -> Result<Output, HarnessError> {
+    use solidcore::heal::face_props::HealerOpType;
+
+    let k = Kernel::default();
+    let (mut b, face, _) = match test_brep(&k, i)? {
+        Ok(x) => x,
+        Err(stop) => return Ok(*stop),
+    };
+    let mut props: FaceProps<H> = FaceProps::new();
+    let r = if i.face == 3 {
+        props.set_props_stage3(&k, &b, face, 0, HealerOpType::All)
+    } else {
+        props.set_props_stage2_mut(&k, &mut b, face, 0, HealerOpType::CacheFaceprops2)
+    };
+    let status = match r {
+        Ok(()) => 0.0,
+        Err(e) => match seam_status(&e) {
+            Ok(s) => s,
+            Err(stop) => return Ok(*stop),
+        },
+    };
+    let out = vec![
+        status,
+        props.not_yet_face_type.code() as f64,
+        if props.looptree.is_some() { 1.0 } else { 0.0 },
+        props.bad_crossed_pole.code() as f64,
+        props.crossed_pole_edge.map_or(-1.0, |e| f64::from(e.index())),
+        props.crossed_pole_parameter,
+        props.no_vertex_poles as f64,
+        props.bad_crossed_seam_dir as i64 as f64,
+    ];
+    Ok(Output::new().values("props", out))
+}
+
+/// The face props cases: `my_test_failed_loop_containment`'s `SetProps_Stage3` and every
+/// iteration of `my_test_pole_crossing_endpoint_tolerances`' `SetProps_Stage2`. The face
+/// selector carries the stage; fresh props keep the case setup off the B-rep.
+fn props_cases() -> Vec<(String, Inputs)> {
+    let case = |brep: BrepIn, stage: u32| Inputs {
+        brep,
+        validate_only: false,
+        init_gaps: false,
+        face: stage,
+        props: 0,
+        loops: 0,
+    };
+    let mut out = vec![(
+        "failed_loop_containment".to_string(),
+        case(BrepIn::FailedContainment, 3),
+    )];
+    for end in 0..2u8 {
+        for c in 0..3u8 {
+            out.push((
+                format!("pole_crossing_end{end}_case{c}"),
+                case(BrepIn::PoleCrossing { end, case: c }, 2),
+            ));
+        }
+    }
+    out
+}
+
+/// The seam touch cases: every iteration `my_test_seam_touch_incidence` runs with its
+/// mid-height UV line sample, plus its circle sample (kinds 2 and 4) and corner diagonal
+/// sample (kind 6) at rotation 0, reversed 0. The face selector carries the sample;
+/// fresh props keep the case setup off the B-rep.
+fn seam_cases() -> Vec<(String, Inputs)> {
+    let case = |kind: u8, rotation: u8, reversed: u8, sample: u32| Inputs {
+        brep: BrepIn::SeamTouch {
+            kind,
+            rotation,
+            reversed,
+        },
+        validate_only: false,
+        init_gaps: false,
+        face: sample,
+        props: 0,
+        loops: 0,
+    };
+    let mut out = Vec::new();
+    for kind in 0..7u8 {
+        for rotation in 0..4u8 {
+            for reversed in 0..4u8 {
+                if reversed >= 2 && ((kind != 2 && kind != 4) || rotation != 0) {
+                    continue;
+                }
+                out.push((
+                    format!("seam_touch_k{kind}_r{rotation}_v{reversed}"),
+                    case(kind, rotation, reversed, 0),
+                ));
+            }
+        }
+    }
+    for kind in [2u8, 4] {
+        out.push((format!("seam_touch_k{kind}_circle"), case(kind, 0, 0, 1)));
+    }
+    out.push(("seam_touch_k6_corner".into(), case(6, 0, 0, 2)));
+    out
 }
 
 // ---- generated cases ----------------------------------------------------------------------
@@ -1005,7 +1559,16 @@ impl UnitDiff for Runner {
             seeds: ctx.seeds.max(MIN_GENERATED),
             ..ctx.clone()
         };
-        default_cases(self, &ctx)
+        let mut cases = default_cases(self, &ctx)?;
+        for (name, inputs) in seam_cases().into_iter().chain(props_cases()) {
+            cases.push(Case {
+                unit: self.id().into(),
+                name,
+                source: crate::case::CaseSource::Inline,
+                inputs: serde_json::to_value(inputs).map_err(|e| harness(e.to_string()))?,
+            });
+        }
+        Ok(cases)
     }
 
     fn run_cpp(&self, case: &Case) -> Result<Output, HarnessError> {
@@ -1066,5 +1629,40 @@ mod tests {
             eprintln!("{v:4} {k}");
         }
         assert!(classified * 2 > n, "only {classified} of {n} classify loops");
+    }
+
+    /// The face props cases build on the C++ side, which answers as the upstream tests
+    /// expect: the failed containment returns `SM_ERR_NOTYET_HEAL_FACE` (1040) with type
+    /// `SM_HNF_NO_LOOP_TREE_ROOT` and no tree; only `lCase` 1 keeps the pole crossing.
+    #[test]
+    fn props_cases_answer() {
+        for (name, i) in props_cases() {
+            let c = cpp(&i).unwrap();
+            assert!(c.error.is_none(), "{name}: {:?}", c.error);
+            let v = c.values.get("props").unwrap();
+            if name == "failed_loop_containment" {
+                assert_eq!(v.first(), Some(&1040.0), "{name}: status");
+                let no_root = HealNotYetFaceType::NoLoopTreeRoot.code() as f64;
+                assert_eq!(v.get(1), Some(&no_root), "{name}: not-yet type");
+                assert_eq!(v.get(2), Some(&0.0), "{name}: tree");
+                continue;
+            }
+            let crossing = if name.ends_with("case1") { 1.0 } else { 0.0 };
+            assert_eq!(v.first(), Some(&0.0), "{name}: status");
+            assert_eq!(v.get(3), Some(&crossing), "{name}: bad_crossed_pole");
+        }
+    }
+
+    /// Every seam touch case builds on the C++ side and reaches `GetLoopTouches`.
+    #[test]
+    fn seam_cases_build() {
+        for (name, i) in seam_cases() {
+            let c = cpp(&i).unwrap();
+            assert!(c.error.is_none(), "{name}: {:?}", c.error);
+            let seam = c.values.get("seam").unwrap();
+            // stage2 and CurveOnClassify succeed
+            assert_eq!(seam.first(), Some(&0.0), "{name}");
+            assert_eq!(seam.get(1), Some(&0.0), "{name}");
+        }
     }
 }

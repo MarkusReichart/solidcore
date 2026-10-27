@@ -15,6 +15,15 @@
 //      bands, torus bands)
 //   `5 surf validate_only init_gaps`                CreateFaceInRegionFromSurface over the
 //      surface's natural domain (prog_test my_test_closed_sphere_properties)
+//   `6 kind rotation reversed validate_only init_gaps`
+//      the seam topology of prog_test my_test_seam_touch_incidence (smFaceTest.cpp): one
+//      face on an SmCylinder (kinds 0, 2..5) or SmTorus (kinds 1, 6) with a hole loop and
+//      an enclosing loop of SmCrvOnSurf UV-line edges, seam edges shared within the loop,
+//      built with SmBrepConstructor (seam_touch_brep)
+//   `7 validate_only init_gaps`  prog_test my_test_failed_loop_containment's two overlapping
+//      cylinder loops of SmCrvOnSurf edges (failed_containment_brep)
+//   `8 end case validate_only init_gaps`  prog_test my_test_pole_crossing_endpoint_tolerances'
+//      hemisphere with a two-edge small circle around the north pole (pole_crossing_brep)
 // The B-rep traversal and export (Rd .. export_graph) are copies of the harness code of
 // harness/cpp/shim/topology_face_p2.cpp (via query_face_p2.cpp), so the export has that
 // unit's layout and traversal order (the Rust side imports it with that unit's importer),
@@ -28,7 +37,11 @@
 // closed loops (a verbatim copy of SmFaceProps.cpp lines 1300-1341 without the debug
 // blocks). props_mode 0 passes fresh props (ClassifyLoops runs SetProps_Stage2 itself).
 // Op 0 exports the graph, the props (their values ClassifyLoops reads) and the target loops;
-// op 1 runs ClassifyLoops and exports its results.
+// op 1 runs ClassifyLoops and exports its results. On a kind 6 B-rep, op 2 runs that test's
+// SetProps_Stage2, CurveOnClassify of a sample, GetLoopTouches and GetLoopCrossings, and op
+// 3 exports the UV lines of the SmCrvOnSurf edge curves (which the graph exports as no
+// curve; the Rust side rebuilds them on the face's surface). On a kind 7 or 8 B-rep, op 4
+// runs SetProps_Stage2 or SetProps_Stage3 with fresh props, as those tests do.
 #include "sc_analytic_export.h"
 #include "sc_exact_curve_export.h"
 #include "sc_shim.h"
@@ -40,7 +53,10 @@
 #include <SmBSplineSurface.h>
 #include <SmBrep.h>
 #include <SmCone.h>
+#include <SmBrepData.h>
+#include <SmCircle.h>
 #include <SmContext.h>
+#include <SmCrvOnSurf.h>
 #include <SmCurve.h>
 #include <SmCurveClass.h>
 #include <SmCylinder.h>
@@ -57,6 +73,7 @@
 #include <SmLoop.h>
 #include <SmLoopProps.h>
 #include <SmLoopuse.h>
+#include <SmMath.h>
 #include <SmNurbsCrv.h>
 #include <SmNurbsSrf.h>
 #include <SmPlane.h>
@@ -83,6 +100,9 @@ enum Op : int32_t
 {
     OP_EXPORT = 0,
     OP_CLASSIFY = 1,
+    OP_SEAM_TOUCHES = 2,
+    OP_SEAM_EDGES = 3,
+    OP_PROPS = 4,
 };
 struct Rd
 {
@@ -503,8 +523,16 @@ void put_list(std::vector<double>& o, const std::vector<int64_t>& v)
 }
 
 // The exported graph; layout in the FFI wrapper (`export` section).
-void export_graph(SmBrep* brep, Graph& g, std::vector<double>& o)
+// `crv_on_surf_none`: export an SmCrvOnSurf edge curve as no curve (`-1`; kind 6 and 7 B-reps,
+// whose UV lines op 3 exports instead).
+void export_graph(SmBrep* brep, Graph& g, std::vector<double>& o, bool crv_on_surf_none = false)
 {
+    auto put_edge_curve = [crv_on_surf_none](std::vector<double>& out, const SmCurve* c) {
+        if (crv_on_surf_none && c != nullptr && c->IsKindOf(SmCrvOnSurf_TYPE))
+            out.push_back(-1.0);
+        else
+            put_curve(out, c);
+    };
     o.push_back(flg(brep->m_bValidateOnly));
     for (auto n : {g.regions.size(), g.shells.size(), g.faceuses.size(), g.faces.size(), g.loopuses.size(),
                    g.loops.size(), g.edgeuses.size(), g.edges.size(), g.vertexuses.size(), g.vertices.size()})
@@ -598,7 +626,7 @@ void export_graph(SmBrep* brep, Graph& g, std::vector<double>& o)
         for (SmTopology* t : list_of(p->GetList()))
             v.push_back(g.find(6, t));
         put_list(o, v);
-        sc_exact_curve_export::put_export_curve(o, p->GetCurve(), the_context(), put_curve);
+        sc_exact_curve_export::put_export_curve(o, p->GetCurve(), the_context(), put_edge_curve);
     }
     for (SmVertexuse* p : g.vertexuses)
     {
@@ -781,8 +809,341 @@ SmStatus make_face_with_curves(Rd& rd, const SmContext& ctx, SmBrep* brep)
     return status;
 }
 
+// What a kind 6 build leaves for ops 2 and 3: the face, its two loops in construction order
+// (the hole first), the face surface and natural domain, and the UV line of each new edge.
+struct SeamBuild
+{
+    bool built = false;
+    int64_t kind = 0;
+    SmFace* face = nullptr;
+    SmLoop* loops[2] = {nullptr, nullptr};
+    SmSurface* surface = nullptr;
+    SmExtent2d domain;
+    std::map<const SmEdge*, std::pair<SmPoint2d, SmPoint2d>> uv;
+};
+
+// The B-rep of prog_test my_test_seam_touch_incidence (smFaceTest.cpp, the SmBrepConstructor
+// block of one lKind/lRotation/lReversed iteration, without the checks after it), with the
+// test's own context replaced by the shim's. nullptr (status in `status`) when a constructor
+// call fails, or when the face's loops are not the two loops in construction order (the
+// Rust side takes the face's loops in their list order).
+SmBrep* seam_touch_brep(const SmContext& sContext, ULONG lKind, ULONG lRotation, ULONG lReversed, SeamBuild& sb,
+                        SmStatus& status)
+{
+    status = SM_ERR;
+    // Full cylinder/torus, either one-sided cylinder boundary (optionally
+    // segmented), and a torus patch meeting a corner of the UV domain.
+    SmBoolean bTorus = lKind == 1 || lKind == 6;
+    SmBoolean bHighSide = lKind == 4 || lKind == 5;
+    SmBrepConstructor sBuilder;
+    SmBrep* pBrep = sBuilder.StartBrep(sContext);
+    if (pBrep == NULL)
+        return nullptr;
+    pBrep->SetTolerance(1e-7, FALSE);
+    SmShell *pOuter = NULL, *pInner = NULL;
+    if (sBuilder.StartShell(pOuter, pInner) != SM_SUCCESS)
+        return pBrep;
+    SmFace* pFace = sBuilder.StartFace(SM_OT_SAME);
+    SmSurface* pSurface = NULL;
+    if (bTorus)
+    {
+        SmTorus* pTorus = NULL;
+        if (SmTorus::CreateCanonical(sContext, SmAxis2Placement(), 3., 1., pTorus) != SM_SUCCESS)
+            return pBrep;
+        pSurface = pTorus;
+    }
+    else
+    {
+        SmCylinder* pCylinder = NULL;
+        if (SmCylinder::CreateCanonical(sContext, SmAxis2Placement(), .5, pCylinder) != SM_SUCCESS)
+            return pBrep;
+        SmExtent2d sDomain = pCylinder->GetSTEPUVDomain();
+        if (pCylinder->AdjustSTEPUVDomain(SmExtent2d(sDomain.GetMin().x, 0., sDomain.GetMax().x, 3.)) != SM_SUCCESS)
+        {
+            delete pCylinder;
+            return pBrep;
+        }
+        pSurface = pCylinder;
+    }
+    SmExtent2d sDomain = pSurface->GetNaturalUVDomain();
+    if (sBuilder.SetFaceSurface(pSurface, sDomain) != SM_SUCCESS)
+        return pBrep;
+    SmLoop* apLoops[2];
+    for (ULONG lLoop = 0; lLoop < 2; ++lLoop)
+    {
+        // Deliberately put the hole first, with an untrusted stored role.
+        apLoops[lLoop] = sBuilder.StartLoop(SM_OT_SAME);
+        SmPoint2d asUV[6] = {SmPoint2d(.3, .25), SmPoint2d(.3, .75), SmPoint2d(.45, .75), SmPoint2d(.45, .25)};
+        if (bHighSide)
+        {
+            for (ULONG lIndex = 0; lIndex < 4; ++lIndex)
+            {
+                asUV[lIndex].x += .3;
+            }
+        }
+        if (lKind == 6)
+        {
+            for (ULONG lIndex = 0; lIndex < 4; ++lIndex)
+            {
+                asUV[lIndex].y *= .8;
+            }
+        }
+        if (lLoop)
+        {
+            double dLow = bTorus ? 0. : .05;
+            double dHigh = lKind == 6 ? .7 : lKind == 1 ? 1. : .95;
+            double dLeft = bHighSide ? .3 : 0., dRight = lKind >= 2 && !bHighSide ? .7 : 1.;
+            asUV[0] = SmPoint2d(dLeft, dLow);
+            asUV[1] = SmPoint2d(dRight, dLow);
+            asUV[2] = SmPoint2d(dRight, dHigh);
+            asUV[3] = SmPoint2d(dLeft, dHigh);
+        }
+        ULONG lSegments = lLoop && (lKind == 3 || lKind == 5) ? 6UL : 4UL;
+        if (lSegments == 6)
+        {
+            // Split both vertical boundaries at the sample height, so both
+            // periodic images encounter a vertex between two seam segments.
+            asUV[5] = SmPoint2d(asUV[0].x, .5);
+            asUV[4] = asUV[3];
+            asUV[3] = asUV[2];
+            asUV[2] = SmPoint2d(asUV[1].x, .5);
+        }
+        SmVertex* apVertices[6];
+        SmEdge* apEdges[6] = {NULL, NULL, NULL, NULL, NULL, NULL};
+        for (ULONG lIndex = 0; lIndex < lSegments; ++lIndex)
+        {
+            asUV[lIndex] = sDomain.Evaluate(asUV[lIndex].x, asUV[lIndex].y);
+            SmPoint3d sPoint;
+            if (pSurface->EvaluatePoint(asUV[lIndex], sPoint) != SM_SUCCESS)
+                return pBrep;
+            apVertices[lIndex] = NULL;
+            for (ULONG lPrevious = 0; lPrevious < lIndex; ++lPrevious)
+            {
+                if ((sPoint - apVertices[lPrevious]->GetPoint()).Length() < 1e-8)
+                {
+                    apVertices[lIndex] = apVertices[lPrevious];
+                    break;
+                }
+            }
+            if (!apVertices[lIndex])
+            {
+                apVertices[lIndex] = sBuilder.StartVertexOfLoop(sPoint);
+            }
+        }
+        SmBoolean bReverse = (lReversed & (lLoop ? 2UL : 1UL)) != 0;
+        for (ULONG lIndex = 0; lIndex < lSegments; ++lIndex)
+        {
+            ULONG lFrom = (lRotation + (bReverse ? lSegments - lIndex : lIndex)) % lSegments;
+            ULONG lTo = (lFrom + (bReverse ? lSegments - 1 : 1)) % lSegments;
+            ULONG lSegment = bReverse ? lTo : lFrom;
+            ULONG lPartner = (lSegment + 2) % 4;
+            SmEdge* pShared = lLoop && (lKind == 1 || (lKind == 0 && lSegment % 2)) ? apEdges[lPartner] : NULL;
+            SmEdge* pEdge =
+                sBuilder.StartEdge(pShared ? SM_OT_OPPOSITE : SM_OT_SAME, pShared, apVertices[lFrom], apVertices[lTo]);
+            if (pEdge == NULL)
+                return pBrep;
+            apEdges[lSegment] = pEdge;
+            if (!pShared)
+            {
+                SmLine sLine(asUV[lFrom], asUV[lTo], 2, &sContext);
+                SmCurve* pCurve = new (sContext) SmCrvOnSurf(sLine,      // in : parameter-space boundary
+                                                             *pSurface,  // in : supporting surface
+                                                             NULL,       // in : natural surface domain
+                                                             2,          // in : own copies of the curve and surface
+                                                             &sContext); // in : allocation context
+                if (sBuilder.SetEdgeCurve(pCurve, FALSE) != SM_SUCCESS ||
+                    sBuilder.SetLimits(SmVertexNode(0.), SmVertexNode(1.)) != SM_SUCCESS)
+                    return pBrep;
+                sb.uv[pEdge] = std::make_pair(asUV[lFrom], asUV[lTo]);
+            }
+            if (sBuilder.EndEdge() != SM_SUCCESS)
+                return pBrep;
+        }
+        if (sBuilder.EndLoop() != SM_SUCCESS)
+            return pBrep;
+    }
+    if (sBuilder.EndFace() != SM_SUCCESS || sBuilder.EndShell(FALSE) != SM_SUCCESS || sBuilder.EndBrep() != SM_SUCCESS)
+        return pBrep;
+    SmTArray<SmLoop*> sLoops;
+    pFace->GetLoops(sLoops);
+    if (sLoops.GetSize() != 2 || sLoops[0] != apLoops[0] || sLoops[1] != apLoops[1])
+        return pBrep;
+    sb.built = true;
+    sb.face = pFace;
+    sb.loops[0] = apLoops[0];
+    sb.loops[1] = apLoops[1];
+    sb.surface = pSurface;
+    sb.domain = sDomain;
+    status = SM_SUCCESS;
+    return pBrep;
+}
+
+// The B-rep of prog_test my_test_failed_loop_containment (smFaceTest.cpp; overlapping
+// cylinder loops whose interleaved entries and exits Stage 3 must reject), built as that
+// test does with the shim's context. nullptr (status in `status`) as seam_touch_brep.
+SmBrep* failed_containment_brep(const SmContext& sContext, SeamBuild& sb, SmStatus& status)
+{
+    status = SM_ERR;
+    SmBrepConstructor sBuilder;
+    SmBrep* pBrep = sBuilder.StartBrep(sContext);
+    if (pBrep == NULL)
+        return nullptr;
+    SmShell *pOuter = NULL, *pInner = NULL;
+    pBrep->SetTolerance(1e-7, FALSE);
+    if (sBuilder.StartShell(pOuter, pInner) != SM_SUCCESS)
+        return pBrep;
+    SmFace* pFace = sBuilder.StartFace(SM_OT_SAME);
+    SmCylinder* pSurface = NULL;
+    if (SmCylinder::CreateCanonical(sContext, SmAxis2Placement(), .5, pSurface) != SM_SUCCESS)
+        return pBrep;
+    SmExtent2d sSTEPDomain = pSurface->GetSTEPUVDomain();
+    if (pSurface->AdjustSTEPUVDomain(SmExtent2d(sSTEPDomain.GetUMin(), 0., sSTEPDomain.GetUMax(), 3.)) != SM_SUCCESS)
+    {
+        delete pSurface;
+        return pBrep;
+    }
+    SmExtent2d sDomain = pSurface->GetNaturalUVDomain();
+    if (sBuilder.SetFaceSurface(pSurface, sDomain) != SM_SUCCESS)
+        return pBrep;
+    for (ULONG lLoop = 0; lLoop < 2; ++lLoop)
+    {
+        if (sBuilder.StartLoop(SM_OT_SAME) == NULL)
+            return pBrep;
+        SmPoint2d asUV[4] = {SmPoint2d(.6, .25), SmPoint2d(.6, .75), SmPoint2d(.85, .75), SmPoint2d(.85, .25)};
+        if (lLoop == 0)
+        {
+            asUV[0].Set(0., .05);
+            asUV[1].Set(.7, .05);
+            asUV[2].Set(.7, .95);
+            asUV[3].Set(0., .95);
+        }
+        SmVertex* apVertices[4];
+        for (ULONG lIndex = 0; lIndex < 4; ++lIndex)
+        {
+            asUV[lIndex] = sDomain.Evaluate(asUV[lIndex].x, asUV[lIndex].y);
+            SmPoint3d sPoint;
+            if (pSurface->EvaluatePoint(asUV[lIndex], sPoint) != SM_SUCCESS)
+                return pBrep;
+            apVertices[lIndex] = sBuilder.StartVertexOfLoop(sPoint);
+        }
+        for (ULONG lIndex = 0; lIndex < 4; ++lIndex)
+        {
+            ULONG lNext = (lIndex + 1) % 4;
+            SmEdge* pEdge = sBuilder.StartEdge(SM_OT_SAME, NULL, apVertices[lIndex], apVertices[lNext]);
+            if (pEdge == NULL)
+                return pBrep;
+            SmLine sLine(asUV[lIndex], asUV[lNext], 2, &sContext);
+            SmCurve* pCurve = new (sContext) SmCrvOnSurf(sLine,      // in : parameter-space boundary
+                                                         *pSurface,  // in : supporting surface
+                                                         NULL,       // in : natural surface domain
+                                                         2,          // in : own copies of the curve and surface
+                                                         &sContext); // in : allocation context
+            if (sBuilder.SetEdgeCurve(pCurve, FALSE) != SM_SUCCESS ||
+                sBuilder.SetLimits(SmVertexNode(0.), SmVertexNode(1.)) != SM_SUCCESS ||
+                sBuilder.EndEdge() != SM_SUCCESS)
+                return pBrep;
+            sb.uv[pEdge] = std::make_pair(asUV[lIndex], asUV[lNext]);
+        }
+        if (sBuilder.EndLoop() != SM_SUCCESS)
+            return pBrep;
+    }
+    if (sBuilder.EndFace() != SM_SUCCESS || sBuilder.EndShell(FALSE) != SM_SUCCESS || sBuilder.EndBrep() != SM_SUCCESS)
+        return pBrep;
+    sb.built = true;
+    sb.face = pFace;
+    sb.surface = pSurface;
+    sb.domain = sDomain;
+    status = SM_SUCCESS;
+    return pBrep;
+}
+
+// The B-rep of one iteration of prog_test my_test_pole_crossing_endpoint_tolerances
+// (smHealTest.cpp; `lEnd` puts the near vertex before or after the pole, `lCase` picks the
+// vertex and face tolerances), built as that test does with the shim's context.
+SmBrep* pole_crossing_brep(const SmContext& sContext, ULONG lEnd, ULONG lCase, SeamBuild& sb, SmStatus& status)
+{
+    status = SM_ERR;
+    SmBrepConstructor sBuilder;
+    SmBrep* pBrep = sBuilder.StartBrep(sContext);
+    if (pBrep == NULL)
+        return nullptr;
+    SmShell *pOuter = NULL, *pInner = NULL;
+    if (sBuilder.StartShell(pOuter, pInner) != SM_SUCCESS)
+        return pBrep;
+    SmFace* pFace = sBuilder.StartFace(SM_OT_SAME);
+    if (pFace == NULL)
+        return pBrep;
+    // A nonperiodic hemisphere keeps seam classification out of this test.
+    SmExtent2d sAngles(SmExtent1d(-90, 90), SmExtent1d(-90, 90));
+    SmSphere* pSphere = new (sContext) SmSphere(SmPoint3d(0, 0, 0),  // in : sphere origin
+                                                SmVector3d(1, 0, 0), // in : first frame axis
+                                                SmVector3d(0, 1, 0), // in : second frame axis
+                                                sAngles,             // in : angular domain in degrees
+                                                2.0,                 // in : radius
+                                                FALSE,               // in : keep U and V directions
+                                                FALSE,               // in : outward sphere
+                                                NULL,                // in : generate the meridian curve
+                                                &sContext);          // in : allocation context
+    if (sBuilder.SetFaceSurface(pSphere, pSphere->GetNaturalUVDomain()) != SM_SUCCESS)
+        return pBrep;
+    if (sBuilder.StartLoop(SM_OT_SAME) == NULL)
+        return pBrep;
+
+    double dRadius = sqrt(2.0);
+    double dAngle = 180.0 + (lEnd == 0 ? -0.01 : 0.01);
+    double dRadians = SM_DEG2RAD(dAngle);
+    SmPoint3d sCenter(1, 0, 1), sFar(2, 0, 0);
+    SmVector3d sAxisX(1.0 / dRadius, 0, -1.0 / dRadius), sAxisY(0, 1, 0);
+    SmPoint3d sNear = sCenter + dRadius * (cos(dRadians) * sAxisX + sin(dRadians) * sAxisY);
+    SmVertex* pFar = sBuilder.StartVertexOfLoop(sFar);
+    SmVertex* pNear = sBuilder.StartVertexOfLoop(sNear);
+    SmEdge* pEdges[2] = {NULL, NULL};
+    for (ULONG lEdge = 0; lEdge < 2; ++lEdge)
+    {
+        pEdges[lEdge] = sBuilder.StartEdge(SM_OT_SAME,                // in : edgeuse orientation
+                                           NULL,                      // in : create a new edge
+                                           lEdge == 0 ? pFar : pNear,  // in : existing start vertex
+                                           lEdge == 0 ? pNear : pFar); // in : existing end vertex
+        if (pEdges[lEdge] == NULL)
+            return pBrep;
+        SmExtent1d sArcAngles(lEdge == 0 ? 0.0 : dAngle, lEdge == 0 ? dAngle : 360.0);
+        SmCircle* pCircle = new (sContext) SmCircle(sCenter,    // in : center
+                                                    sAxisX,     // in : first circle axis
+                                                    sAxisY,     // in : second circle axis
+                                                    sArcAngles, // in : angular interval in degrees
+                                                    dRadius,    // in : radius
+                                                    3,          // in : dimension
+                                                    &sContext); // in : allocation context
+        if (sBuilder.SetEdgeCurve(pCircle, FALSE) != SM_SUCCESS ||
+            sBuilder.SetLimits(SmVertexNode(lEdge == 0 ? sFar : sNear), SmVertexNode(lEdge == 0 ? sNear : sFar)) !=
+                SM_SUCCESS ||
+            sBuilder.EndEdge() != SM_SUCCESS)
+            return pBrep;
+    }
+    if (sBuilder.EndLoop() != SM_SUCCESS || sBuilder.EndFace() != SM_SUCCESS || sBuilder.EndShell(FALSE) != SM_SUCCESS ||
+        sBuilder.EndBrep() != SM_SUCCESS)
+        return pBrep;
+
+    // A large vertex tolerance covers the pole. Small tolerances retain the
+    // interior crossing; the last case needs both vertex and face tolerances.
+    pFace->SetTolerance(SmZoneTol3d(lCase == 2 ? 1.5e-4 : 1e-7), FALSE);
+    pNear->SetTolerance(SmZoneTol3d(lCase == 0 ? 1e-3 : lCase == 2 ? 1.5e-4 : 1e-7), FALSE);
+    pFar->SetTolerance(SmZoneTol3d(1e-7), FALSE);
+    for (ULONG lEdge = 0; lEdge < 2; ++lEdge)
+    {
+        pEdges[lEdge]->SetTolerance(SmZoneTol3d(1e-7), FALSE);
+    }
+    sb.built = true;
+    sb.face = pFace;
+    sb.surface = pSphere;
+    sb.domain = pSphere->GetNaturalUVDomain();
+    status = SM_SUCCESS;
+    return pBrep;
+}
+
 // Builds the B-rep of a B-rep block; nullptr (status in `status`) when construction fails.
-SmBrep* build(Rd& rd, const char* path, SmStatus& status)
+// `seam` receives what a kind 6, 7 or 8 build leaves for ops 2 to 4.
+SmBrep* build(Rd& rd, const char* path, SmStatus& status, SeamBuild* seam = nullptr)
 {
     const SmContext& ctx = the_context();
     int64_t kind = rd.idx();
@@ -811,6 +1172,46 @@ SmBrep* build(Rd& rd, const char* path, SmStatus& status)
             SmStatus s = make_face_with_curves(rd, ctx, brep);
             if (status == SM_SUCCESS)
                 status = s;
+        }
+    }
+    else if (kind == 6)
+    {
+        // the test builds its own B-rep with SmBrepConstructor
+        delete brep;
+        ULONG seam_kind = (ULONG)rd.idx();
+        ULONG rotation = (ULONG)rd.idx();
+        ULONG reversed = (ULONG)rd.idx();
+        SeamBuild local;
+        brep = seam_touch_brep(ctx, seam_kind, rotation, reversed, seam ? *seam : local, status);
+        if (seam)
+            seam->kind = 6;
+        if (brep == nullptr)
+        {
+            // the B-rep block's flags are still read below
+            brep = new (ctx) SmBrep();
+            if (status == SM_SUCCESS)
+                status = SM_ERR;
+        }
+    }
+    else if (kind == 7 || kind == 8)
+    {
+        delete brep;
+        SeamBuild local;
+        SeamBuild& sb = seam ? *seam : local;
+        if (kind == 7)
+            brep = failed_containment_brep(ctx, sb, status);
+        else
+        {
+            ULONG end = (ULONG)rd.idx();
+            ULONG which = (ULONG)rd.idx();
+            brep = pole_crossing_brep(ctx, end, which, sb, status);
+        }
+        sb.kind = kind;
+        if (brep == nullptr)
+        {
+            brep = new (ctx) SmBrep();
+            if (status == SM_SUCCESS)
+                status = SM_ERR;
         }
     }
     else
@@ -1153,12 +1554,125 @@ void put_tree(std::vector<double>& o, Graph& g, SmLooptreeItem* root, const SmTA
     }
 }
 
+// A touch list with parameters: `n (loop dir loop_index param)*` (`loop` as put_touches).
+void put_param_touches(std::vector<double>& o, Graph& g, const SmTArray<SmTouchData>& l)
+{
+    o.push_back((double)l.GetSize());
+    for (ULONG i = 0; i < l.GetSize(); i++)
+    {
+        const SmTouchData& t = l.GetAt(i);
+        o.push_back((double)topo_index(g, t.m_pConnectedTo));
+        o.push_back((double)t.m_eLoopDir);
+        o.push_back((double)t.m_lLoopIndx);
+        o.push_back(t.m_dParam);
+    }
+}
+
+// Op 2 on a kind 6 B-rep (layout in the FFI wrapper): my_test_seam_touch_incidence's
+// SetProps_Stage2, then for sample 0 its UV line at mid-height (an SmCrvOnSurf with its UV
+// curve), 1 its model-space circle, 2 its corner diagonal: CurveOnClassify, GetLoopTouches
+// and GetLoopCrossings over the hole and the enclosing loop.
+void seam_touches(std::vector<double>& o, Graph& g, const SeamBuild& sb, int64_t sample)
+{
+    const SmContext& sContext = the_context();
+    SmFace* pFace = sb.face;
+    SmSurface* pSurface = sb.surface;
+    SmExtent2d sDomain = sb.domain;
+    SmFaceProps sProps(&sContext);
+    SmStatus s = sProps.SetProps_Stage2(pFace, 0, SM_HO_ALL);
+    o.push_back(st(s));
+    if (s != SM_SUCCESS)
+        return;
+    SmTArray<SmLoop*> sTargets;
+    sTargets.Add(sb.loops[0]);
+    sTargets.Add(sb.loops[1]);
+    auto run = [&](const SmCurve* pCurve, const SmCurve* pUV) {
+        SmExtent1d sInterval = pCurve->GetNaturalInterval();
+        SmCurveClassification sClassification;
+        sClassification.ReSet(pCurve, &sInterval, pUV, sProps.m_sZoneTol3d);
+        SmStatus sc = pFace->CurveOnClassify(TRUE,            // in : classify intervals with no boundary intersections
+                                             sClassification, // i/o: sample and its boundary encounters
+                                             TRUE,            // in : accommodate edge-face gaps
+                                             TRUE,            // in : verify intersections in 3D
+                                             NULL,            // out: curve modification flag unused
+                                             FALSE);          // in : do not rely on UV trims
+        o.push_back(st(sc));
+        if (sc != SM_SUCCESS)
+            return;
+        o.push_back((double)sClassification.GetSize());
+        for (ULONG i = 0; i < sClassification.GetSize(); i++)
+        {
+            const SmCurveInterval& iv = sClassification.GetAt(i);
+            o.push_back(iv.m_vInterval.GetMin());
+            o.push_back(iv.m_vInterval.GetMax());
+            o.push_back((double)iv.m_vStart.GetPointClass());
+            o.push_back((double)iv.m_vMid.GetPointClass());
+            o.push_back((double)iv.m_vEnd.GetPointClass());
+        }
+        put_loops(o, g, sTargets);
+        // GetLoopTouches (new in 1.0.1): on a failing status only the status (its list
+        // may hold the touches collected before the failure)
+        SmTArray<SmTouchData> sEncounters;
+        SmStatus st_t = sClassification.GetLoopTouches(sTargets, &sProps, sEncounters);
+        o.push_back(st(st_t));
+        if (st_t == SM_SUCCESS)
+            put_param_touches(o, g, sEncounters);
+        SmTArray<ULONG> sCounts;
+        SmTArray<SmTouchData> sRaw, sDone;
+        SmStatus st_c = sClassification.GetLoopCrossings(sTargets, &sProps, &sCounts, &sRaw, &sDone);
+        o.push_back(st(st_c));
+        o.push_back((double)sCounts.GetSize());
+        for (ULONG i = 0; i < sCounts.GetSize(); i++)
+            o.push_back((double)sCounts[i]);
+        put_param_touches(o, g, sRaw);
+        put_param_touches(o, g, sDone);
+    };
+    if (sample == 1)
+    {
+        // The same circle without a defining UV curve.
+        SmCircle sCircle(SmPoint3d(0., 0., 1.5), // in : center at half the cylinder height
+                         SmVector3d(1., 0., 0.), // in : zero-angle direction
+                         SmVector3d(0., 1., 0.), // in : positive angular direction
+                         SmExtent1d(0., 360.),   // in : one complete revolution
+                         .5,                     // in : cylinder radius
+                         3,                      // in : model-space curve
+                         &sContext);             // in : allocation context
+        run(&sCircle, NULL);
+        return;
+    }
+    // 0: the sample at mid-height; 2: the diagonal from (Umin,Vmax) to (Umax,Vmin)
+    SmLine sSampleUV(sample == 2 ? sDomain.Evaluate(0., 1.) : sDomain.Evaluate(0., .5),
+                     sample == 2 ? sDomain.Evaluate(1., 0.) : sDomain.Evaluate(1., .5), 2, &sContext);
+    SmCrvOnSurf sSample(sSampleUV, *pSurface, &sDomain, 0, &sContext);
+    run(&sSample, &sSampleUV);
+}
+
+// Op 4 on a kind 7 or 8 B-rep (layout in the FFI wrapper): fresh SmFaceProps(&ctx), then
+// SetProps_Stage2(face, 0, SM_HO_CACHE_FACEPROPS_2) (`stage` 2, the pole crossing test) or
+// SetProps_Stage3(face, 0, SM_HO_ALL) (`stage` 3, the failed containment test), and the
+// props those tests check.
+void props_stage(std::vector<double>& o, Graph& g, const SeamBuild& sb, int64_t stage)
+{
+    SmFaceProps sProps(&the_context());
+    SmStatus s = stage == 3 ? sProps.SetProps_Stage3(sb.face, 0, SM_HO_ALL)
+                            : sProps.SetProps_Stage2(sb.face, 0, SM_HO_CACHE_FACEPROPS_2);
+    o.push_back(st(s));
+    o.push_back((double)sProps.m_eNotYetFaceType);
+    o.push_back(sProps.m_pLooptreeRoot != NULL ? 1.0 : 0.0);
+    o.push_back((double)sProps.m_bBadCrossedPole);
+    o.push_back((double)g.find(7, sProps.m_pCrossedPoleEdge));
+    o.push_back(sProps.m_dCrossedPoleParameter);
+    o.push_back((double)sProps.m_lNoVertexPoles);
+    o.push_back((double)sProps.m_eBadCrossedSeam);
+}
+
 void run_op(int32_t op, Rd& rd, const char* path, std::vector<double>& o)
 {
     Rd brep_rd = rd;
     SmStatus bst;
     Built b;
-    b.brep = build(rd, path, bst);
+    SeamBuild sb;
+    b.brep = build(rd, path, bst, &sb);
     if (b.brep == nullptr)
     {
         o.push_back(-1.0);
@@ -1168,12 +1682,47 @@ void run_op(int32_t op, Rd& rd, const char* path, std::vector<double>& o)
     o.push_back(0.0);
     Graph g;
     walk(b.brep, g);
+    // ops 2 and 3 read the face selector as their sample
+    int64_t sample = (int64_t)rd.in[rd.at];
     Case c;
     setup(rd, brep_rd, path, g, c);
+    if (op == OP_SEAM_EDGES)
+    {
+        // `n (edge ax ay bx by)*`: the UV line of each SmCrvOnSurf edge curve of a kind 6 build
+        std::vector<double> rows;
+        int64_t n = 0;
+        for (size_t i = 0; i < g.edges.size(); i++)
+        {
+            auto it = sb.uv.find(g.edges[i]);
+            if (!sb.built || it == sb.uv.end())
+                continue;
+            rows.insert(rows.end(), {(double)i, it->second.first.x, it->second.first.y, it->second.second.x,
+                                     it->second.second.y});
+            n++;
+        }
+        o.push_back((double)n);
+        o.insert(o.end(), rows.begin(), rows.end());
+        return;
+    }
+    if (op == OP_SEAM_TOUCHES)
+    {
+        o.push_back(sb.built && sb.kind == 6 ? 0.0 : 1.0);
+        if (sb.built && sb.kind == 6)
+            seam_touches(o, g, sb, sample);
+        return;
+    }
+    if (op == OP_PROPS)
+    {
+        bool ok = sb.built && (sb.kind == 7 || sb.kind == 8);
+        o.push_back(ok ? 0.0 : 1.0);
+        if (ok)
+            props_stage(o, g, sb, sample == 3 ? 3 : 2);
+        return;
+    }
     if (op == OP_EXPORT)
     {
         // the graph, then the case block, then the case block's length
-        export_graph(b.brep, g, o);
+        export_graph(b.brep, g, o, sb.built);
         size_t start = o.size();
         o.push_back(c.rejected ? 1.0 : 0.0);
         if (!c.rejected)

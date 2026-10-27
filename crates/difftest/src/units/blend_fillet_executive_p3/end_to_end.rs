@@ -417,14 +417,21 @@ fn output(mut values: &[f64]) -> Result<Output, HarnessError> {
         "result_geometry".into(),
         take_section(&mut values)?.to_vec(),
     );
-    let (&mass_status, mass) = values
+    let (&mass_status, rest) = values
         .split_first()
         .ok_or_else(|| HarnessError::new("missing mass status"))?;
-    if !mass_status.is_finite()
-        || mass_status.fract() != 0.0
-        || mass.len() != if mass_status == 0.0 { 12 } else { 0 }
-    {
+    let mass_len = if mass_status == 0.0 { 12 } else { 0 };
+    if !mass_status.is_finite() || mass_status.fract() != 0.0 || rest.len() < mass_len {
         return Err(HarnessError::new("invalid mass record"));
+    }
+    let (mass, mut tail) = rest.split_at(mass_len);
+    // Optional diagnostic section: the B-rep box (status, then min and max on success).
+    if !tail.is_empty() {
+        let brep_box = take_section(&mut tail)?;
+        if !tail.is_empty() {
+            return Err(HarnessError::new("invalid mass record"));
+        }
+        out.values.insert("brep_box".into(), brep_box.to_vec());
     }
     out.ints
         .insert("mass_status".into(), vec![mass_status as i64]);
@@ -688,6 +695,22 @@ fn run_rust(k: &mut Kernel, body: SolidResult<Brep>, input: &RealSolid) -> Solid
         }
         Err(error) => values.push(status(error)?),
     }
+    // Diagnostic (pin v1.0.1, rollover-404): the B-rep box whose midpoint
+    // `brep_mass_properties` integrates about (`SmBrep::CalculateBoundingBox`).
+    let mut box_record = Vec::new();
+    match solidcore::query::brep::calculate_bounding_box(
+        k,
+        &body,
+        solidcore::query::brep::BoundingBoxOptions::default(),
+    ) {
+        Ok(b) => {
+            box_record.push(0.0);
+            point(&mut box_record, b.min());
+            point(&mut box_record, b.max());
+        }
+        Err(error) => box_record.push(status(error)?),
+    }
+    section(&mut values, &box_record);
     Ok(values)
 }
 fn apply(k: &mut Kernel, body: &mut Brep, edges: &[EdgeId], input: &RealSolid) -> SolidResult<()> {

@@ -1,0 +1,751 @@
+{
+ "cases": [
+  {
+   "name": "missing_seams_loop_orientation_case0",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(0)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 0
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "loop_orientation_case0_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(0)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 0
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "missing_seams_loop_orientation_case1",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(1)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 1
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "loop_orientation_case1_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(1)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 1
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "missing_seams_loop_orientation_case2",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(2)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 2
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "loop_orientation_case2_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(2)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 2
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "missing_seams_loop_orientation_case3",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(3)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 3
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "loop_orientation_case3_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(3)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 3
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "missing_seams_loop_orientation_case4",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(4)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 4
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "loop_orientation_case4_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(4)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 4
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "missing_seams_loop_orientation_case5",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(5)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 5
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "loop_orientation_case5_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(5)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 5
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "missing_seams_loop_orientation_case6",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(6)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 6
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "loop_orientation_case6_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(6)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 6
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "missing_seams_loop_orientation_case7",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(7)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 7
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "loop_orientation_case7_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(7)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 7
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "missing_seams_loop_orientation_case8",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(8)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 8
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "loop_orientation_case8_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(8)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 8
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "missing_seams_loop_orientation_case9",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(9)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 9
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "loop_orientation_case9_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(9)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 9
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "missing_seams_loop_orientation_case10",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(10)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 10
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "loop_orientation_case10_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(10)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 10
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "missing_seams_loop_orientation_case11",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(11)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 11
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "loop_orientation_case11_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(11)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 11
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "missing_seams_loop_orientation_case12",
+   "upstream_ref": "tests/prog_test/src/smHealTest.cpp:1078 my_test_missing_seams_from_loop_orientation (v1.0.1), tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(12)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 12
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "loop_orientation_case12_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:42 sm_MakeLoopOrientationCase(12)",
+   "inputs": {
+    "test_brep": {
+     "kind": "loop_orientation",
+     "case": 12
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "torus_vertex_loop_fixture0_seam",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:3530 my_test_torus_seam_insertion_with_vertex_loops (v1.0.1), tests/prog_test/src/smTestBrep.cpp:197 sm_MakeTorusVertexLoopCase(0) (its HasSeamProblem call)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 0
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "torus_vertex_loop_fixture0_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:197 sm_MakeTorusVertexLoopCase(0)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 0
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "torus_vertex_loop_fixture1_seam",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:3530 my_test_torus_seam_insertion_with_vertex_loops (v1.0.1), tests/prog_test/src/smTestBrep.cpp:197 sm_MakeTorusVertexLoopCase(1) (its HasSeamProblem call)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 1
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "torus_vertex_loop_fixture1_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:197 sm_MakeTorusVertexLoopCase(1)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 1
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "torus_vertex_loop_fixture2_seam",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:3530 my_test_torus_seam_insertion_with_vertex_loops (v1.0.1), tests/prog_test/src/smTestBrep.cpp:197 sm_MakeTorusVertexLoopCase(2) (its HasSeamProblem call)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 2
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "torus_vertex_loop_fixture2_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:197 sm_MakeTorusVertexLoopCase(2)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 2
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "torus_vertex_loop_fixture3_seam",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:3530 my_test_torus_seam_insertion_with_vertex_loops (v1.0.1), tests/prog_test/src/smTestBrep.cpp:197 sm_MakeTorusVertexLoopCase(3) (its HasSeamProblem call)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 3
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "torus_vertex_loop_fixture3_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:197 sm_MakeTorusVertexLoopCase(3)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 3
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "torus_vertex_loop_fixture4_seam",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:3530 my_test_torus_seam_insertion_with_vertex_loops (v1.0.1), tests/prog_test/src/smTestBrep.cpp:197 sm_MakeTorusVertexLoopCase(4) (its HasSeamProblem call)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 4
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "torus_vertex_loop_fixture4_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:197 sm_MakeTorusVertexLoopCase(4)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 4
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "torus_vertex_loop_fixture5_seam",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:3530 my_test_torus_seam_insertion_with_vertex_loops (v1.0.1), tests/prog_test/src/smTestBrep.cpp:197 sm_MakeTorusVertexLoopCase(5) (its HasSeamProblem call)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 5
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "torus_vertex_loop_fixture5_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:197 sm_MakeTorusVertexLoopCase(5)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 5
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "torus_vertex_loop_fixture6_seam",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:3530 my_test_torus_seam_insertion_with_vertex_loops (v1.0.1), tests/prog_test/src/smTestBrep.cpp:197 sm_MakeTorusVertexLoopCase(6) (its HasSeamProblem call)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 6
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "torus_vertex_loop_fixture6_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:197 sm_MakeTorusVertexLoopCase(6)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 6
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "torus_vertex_loop_fixture7_seam",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:3530 my_test_torus_seam_insertion_with_vertex_loops (v1.0.1), tests/prog_test/src/smTestBrep.cpp:197 sm_MakeTorusVertexLoopCase(7) (its HasSeamProblem call)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 7
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "torus_vertex_loop_fixture7_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:197 sm_MakeTorusVertexLoopCase(7)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 7
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "torus_vertex_loop_fixture8_seam",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:3530 my_test_torus_seam_insertion_with_vertex_loops (v1.0.1), tests/prog_test/src/smTestBrep.cpp:197 sm_MakeTorusVertexLoopCase(8) (its HasSeamProblem call)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 8
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "torus_vertex_loop_fixture8_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:197 sm_MakeTorusVertexLoopCase(8)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 8
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "torus_vertex_loop_fixture9_seam",
+   "upstream_ref": "tests/prog_test/src/smTopoTest.cpp:3530 my_test_torus_seam_insertion_with_vertex_loops (v1.0.1), tests/prog_test/src/smTestBrep.cpp:197 sm_MakeTorusVertexLoopCase(9) (its HasSeamProblem call)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 9
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  },
+  {
+   "name": "torus_vertex_loop_fixture9_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:197 sm_MakeTorusVertexLoopCase(9)",
+   "inputs": {
+    "test_brep": {
+     "kind": "torus_vertex_loop",
+     "case": 9
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "xy_sheet20_brep",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:21 sm_make_xy_sheet(20) (the sheet of tests/prog_test/src/smFaceTest.cpp:336 my_test_get_loop_crossings and smTopoTest my_test_separating_closed_edges)",
+   "inputs": {
+    "test_brep": {
+     "kind": "xy_sheet",
+     "size": 20.0
+    },
+    "face": 0,
+    "op": "brep"
+   }
+  },
+  {
+   "name": "xy_sheet20_edges",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:21 sm_make_xy_sheet(20) (the sheet of tests/prog_test/src/smFaceTest.cpp:336 my_test_get_loop_crossings and smTopoTest my_test_separating_closed_edges)",
+   "inputs": {
+    "test_brep": {
+     "kind": "xy_sheet",
+     "size": 20.0
+    },
+    "face": 0,
+    "op": "list",
+    "kind": "edges",
+    "tgt_only": false,
+    "loop": -1
+   }
+  },
+  {
+   "name": "xy_sheet20_vertices",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:21 sm_make_xy_sheet(20) (the sheet of tests/prog_test/src/smFaceTest.cpp:336 my_test_get_loop_crossings and smTopoTest my_test_separating_closed_edges)",
+   "inputs": {
+    "test_brep": {
+     "kind": "xy_sheet",
+     "size": 20.0
+    },
+    "face": 0,
+    "op": "list",
+    "kind": "vertices",
+    "tgt_only": false,
+    "loop": 0
+   }
+  },
+  {
+   "name": "xy_sheet20_line_through",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:21 sm_make_xy_sheet(20) (the sheet of tests/prog_test/src/smFaceTest.cpp:336 my_test_get_loop_crossings and smTopoTest my_test_separating_closed_edges)",
+   "inputs": {
+    "test_brep": {
+     "kind": "xy_sheet",
+     "size": 20.0
+    },
+    "face": 0,
+    "op": "line",
+    "p": [
+     10.0,
+     10.0,
+     1.0
+    ],
+    "v": [
+     0.0,
+     0.0,
+     -1.0
+    ],
+    "fire": false
+   }
+  },
+  {
+   "name": "xy_sheet20_line_corner",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:21 sm_make_xy_sheet(20) (the sheet of tests/prog_test/src/smFaceTest.cpp:336 my_test_get_loop_crossings and smTopoTest my_test_separating_closed_edges)",
+   "inputs": {
+    "test_brep": {
+     "kind": "xy_sheet",
+     "size": 20.0
+    },
+    "face": 0,
+    "op": "line",
+    "p": [
+     0.0,
+     0.0,
+     1.0
+    ],
+    "v": [
+     0.0,
+     0.0,
+     -1.0
+    ],
+    "fire": true
+   }
+  },
+  {
+   "name": "xy_sheet20_line_edge",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:21 sm_make_xy_sheet(20) (the sheet of tests/prog_test/src/smFaceTest.cpp:336 my_test_get_loop_crossings and smTopoTest my_test_separating_closed_edges)",
+   "inputs": {
+    "test_brep": {
+     "kind": "xy_sheet",
+     "size": 20.0
+    },
+    "face": 0,
+    "op": "line",
+    "p": [
+     -1.0,
+     10.0,
+     0.0
+    ],
+    "v": [
+     1.0,
+     0.0,
+     0.0
+    ],
+    "fire": false
+   }
+  },
+  {
+   "name": "xy_sheet20_seam",
+   "upstream_ref": "tests/prog_test/src/smTestBrep.cpp:21 sm_make_xy_sheet(20) (the sheet of tests/prog_test/src/smFaceTest.cpp:336 my_test_get_loop_crossings and smTopoTest my_test_separating_closed_edges)",
+   "inputs": {
+    "test_brep": {
+     "kind": "xy_sheet",
+     "size": 20.0
+    },
+    "face": 0,
+    "op": "seam",
+    "outer": false,
+    "periodic_u": -1,
+    "periodic_v": -1
+   }
+  }
+ ]
+}

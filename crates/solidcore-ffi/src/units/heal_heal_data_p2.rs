@@ -4,11 +4,12 @@
 //! Upstream: `source/SMLib/src/SmHealData.cpp`, `source/SMLib/src/SmEdgeProps.cpp`,
 //! `source/SMLib/src/SmVertexProps.cpp`, `source/SMLib/inc/SmHealProbArray.h`.
 //!
-//! A B-rep block is one of [`super::topology_vertexuse`]'s (kinds `0..=3`),
+//! A B-rep block is one of [`super::topology_vertexuse`]'s (kinds `0..=3` and the
+//! `smTestBrep` blocks `10..=12`),
 //! `4 dx dy dz validate_only init_gaps` (`SmPrimitiveCreation::CreateBox`) or
 //! `5 radius swap_uv validate_only init_gaps` (a face on the full
-//! `SmSphere::CreateCanonical` domain), `10 radius a0 a1 validate_only init_gaps` or
-//! `11 major minor a0 a1 validate_only init_gaps` (`SmPrimitiveCreation::CreateSphere` /
+//! `SmSphere::CreateCanonical` domain), `13 radius a0 a1 validate_only init_gaps` or
+//! `14 major minor a0 a1 validate_only init_gaps` (`SmPrimitiveCreation::CreateSphere` /
 //! `CreateTorus` over degrees `a0..a1`, B-rep tolerance `1e-7`); `init_gaps` computes the cached gaps first. The shim replaces analytic face surfaces and edge curves other than
 //! `SmPlane` / `SmLine` by plain B-spline copies before anything runs.
 //!
@@ -159,9 +160,9 @@ pub(crate) fn check_block(path: &str, block: &[f64]) -> Result<(), FfiError> {
         rd.flag()?;
         return rd.done();
     }
-    if kind == 10.0 || kind == 11.0 {
+    if kind == 13.0 || kind == 14.0 {
         // primitive sphere (radius) or torus (major, minor radius) over an angle range
-        let radii = if kind == 11.0 { 2 } else { 1 };
+        let radii = if kind == 14.0 { 2 } else { 1 };
         for _ in 0..radii {
             let r = rd.num()?;
             if !(1e-3..=1e3).contains(&r) {
@@ -188,7 +189,7 @@ pub(crate) fn check_block(path: &str, block: &[f64]) -> Result<(), FfiError> {
         rd.flag()?;
         return rd.done();
     }
-    // kinds 0..=3: the topology.vertexuse validator (it builds the export once)
+    // kinds 0..=3 and 9..=12: the topology.vertexuse validator (it builds the export once)
     vu::eval(vu::Op::Export, path, block).map(|_| ())
 }
 
@@ -387,7 +388,9 @@ pub fn check_heal(args: &[f64]) -> Result<(), FfiError> {
         let code = rd.index(48)?;
         let last = s + 1 == nsteps;
         if stale && !(44..=46).contains(&code) {
-            return Err(bad("only HealBrep / region steps may follow a whole-B-rep edit"));
+            return Err(bad(
+                "only HealBrep / region steps may follow a whole-B-rep edit",
+            ));
         }
         match code {
             12..=14 | 21 | 24 => {

@@ -18,6 +18,12 @@
 //! [`super::topology_edgeuse_p1`]. Its native curve record prefixes the regular
 //! B-spline edge block; UV trims retain their original NURB parameters.
 //!
+//! Kinds `10 case`, `11 case` and `12 size` are the `prog_test` `smTestBrep.cpp` fixtures
+//! (`sm_MakeLoopOrientationCase`, `sm_MakeTorusVertexLoopCase`, `sm_make_xy_sheet`; shim
+//! `support/test_brep_fixture.h`). Their export writes each `SmCrvOnSurf` edge curve as
+//! `-4 type version dim nbytes byte*nbytes`, its binary database record; every other kind
+//! keeps `-2` for such a curve.
+//!
 //! A surface block is `0 oob form n m p q r s cpts(x y z w) u v` (`SmBSplineSurface`) or
 //! `1 O[3] N[3]` (`SmPlane(O, N)`); a curve block `dim n p m cpts(x y z w) knots`
 //! (`SmBSplineCurve`). Indices refer to the export's traversal order. Every op's output
@@ -271,7 +277,7 @@ pub(crate) fn brep_block_at(input: &[f64], path: &str) -> Result<usize, FfiError
 
 /// A B-rep block.
 fn brep_block(rd: &mut Reader<'_>, path: &str) -> Result<(), FfiError> {
-    let kind = rd.index(9)?;
+    let kind = rd.index(12)?;
     match kind {
         0 => {
             let p = Path::new(path);
@@ -348,12 +354,31 @@ fn brep_block(rd: &mut Reader<'_>, path: &str) -> Result<(), FfiError> {
             )?;
         }
         3 => {}
+        // the prog_test smTestBrep.cpp fixtures (harness/cpp/shim/support/test_brep_fixture.h)
+        10 => {
+            rd.index(MAX_LOOP_ORIENTATION_CASE)?;
+        }
+        11 => {
+            rd.index(MAX_TORUS_VERTEX_LOOP_CASE)?;
+        }
+        12 => {
+            // CreateRectangle refuses no size itself: keep the sheet positive and moderate
+            let size = rd.finite()?;
+            if !(size > 0.0 && size <= 1e4) {
+                return Err(bad("xy sheet size outside (0, 1e4]"));
+            }
+        }
         _ => return Err(bad("unsupported B-rep kind")),
     }
     rd.flag()?;
     rd.flag()?;
     Ok(())
 }
+
+/// Largest `sm_MakeLoopOrientationCase` case of a kind-10 block (upstream runs 0..13).
+pub const MAX_LOOP_ORIENTATION_CASE: usize = 12;
+/// Largest `sm_MakeTorusVertexLoopCase` fixture of a kind-11 block (`lCase % 10`).
+pub const MAX_TORUS_VERTEX_LOOP_CASE: usize = 9;
 
 /// Most points of a kind-5 network block.
 pub const MAX_NETWORK_POINTS: usize = 64;

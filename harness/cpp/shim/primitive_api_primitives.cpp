@@ -25,8 +25,10 @@
 #include <SmExtent2d.h>
 #include <SmLoop.h>
 #include <SmPlane.h>
+#include <SmPrimitiveCreation.h>
 #include <SmSurface.h>
 #include <SmTArray.h>
+#include <SmTopoTypes.h>
 #include <SmTorus.h>
 #include <SmVector3d.h>
 #include <nurbs.h>
@@ -593,6 +595,55 @@ SC_EXPORT int32_t sc_primitive_api_primitives_run(const double* in, int64_t n_in
     }
     if (rd.at != n_in)
         return SC_ERR_ARG;
+    return sc_copy_out(o.data(), (int64_t)o.size(), out, cap, out_len);
+    SC_CATCH
+}
+
+// Probe (pin v1.0.1, not a difftest op): SmBrep::ComputePreciseProperties of a sphere about
+// its bounding-box midpoint with the default behaviour (density 1).
+// in: cx cy cz radius no_pole accuracy tol. no_pole = 0: SmApiCreateSphere (tol unused);
+// no_pole = 1: a new SmBrep with SetTolerance(tol), then
+// SmPrimitiveCreation::CreateSphereNoPole(ctx, radius, center, tol, brep), as Rust's
+// create_sphere_no_pole_with_tolerance. out: create status, then (on success) the
+// properties status, then (on success) area volume mass.
+SC_EXPORT int32_t sc_probe_sphere_precise_props(const double* in, double* out, int64_t cap,
+                                                 int64_t* out_len)
+{
+    if (in == NULL)
+        return SC_ERR_ARG;
+    SC_TRY
+    const SmContext* ctx = SmApiGetOrCreateContext();
+    std::vector<double> o;
+    SmVector3d c(in[0], in[1], in[2]);
+    SmBrep* b = NULL;
+    SmStatus s;
+    if (in[4] != 0.0)
+    {
+        b = new (*ctx) SmBrep();
+        b->SetTolerance(in[6]);
+        s = SmPrimitiveCreation::CreateSphereNoPole(ctx, in[3], c, in[6], b);
+    }
+    else
+        s = SmApiCreateSphere(c, in[3], b);
+    o.push_back(s == SM_SUCCESS ? 0.0 : (double)s);
+    if (s == SM_SUCCESS && b != NULL)
+    {
+        SmExtent3d box;
+        b->CalculateBoundingBox(box);
+        double area = 0, volume = 0, mass = 0;
+        SmTArray<SmVector3d> moments;
+        SmMassPropertyBehavior behavior;
+        SmStatus st = b->ComputePreciseProperties(in[5], box.GetMid(), behavior, area, volume,
+                                                  mass, moments);
+        o.push_back(st == SM_SUCCESS ? 0.0 : (double)st);
+        if (st == SM_SUCCESS)
+        {
+            o.push_back(area);
+            o.push_back(volume);
+            o.push_back(mass);
+        }
+    }
+    delete b;
     return sc_copy_out(o.data(), (int64_t)o.size(), out, cap, out_len);
     SC_CATCH
 }

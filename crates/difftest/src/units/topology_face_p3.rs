@@ -28,7 +28,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use solidcore::curve::curve::p2::CurveKind;
+use solidcore::curve::curve::p2::{CurveKind, CRV_ON_SURF_TYPE};
 use solidcore::curve::curve::Curve as SmCurve;
 use solidcore::geom::attribute::{AttributeStore, ObjectKey};
 use solidcore::geom::extent2d::Extent2d;
@@ -148,7 +148,11 @@ fn minus_one() -> i64 {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Inputs {
+    #[serde(default = "network")]
     brep: BrepIn,
+    /// An upstream `smTestBrep` fixture block replacing `brep` (`util::test_brep`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    test_brep: Option<crate::util::test_brep::TestBrepIn>,
     #[serde(default)]
     validate_only: bool,
     #[serde(default)]
@@ -161,12 +165,23 @@ struct Inputs {
     op: OpIn,
 }
 
+fn network() -> BrepIn {
+    BrepIn::Network
+}
+
 fn flag(b: bool) -> f64 {
     f64::from(u8::from(b))
 }
 
 /// The B-rep block (as the `topology.vertexuse` runner's).
 fn block(i: &Inputs) -> Result<Vec<f64>, HarnessError> {
+    if let Some(t) = &i.test_brep {
+        return Ok(crate::util::test_brep::block(
+            t,
+            i.validate_only,
+            i.init_gaps,
+        ));
+    }
     let mut v = Vec::new();
     match &i.brep {
         BrepIn::File { rebuild, .. } => v.extend([0.0, flag(*rebuild)]),
@@ -463,7 +478,13 @@ fn is_vertex_loop(b: &Brep, l: LoopId) -> bool {
 
 /// The deferral of a geometric op on a B-rep holding a kind the import has only as its
 /// B-spline part (see the module docs).
-fn inexact_geometry(types: &[f64], exact: &[bool]) -> Result<Option<Output>, HarnessError> {
+/// `crv_on_surf_exact`: the block's `SmCrvOnSurf` edge curves are exported exactly (the
+/// `smTestBrep` fixtures' `-4` records), so they are real `CrvOnSurf`s on the Rust side.
+fn inexact_geometry(
+    types: &[f64],
+    exact: &[bool],
+    crv_on_surf_exact: bool,
+) -> Result<Option<Output>, HarnessError> {
     let bad = || harness("bad types export");
     let n_f = *types.get(1).ok_or_else(bad)? as usize;
     let surfaces = types.get(2..2 + n_f).ok_or_else(bad)?;
@@ -504,10 +525,11 @@ fn inexact_geometry(types: &[f64], exact: &[bool]) -> Result<Option<Output>, Har
             return Ok(Some(Output::deferred(unit, symbol)));
         }
     }
-    if curves
-        .iter()
-        .any(|&t| t >= 0.0 && !EXACT_CURVES.contains(&(t as i64)))
-    {
+    if curves.iter().any(|&t| {
+        t >= 0.0
+            && !EXACT_CURVES.contains(&(t as i64))
+            && !(crv_on_surf_exact && t as i64 == CRV_ON_SURF_TYPE)
+    }) {
         return Ok(Some(Output::deferred(
             "topology.brep_p7",
             "SmBrep::ReadFromFile",
@@ -574,7 +596,7 @@ fn run_rust_case(i: &Inputs) -> Result<Output, HarnessError> {
     if op as i32 >= Op::LoopOrient as i32 && !vertex_loop {
         let types = ffi::eval(Op::Types, &built.path, &built.block, &[])
             .map_err(|e| harness(format!("c++ types: {e}")))?;
-        if let Some(o) = inexact_geometry(&types, &exact)? {
+        if let Some(o) = inexact_geometry(&types, &exact, i.test_brep.is_some())? {
             return Ok(o);
         }
     }
@@ -848,6 +870,7 @@ impl UnitDiff for Runner {
             .then(|| [rng.uniform(0.1, 0.9), rng.uniform(0.1, 0.9)]);
         let i = Inputs {
             brep,
+            test_brep: None,
             vertex_loop,
             validate_only: rng.chance(0.1),
             init_gaps: rng.chance(0.3),

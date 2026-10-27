@@ -376,6 +376,12 @@ fn orient_of(code: i64) -> Result<OrientType, HarnessError> {
 /// B-splines and lines are rebuilt exactly. Unsupported edge kinds retain their
 /// B-spline part; unsupported analytic UV trim curves are rejected.
 fn read_curve(rd: &mut Rd<'_>, uv: bool) -> Result<Option<SmCurve>, HarnessError> {
+    if rd.v.get(rd.at) == Some(&-4.0) && !uv {
+        // an SmCrvOnSurf edge curve of a smTestBrep block (`crate::util::test_brep`)
+        rd.at += 1;
+        let remaining = rd.v.len().saturating_sub(rd.at);
+        return crate::util::test_brep::read_crv_on_surf(&mut || rd.num(), remaining).map(Some);
+    }
     if rd.v.get(rd.at) != Some(&-3.0) {
         return read_regular_curve(rd, uv);
     }

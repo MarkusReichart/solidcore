@@ -202,10 +202,10 @@ pub(crate) enum Prim {
         oob: bool,
     },
     /// `SmPrimitiveCreation::CreateSphere(radius, a0, a1, SmAxis2Placement())` on a
-    /// B-rep of tolerance `1e-7` (block kind 10).
+    /// B-rep of tolerance `1e-7` (block kind 13).
     PrimSphere { radius: f64, angles: [f64; 2] },
     /// `SmPrimitiveCreation::CreateTorus(major, minor, a0, a1, SmAxis2Placement())` on a
-    /// B-rep of tolerance `1e-7` (block kind 11).
+    /// B-rep of tolerance `1e-7` (block kind 14).
     PrimTorus { radii: [f64; 2], angles: [f64; 2] },
 }
 
@@ -214,6 +214,8 @@ pub(crate) enum Prim {
 pub(crate) enum BIn {
     Prim(Prim),
     Std(BrepIn),
+    /// A `prog_test` `smTestBrep.cpp` fixture (shared fixture blocks 10..=12).
+    Test(crate::util::test_brep::TestBrepIn),
 }
 
 /// A target list: every entity of the kind in order, in reverse order, or explicit
@@ -407,6 +409,12 @@ fn block_of(
 ) -> Result<(String, Vec<f64>), HarnessError> {
     let mut v = Vec::new();
     let path = match b {
+        BIn::Test(t) => {
+            return Ok((
+                String::new(),
+                crate::util::test_brep::block(t, validate_only, init_gaps),
+            ));
+        }
         BIn::Prim(Prim::Box { size }) => {
             v.push(4.0);
             v.extend(size);
@@ -417,12 +425,12 @@ fn block_of(
             String::new()
         }
         BIn::Prim(Prim::PrimSphere { radius, angles }) => {
-            v.extend([10.0, *radius]);
+            v.extend([13.0, *radius]);
             v.extend(angles);
             String::new()
         }
         BIn::Prim(Prim::PrimTorus { radii, angles }) => {
-            v.push(11.0);
+            v.push(14.0);
             v.extend(radii);
             v.extend(angles);
             String::new()
@@ -1038,6 +1046,62 @@ fn entity(kind: u64, index: u64, c: [usize; 10]) -> Option<EntityRef> {
     })
 }
 
+/// A topology tracker on the kernel context (`SmTrackTopologyChanges(pBrep, TRUE)`).
+fn new_tracker(k: &mut Kernel) -> solidcore::topology::topology::TrackTopologyChanges {
+    solidcore::topology::topology::TrackTopologyChanges::new(
+        Some(solidcore::topology::BrepId::from_index(0)),
+        125,
+        true,
+        Some(&mut k.context),
+    )
+}
+
+/// `StopTracking`, recording the dependencies under `b`'s kernel identities.
+fn stop_tracker(
+    k: &mut Kernel,
+    b: &Brep,
+    tracker: &mut solidcore::topology::topology::TrackTopologyChanges,
+) -> Result<(), SolidError> {
+    use solidcore::topology::brep::p3::{topology_entity, topology_ref};
+    match b.notify_serial() {
+        Some(s) => tracker.stop_tracking_with_brep(
+            Some(&mut k.context),
+            b,
+            &|key| topology_entity(s, key),
+            &|e| topology_ref(s, e).key,
+        ),
+        None => {
+            tracker.stop_tracking(Some(&mut k.context));
+            Ok(())
+        }
+    }
+}
+
+/// The region list (`n (index is_void)*`, `-3` for a region not in the export), the
+/// infinite region's index and the face, edge and vertex counts, as the shim's
+/// `put_regions`.
+fn put_regions(o: &mut Vec<f64>, b: &Brep, c: [usize; 10]) -> Result<(), SolidError> {
+    use solidcore::topology::brep::p1 as bp1;
+    let index = |r: RegionId| {
+        if (r.index() as usize) < c[0] {
+            r.index() as f64
+        } else {
+            -3.0
+        }
+    };
+    let regions = bp1::regions(b, None)?;
+    o.push(regions.len() as f64);
+    for &r in &regions {
+        o.push(index(r));
+        o.push(f64::from(b.region(r)?.is_void()));
+    }
+    o.push(b.infinite_region().map_or(-1.0, index));
+    o.push(bp1::faces(b, None)?.len() as f64);
+    o.push(bp1::edges(b, None)?.len() as f64);
+    o.push(bp1::vertices(b, None)?.len() as f64);
+    Ok(())
+}
+
 /// The healer state, as the shim's `dump`.
 #[allow(clippy::too_many_lines)]
 fn dump(h: &HealData<H>, b: &Brep, o: &mut Vec<f64>) -> Result<(), SolidError> {
@@ -1370,6 +1434,35 @@ fn rust_heal(
     if exact.iter().any(|x| !x) {
         return Err(harness("a face surface was not imported exactly"));
     }
+    // The smTestBrep loop fixtures exercise SmCrvOnSurf edges: the shim keeps them (they
+    // are no B-spline kind) and exports them as `-4` records. A case whose imported edges
+    // carry none would compare B-spline stand-ins, so it is deferred, not UV-curve
+    // coverage.
+    if let BIn::Test(
+        crate::util::test_brep::TestBrepIn::LoopOrientation { .. }
+        | crate::util::test_brep::TestBrepIn::TorusVertexLoop { .. },
+    ) = brep
+    {
+        let mut crv_on_surf = false;
+        for e in
+            solidcore::topology::brep::p1::edges(&b, None).map_err(|e| harness(e.to_string()))?
+        {
+            if let Some(c) = b
+                .edge(e)
+                .map_err(|e| harness(e.to_string()))?
+                .curve
+                .as_ref()
+            {
+                crv_on_surf |= matches!(c.kind(), solidcore::curve::curve::CurveKind::CrvOnSurf(_));
+            }
+        }
+        if !crv_on_surf {
+            return Ok(Output::deferred(
+                "harness:crv-on-surf-export",
+                "CrvOnSurf edges exported as B-spline stand-ins",
+            ));
+        }
+    }
     // each vertex's vertex use order and the cached gaps, as upstream has them
     let extra = ffi::vertex_lists(&path, &block).map_err(|e| harness(format!("c++ lists: {e}")))?;
     restore(&mut b, &extra, c)?;
@@ -1384,6 +1477,9 @@ fn rust_heal(
 
     let mut o = vec![0.0];
     let mut stop = false;
+    // set by a step that heals or edits the whole B-rep (`BrepHealBrep`,
+    // `FreshHealBrep`, `TrackedSqueezeEdge`): the state is not dumped
+    let mut stale = false;
     for s in steps {
         let code = match s {
             Step::CacheEdgeProps => 0,
@@ -1863,6 +1959,161 @@ fn rust_heal(
                 tracker.stop_tracking(Some(&mut k.context));
                 r.map(|()| false)
             }
+            Step::ResetInfiniteRegion { sel } => {
+                let region = match entity(0, *sel, c) {
+                    Some(EntityRef::Region(r)) => Some(r),
+                    _ => None,
+                };
+                solidcore::topology::brep::p1::reset_infinite_region(
+                    &mut k,
+                    &mut b,
+                    region,
+                    solidcore::topology::brep::p1::SetRegionVoidType::InfiniteRegionSwap,
+                )
+                .map(|()| false)
+            }
+            Step::BrepHealBrep { op } => {
+                stale = true;
+                solidcore::topology::brep::p1::heal_brep(
+                    &mut k,
+                    &mut b,
+                    op_of(i64::from(*op)),
+                    None,
+                    None,
+                    None,
+                    false,
+                )
+                .map(|()| false)
+            }
+            Step::RegionSnapshot => {
+                put_regions(&mut o, &b, c).map_err(|e| harness(e.to_string()))?;
+                Ok(false)
+            }
+            Step::FreshHealBrep { op } => {
+                stale = true;
+                let mut fresh: HealData<H> = HealData::new();
+                let r = fresh.heal_brep(
+                    &mut k,
+                    Some(&mut b),
+                    op_of(i64::from(*op)),
+                    HealBrepTargets::default(),
+                    false,
+                );
+                o.push(fresh.not_yet_face_props.prob_array.len() as f64);
+                r.map(|()| false)
+            }
+            Step::TrackedSetPoint { sel, op } => {
+                let Some(EntityRef::Vertex(v)) = entity(9, *sel, c) else {
+                    o.push(NULL_DEREF);
+                    stop = true;
+                    break;
+                };
+                let point = b.vertex(v).map_err(|e| harness(e.to_string()))?.point;
+                let mut tracker = new_tracker(&mut k);
+                let edit = solidcore::topology::brep::p3::with_kernel_callbacks(
+                    &mut k,
+                    &mut b,
+                    |_k, b, env| {
+                        solidcore::topology::vertex::set_point(
+                            b,
+                            v,
+                            point,
+                            env.records,
+                            env.attributes,
+                            env.context.as_deref_mut(),
+                            (env.key_of)(EntityRef::Vertex(v)),
+                            &|vu| (env.key_of)(EntityRef::Vertexuse(vu)),
+                        )
+                    },
+                );
+                let r = edit.and_then(|()| stop_tracker(&mut k, &b, &mut tracker));
+                let r = r.and_then(|()| {
+                    o.push(tracker.rm_list().len() as f64);
+                    o.push(tracker.add_list().len() as f64);
+                    let serial = b.notify_serial();
+                    let resolve = |key| {
+                        serial.and_then(|s| solidcore::topology::brep::p3::topology_entity(s, key))
+                    };
+                    let r = h.update_tracked_targets(
+                        &mut k,
+                        &mut b,
+                        &tracker,
+                        resolve,
+                        op_of(i64::from(*op)),
+                    );
+                    o.extend([
+                        h.tgt_vertices.len() as f64,
+                        h.tgt_edges.len() as f64,
+                        h.tgt_faces.len() as f64,
+                    ]);
+                    r
+                });
+                tracker.finish(Some(&mut k.context));
+                r.map(|()| false)
+            }
+            Step::TrackedSqueezeEdge { sel, op } => {
+                let Some(EntityRef::Edge(e)) = entity(7, *sel, c) else {
+                    o.push(NULL_DEREF);
+                    stop = true;
+                    break;
+                };
+                let Some(survivor) = solidcore::topology::edge::vertex(&b, e)
+                    .map_err(|err| harness(err.to_string()))?
+                else {
+                    o.push(NULL_DEREF);
+                    stop = true;
+                    break;
+                };
+                stale = true;
+                let mut tracker = new_tracker(&mut k);
+                let squeezed = solidcore::topology::brep::p3::with_kernel_callbacks(
+                    &mut k,
+                    &mut b,
+                    |k, b, env| solidcore::topology::brep::p3::squeeze_edge(k, b, env, e, survivor),
+                );
+                if let Err(err) = stop_tracker(&mut k, &b, &mut tracker) {
+                    return Err(harness(format!("stop tracking: {err}")));
+                }
+                match squeezed {
+                    Ok(()) => o.push(0.0),
+                    Err(err) => match classify(err) {
+                        Fail::Status(code) => o.push(f64::from(code)),
+                        Fail::Deferred(d) => return Ok(d),
+                        Fail::NullDeref => {
+                            o.push(NULL_DEREF);
+                            stop = true;
+                            break;
+                        }
+                        Fail::Other(m) => return Ok(Output::err(m)),
+                    },
+                }
+                let serial = b.notify_serial();
+                let edge_key = serial.map(|s| {
+                    solidcore::topology::brep::p3::topology_ref(s, EntityRef::Edge(e)).key
+                });
+                o.push(flag(
+                    edge_key.is_some_and(|key| tracker.rm_list().contains(&key)),
+                ));
+                o.push(flag(
+                    solidcore::topology::brep::p1::is_live_topology_member(
+                        &b,
+                        Some(EntityRef::Edge(e)),
+                    ),
+                ));
+                let resolve = |key| {
+                    serial.and_then(|s| solidcore::topology::brep::p3::topology_entity(s, key))
+                };
+                let r = h.update_tracked_targets(
+                    &mut k,
+                    &mut b,
+                    &tracker,
+                    resolve,
+                    op_of(i64::from(*op)),
+                );
+                o.push(flag(h.tgt_edges.contains(&e)));
+                tracker.finish(Some(&mut k.context));
+                r.map(|()| false)
+            }
             Step::FaceSnapshot => {
                 o.push(h.face_props.allocated() as f64);
                 for kk in 0..h.face_props.allocated() {
@@ -1915,7 +2166,7 @@ fn rust_heal(
             },
         }
     }
-    if !stop {
+    if !stop && !stale {
         if let Err(e) = dump(&h, &b, &mut o) {
             return Ok(match classify(e) {
                 Fail::Deferred(d) => d,
