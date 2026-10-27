@@ -1294,43 +1294,35 @@ fn dump(h: &HealData<H>, b: &Brep, o: &mut Vec<f64>) -> Result<(), SolidError> {
     Ok(())
 }
 
-/// Names the imported geometry by its owning edge and face under
-/// `NamingScheme::Arena`, as upstream's geometry points at its edge and face. The
-/// import leaves edge curves unowned and keys an owned face surface `1 + index`, which
-/// no naming scheme resolves, so the library's own queries of the B-rep
-/// (`BrepQuery::of_brep`, e.g. `FindInfiniteRegion`'s ray fires) built an empty cache
-/// and hit nothing.
-fn arena_owners(b: &mut Brep) -> Result<(), HarnessError> {
-    use solidcore::geom::attribute::ObjectKey;
-    use solidcore::geom::object::ObjectRef;
+/// The owners a native B-rep's geometry has (set by the B-rep build upstream), under the
+/// arena identities the library's own queries of the B-rep resolve (`BrepQuery::of_brep`
+/// of an `Unknown`-named B-rep, e.g. `FindInfiniteRegion`'s ray fires): every edge curve
+/// its edge, and a face surface its face only when the export says the face owns it (the
+/// import keys those `1 + index` and leaves the others unowned), as `topology_brep_p3`.
+/// Without it the B-rep cache holds no curves or surfaces and every ray misses.
+fn own_imported_geometry(b: &mut Brep) -> Result<(), HarnessError> {
     use solidcore::topology::brep_cache::{arena_identity, CacheObject};
-    use solidcore::topology::NamingScheme;
-    let edges: Vec<EdgeId> = b.edges().ids().collect();
-    for e in edges {
-        let edge = b.edge_mut(e).map_err(|e| harness(e.to_string()))?;
-        if let Some(curve) = edge.curve.as_mut().filter(|c| c.owner().is_none()) {
-            curve.set_owner(Some(arena_identity(CacheObject::Edge(e))), None);
-        }
-    }
+    crate::util::own_edge_curves(
+        b,
+        &|e| arena_identity(CacheObject::Edge(e)),
+        Some(arena_identity(CacheObject::Brep)),
+    );
     let faces: Vec<FaceId> = b.faces().ids().collect();
     for f in faces {
-        let imported = ObjectRef {
-            type_code: solidcore::topology::face::p2::TYPE,
-            key: ObjectKey(1 + u64::from(f.index())),
-        };
-        let face = b.face_mut(f).map_err(|e| harness(e.to_string()))?;
-        if let Some(surface) = face
+        if let Some(surface) = b
+            .face_mut(f)
+            .map_err(|e| harness(e.to_string()))?
             .surface
             .as_mut()
-            .filter(|s| s.owner() == Some(imported))
         {
-            surface.set_owner(Some(arena_identity(CacheObject::Face(f))));
-            // a new owner drops the surface's cached face tolerance
-            b.sync_face_surface_tolerance(f)
-                .map_err(|e| harness(e.to_string()))?;
+            if surface.owner().is_some() {
+                let _ = surface.set_owner(Some(arena_identity(CacheObject::Face(f))));
+            }
         }
+        // a new owner drops the face tolerance the import cached on the surface
+        b.sync_face_surface_tolerance(f)
+            .map_err(|e| harness(e.to_string()))?;
     }
-    b.set_naming(NamingScheme::Arena);
     Ok(())
 }
 
@@ -1513,7 +1505,7 @@ fn rust_heal(
     // each vertex's vertex use order and the cached gaps, as upstream has them
     let extra = ffi::vertex_lists(&path, &block).map_err(|e| harness(format!("c++ lists: {e}")))?;
     restore(&mut b, &extra, c)?;
-    arena_owners(&mut b)?;
+    own_imported_geometry(&mut b)?;
 
     let mut k = Kernel::default();
     let mut marks = Marks::default();
