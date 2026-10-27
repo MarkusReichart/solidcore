@@ -21,8 +21,9 @@
 //! Kinds `15 case`, `16 case` and `17 size` are the `prog_test` `smTestBrep.cpp` fixtures
 //! (`sm_MakeLoopOrientationCase`, `sm_MakeTorusVertexLoopCase`, `sm_make_xy_sheet`; shim
 //! `support/test_brep_fixture.h`). Their export writes each `SmCrvOnSurf` edge curve as
-//! `-4 type version dim nbytes byte*nbytes`, its binary database record; every other kind
-//! keeps `-2` for such a curve.
+//! `-4 type version dim nbytes byte*nbytes has_approx [matches max_gap dim n p m
+//! (x y z w)*(n+1) knot*(m+1)]`: its binary database record, then the cached B-spline
+//! approximation the record leaves out; every other kind keeps `-2` for such a curve.
 //!
 //! A surface block is `0 oob form n m p q r s cpts(x y z w) u v` (`SmBSplineSurface`) or
 //! `1 O[3] N[3]` (`SmPlane(O, N)`); a curve block `dim n p m cpts(x y z w) knots`

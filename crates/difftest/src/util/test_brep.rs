@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use solidcore::curve::curve::p2::CRV_ON_SURF_TYPE;
 use solidcore::curve::curve::{Curve as SmCurve, CurveKind};
 use solidcore::kernel::Kernel;
+use solidcore::nurbs::b_spline_curve::BSplineCurve;
 use solidcore::topology::database_io::{DatabaseReader, FileType, InputStream};
 
 use crate::HarnessError;
@@ -54,8 +55,12 @@ fn harness(message: impl Into<String>) -> HarnessError {
 
 /// Reads an `SmCrvOnSurf` record after its `-4` marker: `type version dim nbytes bytes...`,
 /// the curve's binary database record, read back with `SmCrvOnSurf::ReadFromDB` (owner flag
-/// 2, no cached approximation; the shim exports the record only when that is the whole
-/// curve). Counts, bytes, kind and complete consumption are checked before success.
+/// 2), then `has_approx [matches max_gap dim n p m (x y z w)*(n+1) knot*(m+1)]`: the cached
+/// B-spline approximation the record leaves out. The import rebuilds that cache as upstream
+/// made it (`GetOrCreateBSApproxPointer`'s defaults: `SM_APPROX_TOL_3D`, the breaks of the
+/// record, the exported parameterisation flag) and checks the rebuilt curve and gap bit for
+/// bit against the exported ones. Counts, bytes, kind and complete consumption are checked
+/// before success.
 pub(crate) fn read_crv_on_surf(
     num: &mut dyn FnMut() -> Result<f64, HarnessError>,
     remaining: usize,
@@ -85,15 +90,60 @@ pub(crate) fn read_crv_on_surf(
     }
     let mut db = DatabaseReader::with_stream(FileType::Binary, InputStream::new(bytes));
     db.set_version(version);
-    let curve = SmCurve::read_from_db(&Kernel::default(), ty, &mut db, dim, version)
+    let k = Kernel::default();
+    let mut curve = SmCurve::read_from_db(&k, ty, &mut db, dim, version)
         .map_err(|e| harness(format!("export: curve-on-surface record: {e}")))?;
     if db.in_stream().is_none_or(|s| s.remaining() != 0) {
         return Err(harness("export: curve-on-surface record not read whole"));
     }
-    if !matches!(curve.kind(), CurveKind::CrvOnSurf(_)) {
+    let CurveKind::CrvOnSurf(cos) = curve.kind_mut() else {
         return Err(harness("export: curve-on-surface reader changed its kind"));
+    };
+    if integer(num, 1.0)? == 0 {
+        return Ok(curve);
+    }
+    // the cached approximation
+    let matches = integer(num, 1.0)? != 0;
+    let max_gap = num()?;
+    let mut bits = vec![integer(num, 3.0)?];
+    let n = integer(num, 1e7)?;
+    let p = integer(num, 64.0)?;
+    let m = integer(num, 1e7)?;
+    let needed = (n + 1) * 4 + m + 1;
+    if needed as usize > remaining {
+        return Err(harness(
+            "export too short for curve-on-surface approximation",
+        ));
+    }
+    bits.extend([1, n, p, m]);
+    for _ in 0..needed {
+        bits.push(num()?.to_bits());
+    }
+    let rebuilt = cos
+        .get_or_create_bs_approx(&k, k.tolerances.approx_tol_3d, None, Some(matches))
+        .map_err(|e| harness(format!("export: curve-on-surface approximation: {e}")))?;
+    if approx_bits(&rebuilt) != bits || cos.bs_approx_max_gap_3d().to_bits() != max_gap.to_bits() {
+        return Err(harness(
+            "export: curve-on-surface approximation not rebuilt bit for bit",
+        ));
     }
     Ok(curve)
+}
+
+/// The dimension and raw NURB of a B-spline (`dim 1 n p m (x y z w)* knot*`, as bits).
+fn approx_bits(c: &BSplineCurve) -> Vec<u64> {
+    let mut bits = vec![c.dim()];
+    match c.gw_nurb() {
+        None => bits.push(0),
+        Some(n) => {
+            bits.extend([1, n.n() as u64, n.degree() as u64, n.m() as u64]);
+            for p in n.cpts() {
+                bits.extend([p.x, p.y, p.z, p.w].map(f64::to_bits));
+            }
+            bits.extend(n.knots().iter().map(|v| v.to_bits()));
+        }
+    }
+    bits
 }
 
 #[cfg(test)]
