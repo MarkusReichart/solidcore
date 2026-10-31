@@ -7,6 +7,8 @@
 //! |------|----------|
 //! | [`FilletExecutive::do_fillet`] | `SmFilletExecutive::DoFillet` |
 //! | [`FilletExecutive::create_fillet_brep`] | `SmFilletExecutive::CreateFilletBrep` |
+//! | [`FilletExecutive::ease_set_back_sections`] | the fork's `EaseSetBackSections` call in `CreateFilletBrep` (tangency-labs/smlib `e74bbd3`) |
+//! | [`FilletExecutive::preview_fillet_geometry`] | `SmFilletExecutive::GetPreviewFilletSurfaces` after its `CreateFilletCorners` |
 //! | [`FilletExecutive::do_filleting`] | `SmFilletExecutive::DoFilleting` |
 //! | [`FilletExecutive`], [`ErrorInfo`] | executive/error-info member data (co-ported from p1) |
 //! | [`ExecutiveAccess`] | borrowed access to dependency-owned objects |
@@ -493,6 +495,14 @@ pub struct FilletExecutive<O> {
     pub edgeuse_solver_map: BTreeMap<O, O>,
     /// `m_pSelfIntersectionHandler` (added by `blend.fillet_executive_p1`).
     pub self_intersection_handler: Option<O>,
+    /// `m_bBlendCurveAtThirds` (the fork's, tangency-labs/smlib `fd3b6a7`; `FALSE` from
+    /// the constructor): `SetFilletParameters` builds its blend-curve generators with
+    /// their sections at thirds of the way to the corner.
+    pub blend_curve_at_thirds: bool,
+    /// `m_bMarkCornerPatches` (the fork's, tangency-labs/smlib `60af574`; `FALSE` from
+    /// the constructor): `DoFilleting` tags each face of a set-back corner's patch with
+    /// an `SM_AI_FILLET_CORNER_FACE` mark naming the corner before the merge.
+    pub mark_corner_patches: bool,
 }
 
 /// Error-only corner metadata, requested only after a corner operation fails.
@@ -1753,6 +1763,16 @@ pub trait BrepCreationAccess<O: ClassObject + SolutionObject + Ord>:
     /// The judging's own errors; the adapter over [`ExecutiveAccess`] has no solver
     /// geometry to judge.
     fn creation_ball_fits(&mut self, k: &mut Kernel, solver: O) -> Result<bool>;
+
+    /// `sm_ExtendTraceToItsRails` (fork tangency-labs/smlib@a9277fd, WR-609; called
+    /// before the corners since @6e77631, WR-610) on this solver: let its trace reach
+    /// as far as its rails can lie from the filleted edge. Only a live session has
+    /// solvers to extend.
+    ///
+    /// # Errors
+    /// The extension's own errors; the adapter over [`ExecutiveAccess`] has no solver
+    /// geometry to extend.
+    fn creation_extend_trace_to_its_rails(&mut self, k: &mut Kernel, solver: O) -> Result<()>;
 }
 impl<O, A> BrepCreationAccess<O> for A
 where
@@ -1769,6 +1789,10 @@ where
 
     fn creation_ball_fits(&mut self, _k: &mut Kernel, _solver: O) -> Result<bool> {
         Err(invalid("the ball-fit rule needs a live fillet session"))
+    }
+
+    fn creation_extend_trace_to_its_rails(&mut self, _k: &mut Kernel, _solver: O) -> Result<()> {
+        Err(invalid("the trace reach needs a live fillet session"))
     }
 }
 
@@ -1815,6 +1839,25 @@ pub trait FaceStitchAccess<O: ClassObject + SolutionObject + Ord>:
     /// # Errors
     /// Genuine missing context or stitch-operation failures.
     fn stitch_body(&mut self, k: &mut Kernel, body: O, tolerance: f64) -> Result<StitchAttempt>;
+    /// [`FaceStitchAccess::stitch_body`] keeping a fillet's own edge where a corner's
+    /// patch meets it: the fork's stitch with `SmFilletPatchStitchCallback`
+    /// (tangency-labs/smlib@1072d1b, WR-546), whose patch faces are those
+    /// `MakeFaceBrep` built on `corners`' surfaces.
+    /// # Errors
+    /// [`SolidError::Unported`] by default; as [`FaceStitchAccess::stitch_body`].
+    fn stitch_body_keeping_fillet_edges(
+        &mut self,
+        k: &mut Kernel,
+        body: O,
+        tolerance: f64,
+        corners: &[O],
+    ) -> Result<StitchAttempt> {
+        let _ = (k, body, tolerance, corners);
+        Err(SolidError::Unported {
+            upstream: "SmFilletPatchStitchCallback",
+            unit: "blend.fillet_executive_p3",
+        })
+    }
 }
 impl<O, A> FaceStitchAccess<O> for A
 where
@@ -1978,6 +2021,33 @@ pub trait SolverGeometryAccess<O: ClassObject + SolutionObject + Ord> {
             "SmFilletExecutive::FacesOutlastTheirBlends (fork)",
             "blend.fillet_executive_p3",
         ))
+    }
+    /// The fork's `SmFilletExecutive::BandsClearOtherRails` over `solvers` (not upstream;
+    /// opt-in `fixes.fillet_refuse_overlapping_bands`, WR-542): `false` when a blend's
+    /// rail runs inside the band another blend takes off a face they share, away from a
+    /// corner that trims them.
+    ///
+    /// # Errors
+    /// [`SolidError::Unported`] without live context; missing geometry.
+    fn geometry_bands_clear_other_rails(&mut self, k: &mut Kernel, solvers: &[O]) -> Result<bool> {
+        let _ = (k, solvers);
+        Err(SolidError::unported(
+            "SmFilletExecutive::BandsClearOtherRails (fork)",
+            "blend.fillet_executive_p3",
+        ))
+    }
+
+    /// The fork's `SmFilletExecutive::EaseSetBackSections` over `corners` (not upstream;
+    /// tangency-labs/smlib `e74bbd3`, #1376): each round eased into its curvature-continuous
+    /// section before the setbacks of corners with an ease (`SmFilletCorner::m_dEaseDist`).
+    /// The default is a context whose corners carry no ease, where the fork's routine
+    /// changes nothing and succeeds.
+    ///
+    /// # Errors
+    /// Those of the easing (the live session's).
+    fn geometry_ease_set_back_sections(&mut self, k: &mut Kernel, corners: &[O]) -> Result<()> {
+        let _ = (k, corners);
+        Ok(())
     }
 }
 
@@ -2279,6 +2349,54 @@ impl<O: ClassObject + SolutionObject + Ord> FilletExecutive<O> {
         Ok(())
     }
 
+    /// Refuse blends whose bands on a face they share overlap, away from any corner that
+    /// trims them (not upstream; opt-in `fixes.fillet_refuse_overlapping_bands`, WR-542:
+    /// the fork's tangency-labs/smlib@c0d74ee, `SmFilletExecutive::BandsClearOtherRails`,
+    /// called right after `FacesOutlastTheirBlends`). Fails with `FilletErrorType::NoRoom`.
+    ///
+    /// # Errors
+    /// The refusal as `SM_ERR`, noted in the error info; those of the check.
+    pub fn refuse_overlapping_bands(
+        &mut self,
+        k: &mut Kernel,
+        access: &mut impl SolverGeometryAccess<O>,
+    ) -> Result<()> {
+        if k.fixes.fillet_refuse_overlapping_bands
+            && !access.geometry_bands_clear_other_rails(k, &self.solvers)?
+        {
+            return self.record_no_room(
+                "Fillet Error: a blend's rail runs inside the band another blend takes off a face they share (the blends are larger than the face allows)",
+            );
+        }
+        Ok(())
+    }
+
+    /// Ease each round into its curvature-continuous section before the setbacks that ask
+    /// for it, before the corners' edges (their cross-sections) are computed (not upstream;
+    /// the fork's `EaseSetBackSections` call in `CreateFilletBrep`, tangency-labs/smlib
+    /// `e74bbd3`, #1376). Without a corner ease ([`FilletCorner::ease_dist`], `0.0` by
+    /// default) nothing changes. A failure notes `SM_FILERR_EDGE_PROBLEM`.
+    ///
+    /// [`FilletCorner::ease_dist`]: crate::blend::fillet_corner::p3::FilletCorner::ease_dist
+    ///
+    /// # Errors
+    /// The failure as `SM_ERR`, noted in the error info; [`SolidError::Unported`] from the
+    /// easing.
+    pub fn ease_set_back_sections(
+        &mut self,
+        k: &mut Kernel,
+        access: &mut impl SolverGeometryAccess<O>,
+    ) -> Result<()> {
+        let corners = self.corners.clone();
+        if ignore(access.geometry_ease_set_back_sections(k, &corners))?.is_none() {
+            // The generic NoteError overload changes exactly these two members.
+            self.error.code = FilletErrorType::EdgeProblem as i32;
+            self.error.comment = "Fillet Error: unable to ease a round into its curvature-continuous section before a setback".into();
+            return Err(failure());
+        }
+        Ok(())
+    }
+
     /// `NoteError(NoRoom, comment)` (`NoRoom` is not an upstream code), then `SM_ERR`.
     fn record_no_room(&mut self, comment: &str) -> Result<()> {
         // The generic NoteError overload changes exactly these two members.
@@ -2343,6 +2461,55 @@ impl<O: ClassObject + SolutionObject + Ord> FilletExecutive<O> {
                 );
             }
             index += 1;
+        }
+        Ok(())
+    }
+
+    /// `GetPreviewFilletSurfaces` after its `CreateFilletCorners` (which the caller runs,
+    /// as [`Self::do_fillet`]'s): every corner's topology and vertex geometry (without
+    /// `CreateFilletBrep`'s smooth sequences and constant-radius choice), the corner
+    /// topology adjustments, every solver's untrimmed geometry and the trim of its rails.
+    /// The preview surfaces are then those of each retained solver's fillet geometries in
+    /// order (`GetFilletGeoms`), which the caller reads.
+    ///
+    /// # Errors
+    /// `SM_ERR_NULL_POINTER` without a target; the stage failures of
+    /// [`Self::create_fillet_brep`], with the same error info; `SM_ERR` without solvers.
+    pub fn preview_fillet_geometry<A>(&mut self, k: &mut Kernel, access: &mut A) -> Result<()>
+    where
+        A: CornerAdjustmentAccess<O> + RailTrimAccess<O>,
+    {
+        // NER: upstream returns SM_ERR_NULL_POINTER, not invalid input.
+        self.target.ok_or(SolidError::Upstream {
+            operation: OP,
+            code: 1006,
+            entity: None,
+        })?;
+        // Process corners by calculating the vertices first.
+        let mut index = 0;
+        while let Some(corner) = self.corners.get(index).copied() {
+            if ignore(access.vertices_make_topology(k, corner, self))?.is_none() {
+                return self.corner_vertex_failure(
+                    access,
+                    corner,
+                    "Fillet Corner Error: Unable to Make Topology",
+                );
+            }
+            if ignore(access.vertices_calculate(k, corner, self))?.is_none() {
+                return self.corner_vertex_failure(
+                    access,
+                    corner,
+                    "Fillet Corner Error: Unable to Compute Geometry",
+                );
+            }
+            index += 1;
+        }
+        self.adjust_corner_topology(k, access)?;
+        self.calculate_solver_geometry(k, access)?;
+        // bTrimRails: always
+        self.trim_solver_rails(k, access)?;
+        if self.solvers.is_empty() {
+            return Err(SolidError::sm_err(OP));
         }
         Ok(())
     }
@@ -2473,7 +2640,14 @@ impl<O: ClassObject + SolutionObject + Ord> FilletExecutive<O> {
             ignore(access.stitch_attribute(edge, self.edge_attribute))?;
         }
         let tolerance = access.faces_tolerance(k, fillet)?;
-        let mut attempt = access.stitch_body(k, fillet, tolerance)?;
+        // Opt-in, not upstream (`fixes.fillet_patch_keeps_fillet_edges`, WR-546, #1377;
+        // tangency-labs/smlib@1072d1b): where a corner's patch meets a fillet, the
+        // fillet's edge is kept (`SmFilletPatchStitchCallback`).
+        let mut attempt = if k.fixes.fillet_patch_keeps_fillet_edges {
+            access.stitch_body_keeping_fillet_edges(k, fillet, tolerance, &self.corners)?
+        } else {
+            access.stitch_body(k, fillet, tolerance)?
+        };
         if let Some(error) = attempt.status.take() {
             if error.is_unported() {
                 return Err(error);
@@ -2517,11 +2691,26 @@ impl<O: ClassObject + SolutionObject + Ord> FilletExecutive<O> {
             }
         }
 
+        // Opt-in, not upstream (`fixes.fillet_trace_reaches_rails`, WR-609/WR-610; the
+        // fork's tangency-labs/smlib@a9277fd and @6e77631): each solver's base surfaces
+        // reach as far as its rails can lie from the edge before the corners look for
+        // where the rails meet the side edges, which search those surfaces' extended
+        // domains as the trace does.
+        if k.fixes.fillet_trace_reaches_rails {
+            let mut index = 0;
+            while let Some(solver) = self.solvers.get(index).copied() {
+                access.creation_extend_trace_to_its_rails(k, solver)?;
+                index += 1;
+            }
+        }
+
         self.create_corner_vertices(k, access)?;
         self.adjust_corner_topology(k, access)?;
         self.calculate_solver_geometry(k, access)?;
         self.refuse_blends_larger_than_faces(k, access)?;
         self.refuse_face_consuming_blends(k, access)?;
+        self.refuse_overlapping_bands(k, access)?;
+        self.ease_set_back_sections(k, access)?;
         self.calculate_corner_edges(k, access)?;
         self.trim_solver_rails(k, access)?;
         self.classify_solver_rails(k, access)?;

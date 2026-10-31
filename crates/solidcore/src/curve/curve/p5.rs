@@ -329,7 +329,7 @@ pub fn make_curve_cache_with_zone_tol<O: Copy + PartialEq>(
     let cache = build_curve_cache(k, curve, handle, zone_tol_3d)?;
     if let Some(key) = key {
         if let Some(neutral) = cache.retag::<()>(None) {
-            curve.memo().store(key, neutral);
+            curve.memo().store(&key, neutral);
         }
     }
     Ok(cache)
@@ -479,12 +479,12 @@ impl CurveMemo {
             .and_then(|e| e.cache.retag(handle))
     }
 
-    fn store(&self, key: CurveMemoKey, cache: CurveCache<()>) {
+    fn store(&self, key: &CurveMemoKey, cache: CurveCache<()>) {
         let slot = self.0.get_or_init(Arc::default);
         let mut entry = slot
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        *entry = Some(CurveMemoEntry { key, cache });
+        *entry = Some(CurveMemoEntry { key: *key, cache });
     }
 }
 
@@ -1210,8 +1210,8 @@ impl Curve {
         let dom = self.natural_interval();
         for &frac in &params {
             let t = dom.evaluate(frac);
-            // (status ignored)
-            if let Some(v) = ignored(self.evaluate(k, t, 1, false, false))? {
+            // (status ignored; `SmCurve::Evaluate`'s default `bNonZeroTangents = TRUE`)
+            if let Some(v) = ignored(self.evaluate(k, t, 1, false, true))? {
                 for (d, s) in pt_der.iter_mut().zip(v) {
                     *d = s;
                 }

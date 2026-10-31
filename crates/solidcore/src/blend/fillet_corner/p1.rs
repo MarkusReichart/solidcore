@@ -25,6 +25,7 @@
 //! | [`FilletCorner::this_approx_tol_3d`]         | `GetThisApproxTol3d` (and the `SmFilletCorner` branch of `SmTol::GetApproxTol3d(const SmObject*)`) |
 //! | [`FilletCorner::fillet_edges`], [`FilletCorner::fillet_vertices`] | `GetFilletEdges`, `GetFilletVertices` |
 //! | [`FilletCorner::filleted_vertex`], [`FilletCorner::set_back_dist`], [`FilletCorner::status`] | `GetFilletedVertex`, `GetSetBackDist`, `GetStatus` |
+//! | [`FilletCorner::ease_dist`] | `GetEaseDist` (the fork's, tangency-labs/smlib `e74bbd3`) |
 //! | [`FilletCorner::type_code`], [`FilletCorner::type_string`], [`FilletCorner::is_kind_of`] | `GetType`, `GetTypeString`, `IsKindOf` (`SM_COMMON`) |
 //! | [`FilletCorner::add_fillet_vertex`]          | `AddFilletVertex`                           |
 //! | [`FilletCorner::set_bevel`], [`FilletCorner::set_calc_as_const_rad`], [`FilletCorner::set_chamfer`] | `SetBevel`, `SetCalcAsConstRad`, `SmFilletConvexNxNCorner::SetChamfer` |
@@ -703,6 +704,13 @@ impl FilletCorner {
         self.set_back_dist
     }
 
+    /// `GetEaseDist` (the fork's, tangency-labs/smlib `e74bbd3`, #1376): see
+    /// [`FilletCorner::ease_dist`].
+    #[must_use]
+    pub const fn ease_dist(&self) -> f64 {
+        self.ease_dist
+    }
+
     /// `GetStatus`.
     #[must_use]
     pub const fn status(&self) -> FilStatus {
@@ -1185,7 +1193,10 @@ pub fn check_nx1_degeneracy_status(
         match eu3::evaluate_binormal(k, b, eu, t, false, &options) {
             Ok(e) => Ok(Ok(e.face_normal)),
             Err(e @ (SolidError::Unported { .. } | SolidError::NotFound { .. })) => Err(e),
-            Err(e @ SolidError::InvalidInput { reason, .. }) if reason == NULL_DEREF => Err(e),
+            Err(
+                e @ (SolidError::InvalidInput { reason, .. }
+                | SolidError::PortInvariant { reason, .. }),
+            ) if reason == NULL_DEREF => Err(e),
             Err(e) => Ok(Err(e)),
         }
     };
@@ -1197,7 +1208,15 @@ pub fn check_nx1_degeneracy_status(
         Ok(n) => n,
         Err(e) => return Ok(Err(e)),
     };
-    // Check if faceuse normals are parallel to each other
+    // Check if faceuse normals are parallel to each other. With
+    // `fillet_knife_edge_rounds` (WR-570, fork b7ec55b) anti-parallel normals are a cusp
+    // (the faces folded back on each other, a knife edge): the ball touches them back
+    // from the vertex and the fillet ends there as at any other corner
+    if k.fixes.fillet_knife_edge_rounds {
+        // (`bAntiParallel` starts FALSE; `IsParallelTo` leaves it for a zero vector)
+        let (parallel, anti) = faceuse_normal1.parallel_sense(faceuse_normal2, EFF_ZERO_SQRT);
+        return Ok(Ok(parallel && !anti.unwrap_or(false)));
+    }
     Ok(Ok(
         faceuse_normal1.is_parallel_to(faceuse_normal2, EFF_ZERO_SQRT)
     ))

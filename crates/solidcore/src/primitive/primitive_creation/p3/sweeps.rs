@@ -7,6 +7,7 @@
 //! | [`PrimitiveCreation::create_repeated_linear_sweep`] | seven-argument `CreateLinearSweep` |
 //! | [`PrimitiveCreation::create_rotational_sweep`] | full `CreateRotationalSweep` |
 //! | [`PrimitiveCreation::create_partial_rotational_sweep`] | partial `CreateRotationalSweep` |
+//! | [`split_curves_on_axis`] | fork-only `sm_SplitCurvesOnAxis` (WR-590) |
 //!
 //! Deviations: typed services and owned curve slots replace pointers; null curve
 //! dereferences become errors. The existing sweep engine bounds repetitions to
@@ -23,16 +24,28 @@
 //! a whole turn gives each other curve its cylinder, cone, sphere or torus
 //! ([`analytic_revolution`]) before falling back to the `SmSurfOfRevolution`, and a
 //! partial turn sweeps with [`RotationalSweepGeometry::set_analytic_revolutions`] on.
+//! With the fix a whole turn also skips the one-curve special case
+//! (`sm_CreateAnalyticRotationalSweep`), as fork 9853e54 deletes it: a one-curve profile
+//! goes through the same per-curve rule, so a whole circle's torus has its seam at the
+//! profile (#1491).
+//! Not upstream (WR-590, opt-in `Kernel::fixes.revolve_splits_curves_on_axis`;
+//! SolidCraft change, tangency-labs/smlib e4f1377): a partial turn first splits each
+//! curve where it meets the axis inside itself ([`split_curves_on_axis`], the fork's
+//! `sm_SplitCurvesOnAxis`), which `CheckCurveSweep` otherwise refuses
+//! (`SM_SC_ROT_ON_CURVE`); a closed curve's last piece is joined back onto its first.
 
 use super::{construct::target, geometry::bspline, PrimitiveAccess};
 use crate::curve::curve::Curve;
+use crate::curve::curve::CurveKind;
 use crate::curve::ellipse::Ellipse;
+use crate::curve::line::Line;
 use crate::error::{ignore_status, ignored, EntityRef, Result, SolidError};
 use crate::geom::axis2_placement::Axis2Placement;
 use crate::geom::geom_utility::{
     p1::{line_closest_point, line_point_distance},
     p2::ContinuityType,
 };
+use crate::kernel::Kernel;
 use crate::math::{max4, Point3, Vec3, EFF_ZERO, EFF_ZERO_SQRT, PI};
 use crate::nurbs::b_spline_curve::p1::BSplineCurve;
 use crate::primitive::primitive_creation::p1::{analytic_rotational_sweep, PrimitiveCreation};
@@ -46,6 +59,7 @@ use crate::sweep::topology_sweep::{
 use crate::sweep::trans_sweep_geometry::TranslationalSweepGeometry;
 use crate::topology::{BrepId, FaceId};
 const OP: &str = "primitive::primitive_creation::p3::sweeps";
+const OP_SPLIT_ON_AXIS: &str = "primitive::primitive_creation::p3::sweeps::split_curves_on_axis";
 
 /// Flags shared by the repeated linear and partial rotational sweeps.
 #[derive(Debug, Clone, Copy)]
@@ -90,6 +104,93 @@ fn split(a: &impl PrimitiveAccess, b: BrepId, curves: &mut Vec<Option<Curve>>) -
     }
     Ok(())
 }
+/// `(SmBSplineCurve*)` of a split piece: the B-spline every curve kind the split
+/// makes is built on.
+fn piece_as_bspline(curve: Curve) -> Result<BSplineCurve> {
+    match curve.into_kind() {
+        CurveKind::BSpline(b) => Ok(b),
+        CurveKind::Line(l) => Ok(l.base_with_nurb()?.into_owned()),
+        CurveKind::Ellipse(e) => Ok(e.base().clone()),
+        CurveKind::Hyperbola(h) => Ok(h.base().clone()),
+        CurveKind::Parabola(p) => Ok(p.base().clone()),
+        _ => Err(SolidError::invalid_input(
+            OP_SPLIT_ON_AXIS,
+            "split piece is not an SmBSplineCurve",
+        )),
+    }
+}
+
+/// Not upstream (WR-590, the fork's `sm_SplitCurvesOnAxis`, tangency-labs/smlib
+/// e4f1377): the curves of a profile to turn about the axis through `axis_base` along
+/// `axis`, each split where it meets the axis inside itself (a circle tangent to the
+/// axis: a horn torus). `RotationalSweepGeometry::check_curve_sweep` refuses such a
+/// curve (`SM_SC_ROT_ON_CURVE`); this finds the points as that check does, with the
+/// same tolerance, and splits there. A curve closed on itself, cut at its points, has
+/// its last piece joined back onto its first, so it stays one curve that starts at
+/// the first of them. Empty slots are dropped, as the fork's loop skips them.
+///
+/// # Errors
+///
+/// Those of [`Curve::intersect_with_line`], [`Curve::create_by_split_curve`] and
+/// [`BSplineCurve::create_by_joining`].
+pub fn split_curves_on_axis(
+    k: &Kernel,
+    curves: &mut Vec<Option<Curve>>,
+    axis_base: Point3,
+    axis: Vec3,
+    tol: f64,
+) -> Result<()> {
+    let mut out = Vec::new();
+    let axis_line = Line::infinite(axis_base, axis, 3, false);
+    let axis_ivl = axis_line.natural_interval();
+    for slot in curves.iter_mut() {
+        let Some(mut curve) = slot.take() else {
+            continue;
+        };
+        let ivl = curve.natural_interval();
+        let hits = curve.intersect_with_line(k, &ivl, &axis_line, &axis_ivl, tol)?;
+        let mut at = Vec::new();
+        for sol in &hits.solutions {
+            let param = sol.start.param(0)?;
+            if !ivl.is_value_on_boundary(param, tol).0 {
+                at.push(param);
+            }
+        }
+        if at.is_empty() {
+            out.push(Some(curve));
+            continue;
+        }
+        at.sort_by(f64::total_cmp);
+        let closed = curve.is_closed(k, &ivl, tol)?;
+        let mut pieces = Vec::new();
+        for &param in &at {
+            let next = curve.create_by_split_curve(k, param)?;
+            pieces.push(curve);
+            curve = next;
+        }
+        pieces.push(curve);
+        if closed {
+            // the last piece runs on to the curve's start: it and the first are one piece
+            let mut rest = pieces.into_iter();
+            let head = rest
+                .next()
+                .ok_or_else(|| SolidError::null_pointer(OP_SPLIT_ON_AXIS))?;
+            let mut middle: Vec<Curve> = rest.collect();
+            let last = middle
+                .pop()
+                .ok_or_else(|| SolidError::null_pointer(OP_SPLIT_ON_AXIS))?;
+            let mut join = [piece_as_bspline(last)?, piece_as_bspline(head)?];
+            let joined = Curve::from(BSplineCurve::create_by_joining(&mut join, None)?);
+            pieces = Vec::with_capacity(middle.len() + 1);
+            pieces.push(joined);
+            pieces.extend(middle);
+        }
+        out.extend(pieces.into_iter().map(Some));
+    }
+    *curves = out;
+    Ok(())
+}
+
 fn entity(b: BrepId, item: EntityRef) -> Result<SweepEntity> {
     match item {
         EntityRef::Region(i) => Ok(SweepEntity::Region(b, i)),
@@ -315,7 +416,12 @@ impl PrimitiveCreation {
         self.init_entity_maps();
         let _ = target(self, brep)?;
         a.set_editing(brep, true)?;
-        if let [Some(curve)] = curves {
+        // Not upstream (#1491, with `fixes.revolve_analytic_profile_faces`): fork
+        // 9853e54 deletes the one-curve special case (sm_CreateAnalyticRotationalSweep),
+        // whose whole-circle torus puts its seam a quarter turn from the profile; the
+        // per-curve rule below covers a one-curve profile too
+        let one_curve_special_case = !a.kernel(brep)?.fixes.revolve_analytic_profile_faces;
+        if let (true, [Some(curve)]) = (one_curve_special_case, &mut *curves) {
             if ignored(a.with_primitive_brep(brep, |k, b| {
                 analytic_rotational_sweep(k, b, curve, axis_base, axis)
             }))?
@@ -459,6 +565,11 @@ impl PrimitiveCreation {
                 return Err(SolidError::sm_err(OP));
             }
             let tolerance = a.brep(brep)?.tolerance();
+            // Not upstream (WR-590, opt-in): no curve meets the axis inside itself
+            // (CheckCurveSweep's SM_SC_ROT_ON_CURVE)
+            if a.kernel(brep)?.fixes.revolve_splits_curves_on_axis {
+                split_curves_on_axis(a.kernel(brep)?, curves, axis_base, axis, tolerance)?;
+            }
             a.set_editing(brep, true)?;
             let mut faces = Vec::new();
             let mut edges = Vec::new();
@@ -606,6 +717,54 @@ mod tests {
                 "block at {corner:?} minus the hollow ball: volume {got}, want {want}"
             );
         }
+    }
+
+    /// A square with a square hole (20 x 20 at r 10 to 30, the hole 8 x 8 centred in it)
+    /// turned a whole turn about z is a ring with a ring-shaped void: with the opt-ins
+    /// (WR-529, the fork's tangency-labs/smlib@38b4212) the void is not counted as
+    /// material, and the volume is Pappus's, area 336 about the centroid at r 20.
+    #[test]
+    fn holed_profile_full_turn_leaves_the_hole_a_void() {
+        use crate::geom::attribute::{AttributeStore, ObjectKey};
+        use crate::mass::integrator::properties::{brep_volume, PropertyAttributes};
+
+        let square = |x0: f64, z0: f64, side: f64| {
+            let (x1, z1) = (x0 + side, z0 + side);
+            [
+                segment([x0, 0.0, z0], [x1, 0.0, z0]),
+                segment([x1, 0.0, z0], [x1, 0.0, z1]),
+                segment([x1, 0.0, z1], [x0, 0.0, z1]),
+                segment([x0, 0.0, z1], [x0, 0.0, z0]),
+            ]
+        };
+        let mut profile = square(10.0, 0.0, 20.0).to_vec();
+        profile.extend(square(16.0, 6.0, 8.0));
+        let curves: Vec<Option<&Curve>> = profile.iter().map(Some).collect();
+        let (o, z) = (Point3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0));
+
+        let mut k = Kernel::default();
+        k.fixes.revolve_nested_shells_as_cavities = true;
+        k.fixes.revolve_holed_profile_void = true;
+        let mut ring = create_rotational_sweep(&mut k, &curves, o, z, 360.0, true).unwrap();
+        let store = AttributeStore::default();
+        let key_of = |_| ObjectKey(0);
+        let attributes = PropertyAttributes {
+            store: &store,
+            key_of: &key_of,
+        };
+        let volume = brep_volume(&k, &mut ring, 1e-6, &attributes).unwrap();
+        let want = (400.0 - 64.0) * 2.0 * std::f64::consts::PI * 20.0;
+        assert!(
+            (volume - want).abs() < 1e-3 * want,
+            "volume {volume}, want {want}"
+        );
+        let check = crate::topology::brep::validation::check_brep(
+            &mut k,
+            &mut ring,
+            crate::topology::brep::validation::CheckLevel::Level2,
+        )
+        .unwrap();
+        assert_eq!(check.failure_count(), 0, "{:?}", check.lines());
     }
 
     /// An open chain of two lines (out from r 6 to 8, then up 2) revolved half a turn into

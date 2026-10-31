@@ -21,6 +21,8 @@
 //! | `loops::loop_`, `loops::loopuse` (private) | `SmLoop::AssertValid`, `SmLoopuse::AssertValid` |
 //! | `edge::edge`, `edge::edgeuse`, `edge::curve` (private) | `SmEdge::AssertValid`, `sm_AssertTestEdge14`, `SmEdgeuse::AssertValid`, the virtual `SmCurve::AssertValid` |
 //! | `vertex::vertex`, `vertex::vertexuse` (private) | `SmVertex::AssertValid`, `SmVertexuse::AssertValid` |
+//! | [`curve_assert_valid`] | the virtual `SmCurve::AssertValid` of a free-standing curve |
+//! | `curves` (private) | `SmOffsetCurve`, `SmProjectedCurve`, `SmHermiteCurve`, `SmCrvOnSurf`, `SmCrvInVolume::AssertValid` |
 //! | `seams` (private) | the callees other packages port (see that module) |
 //!
 //! Deviations: object pointers are arena identities; the report helpers implement the
@@ -40,6 +42,7 @@
 
 mod base;
 mod brep;
+mod curves;
 mod edge;
 mod face;
 mod loops;
@@ -57,7 +60,7 @@ use crate::geom::assert_array::{
 use crate::geom::object::ObjectRef;
 use crate::kernel::Kernel;
 use crate::math::UNDEF_DOUBLE;
-use crate::topology::{Brep, BrepId, NamingScheme};
+use crate::topology::{Brep, BrepId};
 
 /// `SM_LEVEL_GIVEN`: every test, no base classes.
 const LEVEL_GIVEN: u8 = 4;
@@ -173,33 +176,23 @@ fn report_line(r: &AssertReport) -> String {
     )
 }
 
-/// The geometry-owner identities of `b`'s topology by its naming scheme: the Euler
-/// operators' notification identities for a [`NamingScheme::Notify`] B-rep, else the
-/// arena identities ([`crate::topology::brep_cache::arena_identity`]).
-fn naming_keys(b: &Brep) -> fn(EntityRef) -> ObjectRef {
-    fn arena(e: EntityRef) -> ObjectRef {
-        use crate::topology::brep_cache::{arena_identity, CacheObject};
-        match e {
-            EntityRef::Edge(x) => arena_identity(CacheObject::Edge(x)),
-            EntityRef::Face(x) => arena_identity(CacheObject::Face(x)),
-            EntityRef::Vertex(x) => arena_identity(CacheObject::Vertex(x)),
-            EntityRef::Brep(_) => arena_identity(CacheObject::Brep),
-            other => crate::topology::loopuse::notify_ref(other),
-        }
-    }
-    match b.naming() {
-        NamingScheme::Notify => crate::topology::loopuse::notify_ref,
-        _ => arena,
-    }
-}
-
-/// [`check_brep_with_keys`] with the geometry-owner identities of `b`'s naming scheme.
+/// [`check_brep_with_keys`] with the geometry-owner identities of `b`'s naming scheme
+/// ([`Brep::owner_identity`]): the Euler operators' notification identities for a
+/// [`NamingScheme::Notify`](crate::topology::NamingScheme::Notify) B-rep; for a
+/// [`NamingScheme::Caller`](crate::topology::NamingScheme::Caller) B-rep the caller
+/// key recorded where the entity was built or its geometry bound (an imported body,
+/// [`crate::topology::brep::p3::api_brep_copy`], an operation on either), else the
+/// arena identities ([`crate::topology::brep_cache::arena_identity`]), which the
+/// binders name an entity with no recorded key by too.
 ///
 /// # Errors
 ///
 /// Those of [`check_brep_with_keys`].
 pub fn check_brep(k: &mut Kernel, b: &mut Brep, level: CheckLevel) -> Result<BrepCheck> {
-    let keys = naming_keys(b);
+    let naming = b.naming();
+    let recorded = b.geometry_owner_keys().clone();
+    let keys =
+        |e: EntityRef| crate::topology::owner_identity_of(naming, recorded.get(&e).copied(), e);
     check_brep_with_keys(k, b, level, &keys)
 }
 
@@ -277,6 +270,36 @@ pub fn assert_valid(
         edge_sets: edge::EdgeSets::default(),
     };
     brep::brep(k, b, &mut cx, walk)
+}
+
+/// The virtual `AssertValid(pAList, eTestLevel, SM_NO_WALK)` of a curve outside any
+/// B-rep (as the edge and edge-use checks run it on their curves): the checks of
+/// `curve`'s class and, unless `level` is `SM_LEVEL_GIVEN` (4), of its base classes,
+/// with the contained objects of a compound curve checked as upstream. The curve
+/// reports as `key`; an ellipse's polar converter and contained objects report under
+/// `key ^ (n << 48)` (`n = 1, 2, ..` in walk order), so keep bits 48.. of `key`
+/// clear. Failed checks are appended to `reports` in native order. Returns `true`
+/// when every check passed.
+///
+/// # Errors
+///
+/// [`crate::SolidError::InvalidInput`] for a level above 4 or where upstream's
+/// behaviour is undefined (an offset curve without a base curve; a report past the
+/// end of its label table); [`crate::SolidError::Unported`] from a check not yet
+/// ported; those of the geometric callees.
+pub fn curve_assert_valid(
+    k: &Kernel,
+    curve: &mut crate::curve::curve::Curve,
+    reports: Option<&mut AssertArray>,
+    level: u8,
+    key: ObjectKey,
+) -> Result<bool> {
+    if level > LEVEL_GIVEN {
+        return Err(super::invalid("invalid assert test level"));
+    }
+    let mut walk = curves::Walk::new(key);
+    let polar_key = walk.next_key()?;
+    edge::curve_in_walk(k, curve, reports, level, key, polar_key, None, &mut walk)
 }
 
 /// The state of one `AssertValid` run: the reports, the requested level, the geometry
