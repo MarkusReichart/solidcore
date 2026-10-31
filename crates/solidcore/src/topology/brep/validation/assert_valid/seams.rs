@@ -2,8 +2,8 @@
 //!
 //! Upstream: `source/SMLib/src/SmEdgeuse.cpp`, `SmBSplineCurve.cpp`, `SmLoopuse.cpp`,
 //! `SmVertex.cpp`, `SmShell.cpp`, `SmFace.cpp`, `SmEdge.cpp`, `SmSurface.cpp` (and the
-//! surface classes), `SmOffsetCurve.cpp`, `SmProjectedCurve.cpp`, `SmHermiteCurve.cpp`,
-//! `SmCrvOnSurf.cpp`, `SmCrvInVolume.cpp`.
+//! surface classes). The compound and Hermite curve checks, once seams here, are
+//! ported in `curves`.
 //!
 //! | Rust (private seam)          | Upstream                                  |
 //! |------------------------------|-------------------------------------------|
@@ -14,11 +14,6 @@
 //! | `is_inner_shell_of`          | `SmShell::IsInnerShellOf`                 |
 //! | `assert_test_face37`         | `sm_AssertTestFace37`                     |
 //! | `surface_assert_valid`       | `SmSurface::AssertValid` (virtual; wired) |
-//! | `offset_curve_assert_valid`  | `SmOffsetCurve::AssertValid`              |
-//! | `projected_curve_assert_valid` | `SmProjectedCurve::AssertValid`         |
-//! | `hermite_curve_assert_valid` | `SmHermiteCurve::AssertValid`             |
-//! | `crv_on_surf_assert_valid`   | `SmCrvOnSurf::AssertValid`                |
-//! | `crv_in_volume_assert_valid` | `SmCrvInVolume::AssertValid`              |
 //! | `assert_test_face32`         | `sm_AssertTestFace32`                     |
 //! | `assert_test_face33`         | `sm_AssertTestFace33`                     |
 //! | `assert_test_face38`         | `sm_AssertTestFace38`                     |
@@ -40,10 +35,6 @@ use crate::geom::assert_array::{AssertArray, ObjectKey};
 use crate::geom::extent2d::Extent2d;
 use crate::kernel::Kernel;
 use crate::topology::{Brep, EdgeId, EdgeuseId, FaceId, LoopuseId, ShellId, VertexId};
-
-fn unported(upstream: &'static str, unit: &'static str) -> SolidError {
-    SolidError::Unported { upstream, unit }
-}
 
 // ---- level-0 helpers (WP2, wired: #1472) ------------------------------------------------------------
 
@@ -119,111 +110,33 @@ pub(super) fn surface_assert_valid(
     surface.assert_valid(k, list, level, key)
 }
 
-/// `SmOffsetCurve::AssertValid` of `curve` (an offset curve), reporting about `key`.
-pub(super) fn offset_curve_assert_valid(
-    _k: &Kernel,
-    _curve: &mut Curve,
-    _list: Option<&mut AssertArray>,
-    _level: u8,
-    _key: ObjectKey,
-) -> Result<bool> {
-    // UNPORTED(curve.offset_curve): SmOffsetCurve::AssertValid
-    Err(unported("SmOffsetCurve::AssertValid", "curve.offset_curve"))
-}
-
-/// `SmProjectedCurve::AssertValid` of `curve` (a projected curve), reporting about `key`.
-pub(super) fn projected_curve_assert_valid(
-    _k: &Kernel,
-    _curve: &mut Curve,
-    _list: Option<&mut AssertArray>,
-    _level: u8,
-    _key: ObjectKey,
-) -> Result<bool> {
-    // UNPORTED(curve.projected_curve): SmProjectedCurve::AssertValid
-    Err(unported(
-        "SmProjectedCurve::AssertValid",
-        "curve.projected_curve",
-    ))
-}
-
-/// `SmHermiteCurve::AssertValid` of `curve` (a Hermite curve), reporting about `key`.
-pub(super) fn hermite_curve_assert_valid(
-    _k: &Kernel,
-    _curve: &mut Curve,
-    _list: Option<&mut AssertArray>,
-    _level: u8,
-    _key: ObjectKey,
-) -> Result<bool> {
-    // UNPORTED(curve.hermite_curve): SmHermiteCurve::AssertValid
-    Err(unported(
-        "SmHermiteCurve::AssertValid",
-        "curve.hermite_curve",
-    ))
-}
-
-/// `SmCrvOnSurf::AssertValid` of `curve` (a curve on surface or a tangent field, which
-/// inherits it), reporting about `key`.
-pub(super) fn crv_on_surf_assert_valid(
-    _k: &Kernel,
-    _curve: &mut Curve,
-    _list: Option<&mut AssertArray>,
-    _level: u8,
-    _key: ObjectKey,
-) -> Result<bool> {
-    // UNPORTED(curve.crv_on_surf): SmCrvOnSurf::AssertValid
-    Err(unported("SmCrvOnSurf::AssertValid", "curve.crv_on_surf"))
-}
-
-/// `SmCrvInVolume::AssertValid` of `curve` (a curve in volume), reporting about `key`.
-pub(super) fn crv_in_volume_assert_valid(
-    _k: &Kernel,
-    _curve: &mut Curve,
-    _list: Option<&mut AssertArray>,
-    _level: u8,
-    _key: ObjectKey,
-) -> Result<bool> {
-    // UNPORTED(curve.crv_in_volume): SmCrvInVolume::AssertValid
-    Err(unported(
-        "SmCrvInVolume::AssertValid",
-        "curve.crv_in_volume",
-    ))
-}
-
 // ---- level-2 tests (WP4) --------------------------------------------------------------
 
 /// `sm_AssertTestFace32(this)` (`== TRUE`): no coincident vertices
 /// (`HasCoincidentVertices`). Face test 32, evaluated only at `SM_LEVEL_2` and above.
-pub(super) fn assert_test_face32(_k: &mut Kernel, _b: &mut Brep, _f: FaceId) -> Result<bool> {
-    // UNPORTED(topology.face_p4): sm_AssertTestFace32
-    Err(unported("sm_AssertTestFace32", "topology.face_p4"))
+pub(super) fn assert_test_face32(_k: &mut Kernel, b: &mut Brep, f: FaceId) -> Result<bool> {
+    crate::topology::face::assert_tests::assert_test_face32(b, f)
 }
 
 /// `sm_AssertTestFace33(this)` (`== TRUE`): no coincident edges (`HasCoincidentEdges`).
 /// Face test 33, evaluated only at `SM_LEVEL_2` and above.
-pub(super) fn assert_test_face33(_k: &mut Kernel, _b: &mut Brep, _f: FaceId) -> Result<bool> {
-    // UNPORTED(topology.face_p4): sm_AssertTestFace33
-    Err(unported("sm_AssertTestFace33", "topology.face_p4"))
+pub(super) fn assert_test_face33(k: &mut Kernel, b: &mut Brep, f: FaceId) -> Result<bool> {
+    crate::topology::face::assert_tests::assert_test_face33(k, b, f)
 }
 
 /// `sm_AssertTestFace38(this)` (`== TRUE`): the face loops are disjoint in UV
 /// (`sm_DoLoopsIntersectInUV`). Face test 38, evaluated only at `SM_LEVEL_2` and above
 /// and only for a face with a surface.
-pub(super) fn assert_test_face38(_k: &mut Kernel, _b: &mut Brep, _f: FaceId) -> Result<bool> {
-    // UNPORTED(topology.face_p4): sm_AssertTestFace38
-    Err(unported("sm_AssertTestFace38", "topology.face_p4"))
+pub(super) fn assert_test_face38(k: &mut Kernel, b: &mut Brep, f: FaceId) -> Result<bool> {
+    crate::topology::face::assert_tests::assert_test_face38(k, b, f)
 }
 
 /// `sm_AssertTestEdge13(this, &dMaxGap)`: `(passed, max_gap)`, the edge curve within
 /// `SmTol::GetXSectTol3d(this, this)` of every face surface (`IsOnFaceEdgeForm`).
 /// Edge test 13, evaluated only at `SM_LEVEL_2` and above; `max_gap` is the report
 /// value (upstream initialises it to `0.0`).
-pub(super) fn assert_test_edge13(
-    _k: &mut Kernel,
-    _b: &mut Brep,
-    _e: EdgeId,
-) -> Result<(bool, f64)> {
-    // UNPORTED(topology.edge): sm_AssertTestEdge13
-    Err(unported("sm_AssertTestEdge13", "topology.edge"))
+pub(super) fn assert_test_edge13(k: &mut Kernel, b: &mut Brep, e: EdgeId) -> Result<(bool, f64)> {
+    crate::topology::edge::edge_form::assert_test_edge13(k, b, e)
 }
 
 /// `sm_AssertTestVertex1(this, &dMaxGap3d, &pMaxGapFace)`: `(passed, max_gap_3d)`, the
@@ -231,10 +144,10 @@ pub(super) fn assert_test_edge13(
 /// (`IsWithinXSectTol3dOfFaces`, `IsOnFaceCorner`). Called at every level; its report
 /// (Vertex test 1) is level 2.
 pub(super) fn assert_test_vertex1(
-    _k: &mut Kernel,
-    _b: &mut Brep,
-    _v: VertexId,
+    k: &mut Kernel,
+    b: &mut Brep,
+    v: VertexId,
 ) -> Result<(bool, f64)> {
-    // UNPORTED(topology.vertex): sm_AssertTestVertex1
-    Err(unported("sm_AssertTestVertex1", "topology.vertex"))
+    let (passed, max_gap_3d, _) = crate::topology::vertex::corner::assert_test_vertex1(k, b, v)?;
+    Ok((passed, max_gap_3d))
 }

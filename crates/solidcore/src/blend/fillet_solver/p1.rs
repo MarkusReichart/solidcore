@@ -173,7 +173,9 @@ fn invalid(reason: &'static str) -> SolidError {
 /// upstream, not a status) pass through.
 fn as_sm_err(e: SolidError, op: &'static str) -> SolidError {
     match e {
-        SolidError::Unported { .. } | SolidError::InvalidInput { .. } => e,
+        SolidError::Unported { .. }
+        | SolidError::InvalidInput { .. }
+        | SolidError::PortInvariant { .. } => e,
         _ => SolidError::sm_err(op),
     }
 }
@@ -266,9 +268,19 @@ impl FilletSurfaceGenerator {
     /// `SmBlendCurveCrossSectionFSG(dBlendScale, lContinuity)`.
     #[must_use]
     pub const fn blend_curve(blend_scale: f64, continuity: u32) -> Self {
+        Self::blend_curve_at_thirds(blend_scale, continuity, false)
+    }
+
+    /// `SmBlendCurveCrossSectionFSG(dBlendScale, lContinuity, bAtThirds)` (the fork's,
+    /// tangency-labs/smlib `fd3b6a7`): with `at_thirds`, each section's inner control
+    /// points sit a third and two thirds of the way from each contact to where the
+    /// contacts' tangent lines meet.
+    #[must_use]
+    pub const fn blend_curve_at_thirds(blend_scale: f64, continuity: u32, at_thirds: bool) -> Self {
         Self::BlendCurve(BlendCurveCrossSectionFsg {
             continuity,
             blend_scale,
+            at_thirds,
         })
     }
 
@@ -501,6 +513,13 @@ pub struct FilletSolver {
     pub saved_offsets: [f64; 2],
     /// `m_dSurfaceExtensionFactor` (`0.5`).
     pub surface_extension_factor: f64,
+    /// Fork `m_dTraceReach` (WR-609, `fixes.fillet_trace_reaches_rails`): how far (3D)
+    /// the trace's base surface domains reach past their own at least, across the edge
+    /// (`0` = by the extension factor alone; [`FilletSolver::domain_extension`]).
+    pub trace_reach: f64,
+    /// Fork `m_abTraceAcross` (WR-609): `[surface][u, v]`, whether that parameter
+    /// direction runs across the edge (gets [`FilletSolver::trace_reach`]).
+    pub trace_across: [[bool; 2]; 2],
     /// `m_dConversionTol` (`SM_EFF_ZERO / 10`).
     pub conversion_tol: f64,
     /// `m_bReverseTrim`.
@@ -556,6 +575,8 @@ impl FilletSolver {
             lent_rollover: None,
             saved_offsets: [0.0, 0.0],
             surface_extension_factor: 0.5,
+            trace_reach: 0.0,
+            trace_across: [[true, true], [true, true]],
             conversion_tol: EFF_ZERO / 10.0,
             reverse_trim: false,
             extend_before: false,
@@ -1162,12 +1183,9 @@ impl FilletSolver {
         surface: &Surface,
         domain: &mut Extent2d,
     ) -> Result<()> {
-        // get length of extensions
-        let domain_size = domain.size();
-        let mut size = Vec2::new(
-            self.surface_extension_factor * domain_size.x,
-            self.surface_extension_factor * domain_size.y,
-        );
+        // get length of extensions (fork WR-609: and the trace's reach, which stays 0
+        // without `fixes.fillet_trace_reaches_rails`)
+        let mut size = self.domain_extension(k, Some(surface), &*domain)?;
 
         // Extend by a smaller amount if periodic.
         let periodic_extension_factor = 0.2;
@@ -3060,7 +3078,9 @@ fn binormal_status_ignored(
             if e.is_unported()
                 || matches!(
                     e,
-                    SolidError::NotFound { .. } | SolidError::InvalidInput { .. }
+                    SolidError::NotFound { .. }
+                        | SolidError::InvalidInput { .. }
+                        | SolidError::PortInvariant { .. }
                 ) =>
         {
             Err(e)
@@ -3213,6 +3233,7 @@ pub fn trim_rail(k: &Kernel, b: &mut Brep, rail: EdgeId, trim_interval: &Extent1
     // path reads it
     tk.rng = k.rng.clone();
     tk.fixes.bspline_trim_preserves_uv_spans = k.fixes.bspline_trim_preserves_uv_spans;
+    tk.fixes.bspline_trim_keeps_rational_end_spans = k.fixes.bspline_trim_keeps_rational_end_spans;
     b.edge_mut(rail)?
         .curve
         .as_mut()

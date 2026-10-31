@@ -1285,6 +1285,7 @@ fn step_rust(k: &mut Kernel, bodies: &mut BTreeMap<String, Brep>, step: &Step) -
                 move_profile_center_to_path: false,
                 orient_profile_perpendicular_to_path: false,
                 move_to_profile: false,
+                profile_at_path_start: false,
             };
             sweeps::create_curve_sweep(k, &refs, Some(&path), None, None, Some(&options))
                 .map_err(|e| solid(&e))?
@@ -1422,18 +1423,42 @@ fn measure(k: &Kernel, b: &mut Brep) -> Result<Measured, SolidError> {
 fn enable_fix(k: &mut Kernel, name: &str) -> Result<(), String> {
     let field = match name {
         "sweep_frame_on_planar_path_normal" => &mut k.fixes.sweep_frame_on_planar_path_normal,
+        "imprint_extends_edge_to_proto_vertex" => &mut k.fixes.imprint_extends_edge_to_proto_vertex,
+        "imprint_extension_keeps_analytic_curve" => {
+            &mut k.fixes.imprint_extension_keeps_analytic_curve
+        }
+        "delete_vertex_joins_seam_iso_curve" => &mut k.fixes.delete_vertex_joins_seam_iso_curve,
         "cover_refuses_folded_continuation" => &mut k.fixes.cover_refuses_folded_continuation,
+        "cover_wraps_across_closed_seam" => &mut k.fixes.cover_wraps_across_closed_seam,
         "fillet_refuse_non_manifold_result" => &mut k.fixes.fillet_refuse_non_manifold_result,
         "fillet_refuse_crossing_rails" => &mut k.fixes.fillet_refuse_crossing_rails,
         "fillet_refuse_ball_not_fitting" => &mut k.fixes.fillet_refuse_ball_not_fitting,
+        "fillet_torus_rail_on_axis" => &mut k.fixes.fillet_torus_rail_on_axis,
         "cone_parallel_line_midpoint" => &mut k.fixes.cone_parallel_line_midpoint,
+        "fillet_trace_from_tangent_point_toward_next" => {
+            &mut k.fixes.fillet_trace_from_tangent_point_toward_next
+        }
         "analytic_copy_keeps_parameterization" => &mut k.fixes.analytic_copy_keeps_parameterization,
         "precise_properties_body_length_scale" => &mut k.fixes.precise_properties_body_length_scale,
+        "boolean_wire_edge_keeps_faceuse_shell" => {
+            &mut k.fixes.boolean_wire_edge_keeps_faceuse_shell
+        }
+        "boolean_new_face_closure_both_sides" => &mut k.fixes.boolean_new_face_closure_both_sides,
         "precise_properties_split_at_surface_knots" => {
             &mut k.fixes.precise_properties_split_at_surface_knots
         }
+        "precise_properties_trim_base_v" => &mut k.fixes.precise_properties_trim_base_v,
+        "loops_go_on_round_the_vertex" => &mut k.fixes.loops_go_on_round_the_vertex,
         "revolve_nested_shells_as_cavities" => &mut k.fixes.revolve_nested_shells_as_cavities,
+        "revolve_splits_curves_on_axis" => &mut k.fixes.revolve_splits_curves_on_axis,
+        "stitch_solid_nests_cavities" => &mut k.fixes.stitch_solid_nests_cavities,
         "sphere_small_circle_not_touching" => &mut k.fixes.sphere_small_circle_not_touching,
+        "curve_tight_box_interval_knots" => &mut k.fixes.curve_tight_box_interval_knots,
+        "fillet_tangent_point_one_sided_step" => &mut k.fixes.fillet_tangent_point_one_sided_step,
+        "fillet_rails_meet_at_one_end_point" => &mut k.fixes.fillet_rails_meet_at_one_end_point,
+        "fillet_nx1_tangent_side_edge" => &mut k.fixes.fillet_nx1_tangent_side_edge,
+        "fillet_nx1_tangent_corner_edge" => &mut k.fixes.fillet_nx1_tangent_corner_edge,
+        "fillet_trace_reaches_rails" => &mut k.fixes.fillet_trace_reaches_rails,
         _ => return Err(format!("unknown `fixes` entry `{name}`")),
     };
     *field = true;
@@ -1614,7 +1639,6 @@ pub fn run_cases(root: &Path, opts: &CasesOptions) -> ExitCode {
             "SOLIDCRAFT-CASES: no case matches `{}`",
             opts.glob.as_deref().unwrap_or("*")
         );
-        return ExitCode::SUCCESS;
     }
     println!(
         "SOLIDCRAFT-CASES: {} case(s), Rust engine only",
@@ -1706,6 +1730,74 @@ mod tests {
 
     fn all() -> Vec<Loaded> {
         load(&cases_dir(&crate::case::repo_root()), None).unwrap()
+    }
+
+    #[test]
+    fn empty_selection_replaces_stale_reports_and_respects_report_options() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "difftest-solidcraft-empty-report-{}-{nonce}",
+            std::process::id()
+        ));
+        let fixtures = cases_dir(&root);
+        std::fs::create_dir_all(&fixtures).unwrap();
+        // Exercise both an empty corpus and a nonempty corpus filtered to zero cases.
+        for glob in [None, Some("missing")] {
+            if glob.is_some() {
+                let fixture = json!({
+                    "issue": "test", "pr": "test", "test": "test", "summary": "test",
+                    "cases": [{"name": "box", "steps": [
+                        {"op": "box", "id": "result", "origin": [0, 0, 0], "size": [1, 1, 1]}
+                    ], "expect": {"lumps": 1}}]
+                });
+                std::fs::write(fixtures.join("case.json"), fixture.to_string()).unwrap();
+            }
+            let mut opts = CasesOptions {
+                glob: glob.map(str::to_string),
+                report_dir: glob.map(|_| root.join("custom-reports")),
+                no_report: false,
+            };
+            let dir = opts
+                .report_dir
+                .clone()
+                .unwrap_or_else(|| root.join("reports"));
+            std::fs::create_dir_all(&dir).unwrap();
+            let filename = if glob.is_some() {
+                "solidcraft-cases_missing.json"
+            } else {
+                "solidcraft-cases.json"
+            };
+            let path = dir.join(filename);
+            let stale = r#"{"cases":[{"id":"stale"}],"summary":{"rust":{"PASS":1}}}"#;
+            std::fs::write(&path, stale).unwrap();
+            assert_eq!(run_cases(&root, &opts), ExitCode::SUCCESS);
+            let report: Value =
+                serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            assert_eq!(report["cases"], json!([]), "glob {glob:?}");
+            assert_eq!(report["glob"], json!(glob));
+            assert_eq!(report["volume_accuracy"], json!(VOLUME_ACCURACY));
+            assert_eq!(report["summary"]["blocked_by"], json!({}));
+            for verdict in VERDICTS {
+                assert_eq!(report["summary"]["rust"][verdict], json!(0));
+            }
+            // --no-report must not overwrite an existing report or create a directory.
+            std::fs::write(&path, stale).unwrap();
+            opts.no_report = true;
+            assert_eq!(run_cases(&root, &opts), ExitCode::SUCCESS);
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), stale);
+            let absent = dir.join("not-created");
+            opts.report_dir = Some(absent.clone());
+            assert_eq!(run_cases(&root, &opts), ExitCode::SUCCESS);
+            assert!(!absent.exists());
+            // A file cannot be a report directory, even when there are zero results.
+            opts.no_report = false;
+            opts.report_dir = Some(path);
+            assert_eq!(run_cases(&root, &opts), ExitCode::from(2));
+        }
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
