@@ -2378,9 +2378,12 @@ mod tests {
         use crate::surface::procedural_sweep::{ProceduralSweep, ScrewMotion};
 
         let k = Kernel::new(&KernelOptions::default());
-        let profile =
-            BSplineCurve::create_line_segment(3, Vec3::new(4.0, 0.0, 0.0), Vec3::new(5.0, 0.0, 1.0))
-                .unwrap();
+        let profile = BSplineCurve::create_line_segment(
+            3,
+            Vec3::new(4.0, 0.0, 0.0),
+            Vec3::new(5.0, 0.0, 1.0),
+        )
+        .unwrap();
         let motion = ScrewMotion::new(Vec3::ZERO, Vec3::new(0.0, 0.0, 1.0), 1.5, None).unwrap();
         let sweep = ProceduralSweep::create(&profile, motion, &[0.0, 0.5, 1.0], 0.25).unwrap();
         let net = BSplineSurface::create_bilinear_surface(
@@ -2402,11 +2405,9 @@ mod tests {
         let v1 = b.add_vertex(Vec3::X).unwrap();
         let e = b.add_edge(v0, v1).unwrap();
         b.edge_mut(e).unwrap().curve = Some(curve);
-        let keeps_definition = |b: &Brep| {
-            match b.edge(e).unwrap().curve.as_ref().unwrap().kind() {
-                CurveKind::Iso(c) => c.surface().procedural_definition().is_some(),
-                other => panic!("the edge's curve is no iso curve: {other:?}"),
-            }
+        let keeps_definition = |b: &Brep| match b.edge(e).unwrap().curve.as_ref().unwrap().kind() {
+            CurveKind::Iso(c) => c.surface().procedural_definition().is_some(),
+            other => panic!("the edge's curve is no iso curve: {other:?}"),
         };
         assert!(keeps_definition(&b));
 
