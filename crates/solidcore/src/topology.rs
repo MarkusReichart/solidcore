@@ -2359,4 +2359,66 @@ mod tests {
             .unwrap();
         assert_eq!(again, surface_key);
     }
+
+    /// A snapshot keeps the definition a surface nested in an edge's curve carries
+    /// (#2665). An iso curve reads its base surface, and a surface that is the net of a
+    /// procedural sweep keeps that sweep as its definition
+    /// ([`Surface::procedural_definition`]): the net alone is not the surface, since
+    /// every exact evaluation of it reads the definition. Put back after a refused edit,
+    /// the edge's curve must read the same surface with the same definition, or the
+    /// restored body is not the body it was.
+    #[test]
+    fn a_snapshot_keeps_the_definition_a_nested_surface_carries() {
+        use crate::curve::curve::CurveKind;
+        use crate::curve::iso_curve::IsoCurve;
+        use crate::kernel::{Kernel, KernelOptions};
+        use crate::nurbs::b_spline_curve::BSplineCurve;
+        use crate::nurbs::b_spline_surface::p1::SurfParamType;
+        use crate::nurbs::b_spline_surface::BSplineSurface;
+        use crate::surface::procedural_sweep::{ProceduralSweep, ScrewMotion};
+
+        let k = Kernel::new(&KernelOptions::default());
+        let profile =
+            BSplineCurve::create_line_segment(3, Vec3::new(4.0, 0.0, 0.0), Vec3::new(5.0, 0.0, 1.0))
+                .unwrap();
+        let motion = ScrewMotion::new(Vec3::ZERO, Vec3::new(0.0, 0.0, 1.0), 1.5, None).unwrap();
+        let sweep = ProceduralSweep::create(&profile, motion, &[0.0, 0.5, 1.0], 0.25).unwrap();
+        let net = BSplineSurface::create_bilinear_surface(
+            Vec3::ZERO,
+            Vec3::X,
+            Vec3::Y,
+            Vec3::new(1.0, 1.0, 0.0),
+        )
+        .unwrap();
+        let mut surface = Surface::from(net);
+        surface.set_sweep_definition(sweep);
+        assert!(surface.procedural_definition().is_some());
+        let curve = Curve::from(
+            IsoCurve::from_surface(&k, surface, SurfParamType::U, 0.5, true, true).unwrap(),
+        );
+
+        let mut b = Brep::new();
+        let v0 = b.add_vertex(Vec3::ZERO).unwrap();
+        let v1 = b.add_vertex(Vec3::X).unwrap();
+        let e = b.add_edge(v0, v1).unwrap();
+        b.edge_mut(e).unwrap().curve = Some(curve);
+        let keeps_definition = |b: &Brep| {
+            match b.edge(e).unwrap().curve.as_ref().unwrap().kind() {
+                CurveKind::Iso(c) => c.surface().procedural_definition().is_some(),
+                other => panic!("the edge's curve is no iso curve: {other:?}"),
+            }
+        };
+        assert!(keeps_definition(&b));
+
+        // the edit drops the curve and is refused, so the snapshot is put back
+        let refused: Result<()> = b.with_rollback(
+            |br| {
+                br.edge_mut(e).unwrap().curve = None;
+                Err(SolidError::sm_err("topology::tests::refused_edit"))
+            },
+            |r| r.is_ok(),
+        );
+        assert!(refused.is_err());
+        assert!(keeps_definition(&b));
+    }
 }
