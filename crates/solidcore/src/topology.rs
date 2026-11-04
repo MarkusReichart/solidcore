@@ -2417,7 +2417,7 @@ mod tests {
                 br.edge_mut(e).unwrap().curve = None;
                 Err(SolidError::sm_err("topology::tests::refused_edit"))
             },
-            |r| r.is_ok(),
+            std::result::Result::is_ok,
         );
         assert!(refused.is_err());
         assert!(keeps_definition(&b));
