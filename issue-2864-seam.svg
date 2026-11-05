@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="960" height="430" viewBox="0 0 960 430">
+  <title>issue-2864-seam</title>
+  <g id="Layer_1" data-name="Layer 1">
+    <rect id="background" x="0" y="0" width="960" height="430" fill="#ffffff"/>
+    <rect id="block_L" data-name="block L" x="170" y="160" width="200" height="160" fill="#f0f0f0" stroke="#555555" stroke-miterlimit="10"/>
+    <circle id="cylinder_L" data-name="cylinder L" cx="170" cy="240" r="80" fill="#f0f0f0" stroke="#555555" stroke-miterlimit="10"/>
+    <path id="round_L" data-name="round L" d="M170 320 L223.07 320 C244.668 305.674 259.556 283.224 264.349 257.753 C269.142 232.283 263.433 205.957 248.52 184.76 L235.43 193.97 C252.613 218.395 254.761 250.357 241.001 276.861 C227.24 303.366 199.863 320 170 320 Z" fill="#dce9f5" stroke="#1f6fb2" stroke-width="3" stroke-linejoin="round"/>
+    <path id="unpicked_piece_L" data-name="unpicked piece L" d="M235.43 193.97 C220.448 172.673 196.039 160 170 160" fill="none" stroke="#555555" stroke-width="2" stroke-miterlimit="10" stroke-dasharray="6 4"/>
+    <circle id="seam_vertex_L" data-name="seam vertex L" cx="235.43" cy="193.97" r="4" fill="#000000"/>
+    <rect id="block_R" data-name="block R" x="700" y="160" width="200" height="160" fill="#f0f0f0" stroke="#555555" stroke-miterlimit="10"/>
+    <circle id="cylinder_R" data-name="cylinder R" cx="700" cy="240" r="80" fill="#f0f0f0" stroke="#555555" stroke-miterlimit="10"/>
+    <path id="round_R" data-name="round R" d="M700 320 L753.07 320 C779.884 302.214 796.004 272.177 796.004 240 C796.004 207.823 779.884 177.786 753.07 160 L700 160 C744.183 160 780 195.817 780 240 C780 284.183 744.183 320 700 320 Z" fill="#dce9f5" stroke="#1f6fb2" stroke-width="3" stroke-linejoin="round"/>
+    <circle id="seam_vertex_R" data-name="seam vertex R" cx="765.43" cy="193.97" r="4" fill="#000000"/>
+    <text transform="matrix(1 0 0 1 40 50)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#000000"><tspan x="0" y="0">Today: the round stops at the seam</tspan></text>
+    <text transform="matrix(1 0 0 1 540 50)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#000000"><tspan x="0" y="0">Wanted: it runs on across the seam</tspan></text>
+    <line x1="239" y1="190" x2="272" y2="120" fill="none" stroke="#555555" stroke-miterlimit="10"/>
+    <text transform="matrix(1 0 0 1 276 118)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">seam&apos;s vertex</tspan></text>
+    <line x1="244" y1="188" x2="300" y2="200" fill="none" stroke="#555555" stroke-miterlimit="10"/>
+    <text transform="matrix(1 0 0 1 304 205)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">step</tspan></text>
+    <line x1="204" y1="167" x2="182" y2="120" fill="none" stroke="#555555" stroke-miterlimit="10"/>
+    <text transform="matrix(1 0 0 1 110 112)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">not picked</tspan></text>
+    <line x1="245" y1="290" x2="300" y2="350" fill="none" stroke="#555555" stroke-miterlimit="10"/>
+    <text transform="matrix(1 0 0 1 304 360)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">round of the picked piece</tspan></text>
+    <line x1="769" y1="190" x2="802" y2="120" fill="none" stroke="#555555" stroke-miterlimit="10"/>
+    <text transform="matrix(1 0 0 1 806 118)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">seam&apos;s vertex</tspan></text>
+    <line x1="775" y1="290" x2="830" y2="350" fill="none" stroke="#555555" stroke-miterlimit="10"/>
+    <text transform="matrix(1 0 0 1 700 360)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">one round over both pieces</tspan></text>
+    <text transform="matrix(1 0 0 1 40 405)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#555555"><tspan x="0" y="0">Plan view of the block&apos;s top (z = 15) where it meets the cylinder. The cylinder&apos;s seam splits the concave half circle at 35°.</tspan></text>
+  </g>
+</svg>
