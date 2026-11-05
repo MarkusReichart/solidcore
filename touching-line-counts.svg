@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="820" height="340" viewBox="0 0 820 340">
+  <title>touching-line-counts</title>
+  <g id="Layer_1" data-name="Layer 1">
+    <rect id="background" x="0" y="0" width="820" height="340" fill="#ffffff"/>
+    <rect x="40" y="80" width="180" height="180" fill="#f0f0f0"/>
+    <circle cx="170" cy="170" r="50" fill="#ffffff" stroke="#1f6fb2" stroke-width="3" stroke-miterlimit="10"/>
+    <line x1="220" y1="80" x2="220" y2="260" fill="none" stroke="#1f6fb2" stroke-width="3" stroke-miterlimit="10"/>
+    <rect x="440" y="80" width="180" height="180" fill="#f0f0f0"/>
+    <circle cx="570" cy="170" r="50" fill="#ffffff" stroke="#1f6fb2" stroke-width="3" stroke-miterlimit="10"/>
+    <line x1="620" y1="80" x2="620" y2="260" fill="none" stroke="#1f6fb2" stroke-width="3" stroke-miterlimit="10"/>
+    <circle cx="220" cy="170" r="6" fill="#000000"/>
+    <circle cx="620" cy="158" r="5" fill="#000000"/>
+    <circle cx="620" cy="182" r="5" fill="#000000"/>
+    <text transform="matrix(1 0 0 1 40 45)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#000000"><tspan x="0" y="0">Before: the kernel&apos;s list</tspan></text>
+    <text transform="matrix(1 0 0 1 440 45)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#000000"><tspan x="0" y="0">After: the record</tspan></text>
+    <text transform="matrix(1 0 0 1 228 100)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">side face</tspan></text>
+    <text transform="matrix(1 0 0 1 170 175)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000" text-anchor="middle"><tspan x="0" y="0">hole</tspan></text>
+    <text transform="matrix(1 0 0 1 50 250)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">body</tspan></text>
+    <text transform="matrix(1 0 0 1 232 175)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">one edge, four uses</tspan></text>
+    <text transform="matrix(1 0 0 1 40 295)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">ladder 02/018: 20 edges counted, the rig expects 21: fail</tspan></text>
+    <text transform="matrix(1 0 0 1 628 100)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">side face</tspan></text>
+    <text transform="matrix(1 0 0 1 570 175)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000" text-anchor="middle"><tspan x="0" y="0">hole</tspan></text>
+    <text transform="matrix(1 0 0 1 450 250)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">body</tspan></text>
+    <text transform="matrix(1 0 0 1 632 163)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">edge 1: the faces above</tspan></text>
+    <text transform="matrix(1 0 0 1 632 187)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">edge 2: the faces below</tspan></text>
+    <text transform="matrix(1 0 0 1 440 295)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">21 edges counted, as the rig expects: pass</tspan></text>
+    <text transform="matrix(1 0 0 1 440 315)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">The two edges lie on the same line, drawn apart here.</tspan></text>
+  </g>
+</svg>
