@@ -1,0 +1,467 @@
+[
+{
+"command": "file.new",
+"params": {
+"width": 760,
+"height": 450,
+"units": "Points",
+"backgroundContents": "white",
+"name": "wr456-bigger-step-retry"
+}
+},
+{
+"command": "text.create",
+"params": {
+"x": 380.0,
+"y": 38,
+"text": "The bigger-step retry in ComputePointValues (WR-456)",
+"size": 20,
+"font": "Helvetica",
+"style": "Bold",
+"color": "#000000",
+"justify": "center"
+}
+},
+{
+"command": "text.create",
+"params": {
+"x": 200,
+"y": 88,
+"text": "Upstream SMLib 1.0.1: before",
+"size": 14,
+"font": "Helvetica",
+"style": "Bold",
+"color": "#000000",
+"justify": "center"
+}
+},
+{
+"command": "shape.rectangle",
+"params": {
+"x": 50.0,
+"y": 105,
+"width": 300,
+"height": 50
+}
+},
+{
+"command": "paint.setFill",
+"params": {
+"color": "#f0f0f0"
+}
+},
+{
+"command": "paint.setStroke",
+"params": {
+"color": "#555555"
+}
+},
+{
+"command": "stroke.set",
+"params": {
+"weight": 1.0,
+"dash": null
+}
+},
+{
+"command": "text.create",
+"params": {
+"x": 200,
+"y": 135,
+"text": "forward finite-difference step, dStep = 1e-5",
+"size": 14,
+"font": "Helvetica",
+"style": "Regular",
+"color": "#000000",
+"justify": "center"
+}
+},
+{
+"command": "shape.line",
+"params": {
+"x1": 200,
+"y1": 155,
+"x2": 200,
+"y2": 183
+}
+},
+{
+"command": "paint.setStroke",
+"params": {
+"color": "#000000"
+}
+},
+{
+"command": "stroke.set",
+"params": {
+"weight": 1.5,
+"endArrow": "Arrow",
+"arrowAlign": "tip"
+}
+},
+{
+"command": "shape.rectangle",
+"params": {
+"x": 50.0,
+"y": 183,
+"width": 300,
+"height": 50
+}
+},
+{
+"command": "paint.setFill",
+"params": {
+"color": "#f0f0f0"
+}
+},
+{
+"command": "paint.setStroke",
+"params": {
+"color": "#555555"
+}
+},
+{
+"command": "stroke.set",
+"params": {
+"weight": 1.0,
+"dash": null
+}
+},
+{
+"command": "text.create",
+"params": {
+"x": 200,
+"y": 213,
+"text": "StepSolve finds no point",
+"size": 14,
+"font": "Helvetica",
+"style": "Regular",
+"color": "#000000",
+"justify": "center"
+}
+},
+{
+"command": "shape.line",
+"params": {
+"x1": 200,
+"y1": 233,
+"x2": 200,
+"y2": 261
+}
+},
+{
+"command": "paint.setStroke",
+"params": {
+"color": "#000000"
+}
+},
+{
+"command": "stroke.set",
+"params": {
+"weight": 1.5,
+"endArrow": "Arrow",
+"arrowAlign": "tip"
+}
+},
+{
+"command": "shape.rectangle",
+"params": {
+"x": 50.0,
+"y": 261,
+"width": 300,
+"height": 70
+}
+},
+{
+"command": "paint.setFill",
+"params": {
+"color": "#f0f0f0"
+}
+},
+{
+"command": "paint.setStroke",
+"params": {
+"color": "#555555"
+}
+},
+{
+"command": "stroke.set",
+"params": {
+"weight": 1.0,
+"dash": null
+}
+},
+{
+"command": "text.create",
+"params": {
+"x": 200,
+"y": 290,
+"text": "retry: StepSolve(dStep)",
+"size": 14,
+"font": "Helvetica",
+"style": "Regular",
+"color": "#000000",
+"justify": "center"
+}
+},
+{
+"command": "text.create",
+"params": {
+"x": 200,
+"y": 314,
+"text": "the same 1e-5 step again: it fails again",
+"size": 12,
+"font": "Helvetica",
+"style": "Regular",
+"color": "#000000",
+"justify": "center"
+}
+},
+{
+"command": "text.create",
+"params": {
+"x": 200,
+"y": 360,
+"text": "dBigStep = 1e-3 is declared, never passed",
+"size": 12,
+"font": "Helvetica",
+"style": "Regular",
+"color": "#555555",
+"justify": "center"
+}
+},
+{
+"command": "text.create",
+"params": {
+"x": 560,
+"y": 88,
+"text": "solidcore: after",
+"size": 14,
+"font": "Helvetica",
+"style": "Bold",
+"color": "#000000",
+"justify": "center"
+}
+},
+{
+"command": "shape.rectangle",
+"params": {
+"x": 410.0,
+"y": 105,
+"width": 300,
+"height": 50
+}
+},
+{
+"command": "paint.setFill",
+"params": {
+"color": "#f0f0f0"
+}
+},
+{
+"command": "paint.setStroke",
+"params": {
+"color": "#555555"
+}
+},
+{
+"command": "stroke.set",
+"params": {
+"weight": 1.0,
+"dash": null
+}
+},
+{
+"command": "text.create",
+"params": {
+"x": 560,
+"y": 135,
+"text": "forward finite-difference step, dStep = 1e-5",
+"size": 14,
+"font": "Helvetica",
+"style": "Regular",
+"color": "#000000",
+"justify": "center"
+}
+},
+{
+"command": "shape.line",
+"params": {
+"x1": 560,
+"y1": 155,
+"x2": 560,
+"y2": 183
+}
+},
+{
+"command": "paint.setStroke",
+"params": {
+"color": "#000000"
+}
+},
+{
+"command": "stroke.set",
+"params": {
+"weight": 1.5,
+"endArrow": "Arrow",
+"arrowAlign": "tip"
+}
+},
+{
+"command": "shape.rectangle",
+"params": {
+"x": 410.0,
+"y": 183,
+"width": 300,
+"height": 50
+}
+},
+{
+"command": "paint.setFill",
+"params": {
+"color": "#f0f0f0"
+}
+},
+{
+"command": "paint.setStroke",
+"params": {
+"color": "#555555"
+}
+},
+{
+"command": "stroke.set",
+"params": {
+"weight": 1.0,
+"dash": null
+}
+},
+{
+"command": "text.create",
+"params": {
+"x": 560,
+"y": 213,
+"text": "StepSolve finds no point",
+"size": 14,
+"font": "Helvetica",
+"style": "Regular",
+"color": "#000000",
+"justify": "center"
+}
+},
+{
+"command": "shape.line",
+"params": {
+"x1": 560,
+"y1": 233,
+"x2": 560,
+"y2": 261
+}
+},
+{
+"command": "paint.setStroke",
+"params": {
+"color": "#000000"
+}
+},
+{
+"command": "stroke.set",
+"params": {
+"weight": 1.5,
+"endArrow": "Arrow",
+"arrowAlign": "tip"
+}
+},
+{
+"command": "shape.rectangle",
+"params": {
+"x": 410.0,
+"y": 261,
+"width": 300,
+"height": 70
+}
+},
+{
+"command": "paint.setFill",
+"params": {
+"color": "#f0f0f0"
+}
+},
+{
+"command": "paint.setStroke",
+"params": {
+"color": "#1f6fb2"
+}
+},
+{
+"command": "stroke.set",
+"params": {
+"weight": 3.0,
+"dash": null
+}
+},
+{
+"command": "text.create",
+"params": {
+"x": 560,
+"y": 290,
+"text": "retry: StepSolve(dBigStep)",
+"size": 14,
+"font": "Helvetica",
+"style": "Regular",
+"color": "#000000",
+"justify": "center"
+}
+},
+{
+"command": "text.create",
+"params": {
+"x": 560,
+"y": 314,
+"text": "a 1e-3 step, 100 times longer",
+"size": 12,
+"font": "Helvetica",
+"style": "Regular",
+"color": "#000000",
+"justify": "center"
+}
+},
+{
+"command": "text.create",
+"params": {
+"x": 560,
+"y": 360,
+"text": "a point found: the step becomes 1e-3",
+"size": 12,
+"font": "Helvetica",
+"style": "Regular",
+"color": "#555555",
+"justify": "center"
+}
+},
+{
+"command": "text.create",
+"params": {
+"x": 380.0,
+"y": 410,
+"text": "Test bigger_step_retry_uses_the_bigger_step: the retry's first guess lies 1 times (before)",
+"size": 12,
+"font": "Helvetica",
+"style": "Regular",
+"color": "#000000",
+"justify": "center"
+}
+},
+{
+"command": "text.create",
+"params": {
+"x": 380.0,
+"y": 428,
+"text": "and 100 times (after) as far from the point as the first solve's.",
+"size": 12,
+"font": "Helvetica",
+"style": "Regular",
+"color": "#000000",
+"justify": "center"
+}
+}
+]

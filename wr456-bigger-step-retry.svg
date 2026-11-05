@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="760" height="450" viewBox="0 0 760 450">
+  <title>wr456-bigger-step-retry</title>
+  <g id="Layer_1" data-name="Layer 1">
+    <text transform="matrix(1 0 0 1 380 38)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="0" y="0">The bigger-step retry in ComputePointValues (WR-456)</tspan></text>
+    <text transform="matrix(1 0 0 1 200 88)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="0" y="0">Upstream SMLib 1.0.1: before</tspan></text>
+    <rect x="50" y="105" width="300" height="50" fill="#f0f0f0" stroke="#555555" stroke-miterlimit="10"/>
+    <text transform="matrix(1 0 0 1 200 135)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000" text-anchor="middle"><tspan x="0" y="0">forward finite-difference step, dStep = 1e-5</tspan></text>
+    <g>
+      <g>
+        <path d="M200.75 155 L200.75 180.9 L199.25 180.9 L199.25 155 Z" fill="#000000"/>
+        <path d="M200 183 L197 177 L200 178.8 L203 177 Z" fill="#000000"/>
+      </g>
+    </g>
+    <rect x="50" y="183" width="300" height="50" fill="#f0f0f0" stroke="#555555" stroke-miterlimit="10"/>
+    <text transform="matrix(1 0 0 1 200 213)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000" text-anchor="middle"><tspan x="0" y="0">StepSolve finds no point</tspan></text>
+    <g>
+      <g>
+        <path d="M200.75 233 L200.75 258.9 L199.25 258.9 L199.25 233 Z" fill="#000000"/>
+        <path d="M200 261 L197 255 L200 256.8 L203 255 Z" fill="#000000"/>
+      </g>
+    </g>
+    <rect x="50" y="261" width="300" height="70" fill="#f0f0f0" stroke="#555555" stroke-miterlimit="10"/>
+    <text transform="matrix(1 0 0 1 200 290)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000" text-anchor="middle"><tspan x="0" y="0">retry: StepSolve(dStep)</tspan></text>
+    <text transform="matrix(1 0 0 1 200 314)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000" text-anchor="middle"><tspan x="0" y="0">the same 1e-5 step again: it fails again</tspan></text>
+    <text transform="matrix(1 0 0 1 200 360)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#555555" text-anchor="middle"><tspan x="0" y="0">dBigStep = 1e-3 is declared, never passed</tspan></text>
+    <text transform="matrix(1 0 0 1 560 88)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="0" y="0">solidcore: after</tspan></text>
+    <rect x="410" y="105" width="300" height="50" fill="#f0f0f0" stroke="#555555" stroke-miterlimit="10"/>
+    <text transform="matrix(1 0 0 1 560 135)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000" text-anchor="middle"><tspan x="0" y="0">forward finite-difference step, dStep = 1e-5</tspan></text>
+    <g>
+      <g>
+        <path d="M560.75 155 L560.75 180.9 L559.25 180.9 L559.25 155 Z" fill="#000000"/>
+        <path d="M560 183 L557 177 L560 178.8 L563 177 Z" fill="#000000"/>
+      </g>
+    </g>
+    <rect x="410" y="183" width="300" height="50" fill="#f0f0f0" stroke="#555555" stroke-miterlimit="10"/>
+    <text transform="matrix(1 0 0 1 560 213)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000" text-anchor="middle"><tspan x="0" y="0">StepSolve finds no point</tspan></text>
+    <g>
+      <g>
+        <path d="M560.75 233 L560.75 258.9 L559.25 258.9 L559.25 233 Z" fill="#000000"/>
+        <path d="M560 261 L557 255 L560 256.8 L563 255 Z" fill="#000000"/>
+      </g>
+    </g>
+    <rect x="410" y="261" width="300" height="70" fill="#f0f0f0" stroke="#1f6fb2" stroke-width="3" stroke-miterlimit="10"/>
+    <text transform="matrix(1 0 0 1 560 290)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000" text-anchor="middle"><tspan x="0" y="0">retry: StepSolve(dBigStep)</tspan></text>
+    <text transform="matrix(1 0 0 1 560 314)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000" text-anchor="middle"><tspan x="0" y="0">a 1e-3 step, 100 times longer</tspan></text>
+    <text transform="matrix(1 0 0 1 560 360)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#555555" text-anchor="middle"><tspan x="0" y="0">a point found: the step becomes 1e-3</tspan></text>
+    <text transform="matrix(1 0 0 1 380 410)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000" text-anchor="middle"><tspan x="0" y="0">Test bigger_step_retry_uses_the_bigger_step: the retry&apos;s first guess lies 1 times (before)</tspan></text>
+    <text transform="matrix(1 0 0 1 380 428)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000" text-anchor="middle"><tspan x="0" y="0">and 100 times (after) as far from the point as the first solve&apos;s.</tspan></text>
+  </g>
+</svg>
