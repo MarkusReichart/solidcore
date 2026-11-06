@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="612" height="760" viewBox="0 0 612 760">
+  <title>2844-joint</title>
+  <g id="Layer_1" data-name="Layer 1">
+    <rect x="0" y="0" width="612" height="760" fill="#ffffff"/>
+    <line id="diagonal" x1="306" y1="320" x2="306" y2="612" fill="none" stroke="#999999" stroke-width="1.5" stroke-miterlimit="10" stroke-dasharray="6 4"/>
+    <path id="rim" d="M146 326.4 C252.667 317.867 359.333 317.867 466 326.4" fill="none" stroke="#555555" stroke-width="1.5" stroke-miterlimit="10"/>
+    <line id="side_edge" data-name="side edge" x1="306" y1="320" x2="306" y2="105" fill="none" stroke="#000000" stroke-width="2" stroke-miterlimit="10"/>
+    <line id="rail_A" data-name="rail A" x1="466" y1="610.8" x2="282.2" y2="596.8" fill="none" stroke="#1f6fb2" stroke-width="3" stroke-miterlimit="10"/>
+    <line id="rail_B" data-name="rail B" x1="146" y1="610.8" x2="329.8" y2="596.8" fill="none" stroke="#1f6fb2" stroke-width="3" stroke-miterlimit="10"/>
+    <line id="section_A" data-name="section A" x1="306" y1="222.7" x2="282.2" y2="596.8" fill="none" stroke="#999999" stroke-width="1.5" stroke-miterlimit="10" stroke-dasharray="6 4"/>
+    <line id="section_B" data-name="section B" x1="306" y1="222.7" x2="329.8" y2="596.8" fill="none" stroke="#999999" stroke-width="1.5" stroke-miterlimit="10" stroke-dasharray="6 4"/>
+    <circle cx="282.2" cy="596.8" r="4" fill="#000000"/>
+    <circle cx="329.8" cy="596.8" r="4" fill="#000000"/>
+    <circle cx="306" cy="598.4" r="3.5" fill="#555555"/>
+    <circle cx="306" cy="222.7" r="4" fill="#555555"/>
+    <polyline id="dimension" points="282.2,610 282.2,618 282.2,614 329.8,614 329.8,610 329.8,618" fill="none" stroke="#000000" stroke-miterlimit="10"/>
+    <text transform="matrix(1 0 0 1 306 40)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="0" y="0">A joint of the rim seen from above, round r 2</tspan></text>
+    <text transform="matrix(1 0 0 1 316 125)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">the loft&apos;s side edge, seen from above</tspan></text>
+    <text transform="matrix(1 0 0 1 318 218)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">p: both rounds&apos; wall rails cross the side edge</tspan></text>
+    <text transform="matrix(1 0 0 1 318 236)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">1.389 below the joint; the walls are 6.83° apart there</tspan></text>
+    <text transform="matrix(1 0 0 1 316 302)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">joint of the rim&apos;s arcs</tspan></text>
+    <text transform="matrix(1 0 0 1 150 302)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">rim, radius 10</tspan></text>
+    <text transform="matrix(1 0 0 1 272 560)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000" text-anchor="end"><tspan x="0" y="0">A&apos;s section at p, on the disc</tspan></text>
+    <text transform="matrix(1 0 0 1 340 560)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">B&apos;s section at p, on the disc</tspan></text>
+    <text transform="matrix(1 0 0 1 311 590)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">D</tspan></text>
+    <text transform="matrix(1 0 0 1 306 634)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000" text-anchor="middle"><tspan x="0" y="0">0.2381 apart</tspan></text>
+    <text transform="matrix(1 0 0 1 360 632)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">round A&apos;s rail on the disc</tspan></text>
+    <text transform="matrix(1 0 0 1 252 632)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000" text-anchor="end"><tspan x="0" y="0">round B&apos;s rail on the disc</tspan></text>
+    <text transform="matrix(1 0 0 1 40 680)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">D: the disc rails cross on the diagonal, 8.82° apart. The Join ends both rounds on one section at p,</tspan></text>
+    <text transform="matrix(1 0 0 1 40 696)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">but there each ball stands a radius off its own wall: two balls, whose feet on the disc lie</tspan></text>
+    <text transform="matrix(1 0 0 1 40 712)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">0.2381 apart, each 0.1191 past the diagonal on the other round&apos;s side.</tspan></text>
+    <line id="scale" x1="40" y1="740" x2="240" y2="740" fill="none" stroke="#000000" stroke-width="2" stroke-miterlimit="10"/>
+    <text transform="matrix(1 0 0 1 250 745)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">1 mm</tspan></text>
+  </g>
+</svg>
