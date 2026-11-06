@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="760" height="300" viewBox="0 0 760 300">
+  <title>wr445-setback</title>
+  <g id="Layer_1" data-name="Layer 1">
+    <rect id="background" x="0" y="0" width="760" height="300" fill="#ffffff"/>
+    <text transform="matrix(1 0 0 1 30 40)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#000000"><tspan x="0" y="0">Where a corner setback of 8 lands on the box&apos;s x edge</tspan></text>
+    <rect id="upstream_patch_extent" data-name="upstream patch extent" x="160" y="92" width="520" height="12" fill="#555555"/>
+    <text transform="matrix(1 0 0 1 160 84)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">upstream (WR-445): measured from the far vertex, the round ends at x = 8 and the patch runs on to the corner</tspan></text>
+    <rect id="fixed_patch_extent" data-name="fixed patch extent" x="600" y="128" width="80" height="12" fill="#1f6fb2"/>
+    <text transform="matrix(1 0 0 1 590 139)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000" text-anchor="end"><tspan x="0" y="0">the fix: measured from the set-back vertex, the round ends at x = 52</tspan></text>
+    <line id="x_edge" data-name="x edge" x1="80" y1="180" x2="680" y2="180" fill="none" stroke="#000000" stroke-width="2" stroke-miterlimit="10"/>
+    <circle cx="80" cy="180" r="5" fill="#000000"/>
+    <circle cx="680" cy="180" r="5" fill="#000000"/>
+    <circle id="upstream_setback_point" data-name="upstream setback point" cx="160" cy="180" r="5" fill="#555555"/>
+    <circle id="fixed_setback_point" data-name="fixed setback point" cx="600" cy="180" r="6" fill="#1f6fb2"/>
+    <line x1="160" y1="104" x2="160" y2="174" fill="none" stroke="#999999" stroke-width="1.5" stroke-miterlimit="10" stroke-dasharray="4 3"/>
+    <line x1="600" y1="140" x2="600" y2="173" fill="none" stroke="#999999" stroke-width="1.5" stroke-miterlimit="10" stroke-dasharray="4 3"/>
+    <text transform="matrix(1 0 0 1 120 200)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000" text-anchor="middle"><tspan x="0" y="0">8</tspan></text>
+    <text transform="matrix(1 0 0 1 640 200)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000" text-anchor="middle"><tspan x="0" y="0">8</tspan></text>
+    <text transform="matrix(1 0 0 1 30 230)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">far vertex (0, 40, 20)</tspan></text>
+    <text transform="matrix(1 0 0 1 730 230)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000" text-anchor="end"><tspan x="0" y="0">set-back vertex (60, 40, 20)</tspan></text>
+    <text transform="matrix(1 0 0 1 30 268)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">Upstream picks the end by the primary edge use&apos;s vertex but walks the curve&apos;s natural interval; on an edge whose</tspan></text>
+    <text transform="matrix(1 0 0 1 30 284)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">edge use runs against its curve that is the far end. The fix walks the edge&apos;s own interval from the vertex it marks.</tspan></text>
+  </g>
+</svg>
