@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="640" height="380" viewBox="0 0 640 380">
+  <title>law-corner-piece-ends</title>
+  <g id="Layer_1" data-name="Layer 1">
+    <rect id="background" x="0" y="0" width="640" height="380" fill="#ffffff"/>
+    <text transform="matrix(1 0 0 1 40 40)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#000000"><tspan x="0" y="0">A piece of a law-cornered round, at the edge&apos;s start</tspan></text>
+    <rect id="piece_1_range" data-name="piece 1 range" x="165" y="284" width="165" height="14" fill="#dce9f5"/>
+    <line id="y_axis" data-name="y axis" x1="90" y1="280" x2="590" y2="280" fill="none" stroke="#000000" stroke-miterlimit="10"/>
+    <line id="law_continued_before" data-name="law continued before" x1="110" y1="280" x2="220" y2="200" fill="none" stroke="#999999" stroke-width="1.5" stroke-miterlimit="10" stroke-dasharray="6 4"/>
+    <line id="law_continued_after" data-name="law continued after" x1="440" y1="200" x2="550" y2="280" fill="none" stroke="#999999" stroke-width="1.5" stroke-miterlimit="10" stroke-dasharray="6 4"/>
+    <polyline id="law_over_the_edge" data-name="law over the edge" points="220,200 330,120 440,200" fill="none" stroke="#1f6fb2" stroke-width="3" stroke-miterlimit="10"/>
+    <line x1="220" y1="200" x2="220" y2="280" fill="none" stroke="#999999" stroke-width="1.5" stroke-miterlimit="10" stroke-dasharray="3 3"/>
+    <line x1="330" y1="120" x2="330" y2="280" fill="none" stroke="#999999" stroke-width="1.5" stroke-miterlimit="10" stroke-dasharray="3 3"/>
+    <line x1="440" y1="200" x2="440" y2="280" fill="none" stroke="#999999" stroke-width="1.5" stroke-miterlimit="10" stroke-dasharray="3 3"/>
+    <circle id="rails_meet" data-name="rails meet" cx="110" cy="280" r="5" fill="#555555"/>
+    <circle id="first_station" data-name="first station" cx="165" cy="244" r="5" fill="#555555"/>
+    <text transform="matrix(1 0 0 1 200 318)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">edge start</tspan></text>
+    <text transform="matrix(1 0 0 1 298 110)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">law corner (peak), r = 4</tspan></text>
+    <text transform="matrix(1 0 0 1 420 318)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">edge end</tspan></text>
+    <text transform="matrix(1 0 0 1 450 155)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#1f6fb2"><tspan x="0" y="0">r(y): 2, 4, 2 over the edge</tspan></text>
+    <text transform="matrix(1 0 0 1 180 296)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">piece 1&apos;s range</tspan></text>
+    <line x1="110" y1="285" x2="110" y2="335" fill="none" stroke="#555555" stroke-miterlimit="10"/>
+    <text transform="matrix(1 0 0 1 40 350)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">the rails&apos; own start: r = 0, rails and centre line meet; read here, the piece was refused</tspan></text>
+    <line x1="160" y1="240" x2="95" y2="175" fill="none" stroke="#555555" stroke-miterlimit="10"/>
+    <text transform="matrix(1 0 0 1 40 150)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">the piece&apos;s first station:</tspan></text>
+    <text transform="matrix(1 0 0 1 40 166)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">its sides are read here now</tspan></text>
+    <text transform="matrix(1 0 0 1 40 70)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#555555"><tspan x="0" y="0">y along the edge, r the ball&apos;s radius; past the ends the law runs on with its end spans (dashed)</tspan></text>
+  </g>
+</svg>
