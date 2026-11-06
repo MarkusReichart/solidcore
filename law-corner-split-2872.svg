@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="980" height="560" viewBox="0 0 980 560">
+  <title>Untitled-1</title>
+  <g id="Layer_1" data-name="Layer 1">
+    <rect x="0" y="0" width="980" height="560" fill="#ffffff"/>
+    <text transform="matrix(1 0 0 1 24 44)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#000000"><tspan x="0" y="0">Before</tspan></text>
+    <text transform="matrix(1 0 0 1 24 98)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">FilletSession::do_fillet</tspan></text>
+    <rect x="24" y="110" width="128" height="46" fill="#f0f0f0" stroke="#555555" stroke-linecap="round" stroke-linejoin="round"/>
+    <text transform="matrix(1 0 0 1 32 137)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">create_corners</tspan></text>
+    <line x1="152" y1="133" x2="175" y2="133" fill="none" stroke="#000000" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+    <polygon points="182,133 173,128 173,138" fill="#000000"/>
+    <rect x="182" y="110" width="128" height="46" fill="#f0f0f0" stroke="#555555" stroke-linecap="round" stroke-linejoin="round"/>
+    <text transform="matrix(1 0 0 1 190 137)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">do_filleting</tspan></text>
+    <line x1="310" y1="133" x2="333" y2="133" fill="none" stroke="#000000" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+    <polygon points="340,133 331,128 331,138" fill="#000000"/>
+    <rect x="340" y="110" width="128" height="46" fill="#dce9f5" stroke="#1f6fb2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <text transform="matrix(1 0 0 1 348 130)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">split at the</tspan></text>
+    <text transform="matrix(1 0 0 1 348 144)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">law&apos;s corners</tspan></text>
+    <text transform="matrix(1 0 0 1 24 238)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">solidcore-ops fillet_variable (step by step)</tspan></text>
+    <rect x="24" y="250" width="128" height="46" fill="#f0f0f0" stroke="#555555" stroke-linecap="round" stroke-linejoin="round"/>
+    <text transform="matrix(1 0 0 1 32 277)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">create_corners</tspan></text>
+    <line x1="152" y1="273" x2="175" y2="273" fill="none" stroke="#000000" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+    <polygon points="182,273 173,268 173,278" fill="#000000"/>
+    <rect x="182" y="250" width="128" height="46" fill="#f0f0f0" stroke="#555555" stroke-linecap="round" stroke-linejoin="round"/>
+    <text transform="matrix(1 0 0 1 190 277)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">corner settings</tspan></text>
+    <line x1="310" y1="273" x2="333" y2="273" fill="none" stroke="#000000" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+    <polygon points="340,273 331,268 331,278" fill="#000000"/>
+    <rect x="340" y="250" width="128" height="46" fill="#f0f0f0" stroke="#555555" stroke-linecap="round" stroke-linejoin="round"/>
+    <text transform="matrix(1 0 0 1 348 277)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">do_filleting</tspan></text>
+    <polygon points="340,330 468,330 468,376 340,376" fill="#ffffff" stroke="#999999" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+    <text transform="matrix(1 0 0 1 348 357)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#999999"><tspan x="0" y="0">no split</tspan></text>
+    <line x1="404" y1="296" x2="404" y2="330" fill="none" stroke="#999999" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+    <text transform="matrix(1 0 0 1 24 420)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">The round stays one face that kinks at the law&apos;s corner:</tspan></text>
+    <text transform="matrix(1 0 0 1 24 438)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">not a valid solid, refused NotSolid. Before that, ops</tspan></text>
+    <text transform="matrix(1 0 0 1 24 456)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">refused the law outright (Unsupported).</tspan></text>
+    <line x1="490" y1="30" x2="490" y2="530" fill="none" stroke="#999999" stroke-linecap="round" stroke-linejoin="round"/>
+    <text transform="matrix(1 0 0 1 514 44)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#000000"><tspan x="0" y="0">After</tspan></text>
+    <text transform="matrix(1 0 0 1 514 98)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">FilletSession::do_fillet</tspan></text>
+    <rect x="514" y="110" width="128" height="46" fill="#f0f0f0" stroke="#555555" stroke-linecap="round" stroke-linejoin="round"/>
+    <text transform="matrix(1 0 0 1 522 137)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">create_corners</tspan></text>
+    <line x1="642" y1="133" x2="665" y2="133" fill="none" stroke="#000000" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+    <polygon points="672,133 663,128 663,138" fill="#000000"/>
+    <rect x="672" y="110" width="128" height="46" fill="#f0f0f0" stroke="#555555" stroke-linecap="round" stroke-linejoin="round"/>
+    <text transform="matrix(1 0 0 1 680 137)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">do_filleting</tspan></text>
+    <text transform="matrix(1 0 0 1 514 238)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">solidcore-ops fillet_variable (step by step)</tspan></text>
+    <rect x="514" y="250" width="128" height="46" fill="#f0f0f0" stroke="#555555" stroke-linecap="round" stroke-linejoin="round"/>
+    <text transform="matrix(1 0 0 1 522 277)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">create_corners</tspan></text>
+    <line x1="642" y1="273" x2="665" y2="273" fill="none" stroke="#000000" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+    <polygon points="672,273 663,268 663,278" fill="#000000"/>
+    <rect x="672" y="250" width="128" height="46" fill="#f0f0f0" stroke="#555555" stroke-linecap="round" stroke-linejoin="round"/>
+    <text transform="matrix(1 0 0 1 680 277)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">corner settings</tspan></text>
+    <line x1="800" y1="273" x2="823" y2="273" fill="none" stroke="#000000" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+    <polygon points="830,273 821,268 821,278" fill="#000000"/>
+    <rect x="830" y="250" width="128" height="46" fill="#f0f0f0" stroke="#555555" stroke-linecap="round" stroke-linejoin="round"/>
+    <text transform="matrix(1 0 0 1 838 277)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">do_filleting</tspan></text>
+    <text transform="matrix(1 0 0 1 514 358)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="14" fill="#000000"><tspan x="0" y="0">do_filleting</tspan></text>
+    <rect x="514" y="370" width="128" height="46" fill="#f0f0f0" stroke="#555555" stroke-linecap="round" stroke-linejoin="round"/>
+    <text transform="matrix(1 0 0 1 522 397)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">filleting</tspan></text>
+    <line x1="642" y1="393" x2="665" y2="393" fill="none" stroke="#000000" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+    <polygon points="672,393 663,388 663,398" fill="#000000"/>
+    <rect x="672" y="370" width="128" height="46" fill="#dce9f5" stroke="#1f6fb2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <text transform="matrix(1 0 0 1 680 390)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">split at the</tspan></text>
+    <text transform="matrix(1 0 0 1 680 404)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">law&apos;s corners</tspan></text>
+    <line x1="800" y1="393" x2="823" y2="393" fill="none" stroke="#000000" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+    <polygon points="830,393 821,388 821,398" fill="#000000"/>
+    <rect x="830" y="370" width="128" height="46" fill="#f0f0f0" stroke="#555555" stroke-linecap="round" stroke-linejoin="round"/>
+    <text transform="matrix(1 0 0 1 838 397)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">blend face log</tspan></text>
+    <line x1="736" y1="156" x2="736" y2="200" fill="none" stroke="#999999" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+    <line x1="894" y1="296" x2="894" y2="352" fill="none" stroke="#999999" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+    <text transform="matrix(1 0 0 1 742 190)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">the same do_filleting</tspan></text>
+    <text transform="matrix(1 0 0 1 514 456)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">Both drivers split the round at the law&apos;s corners:</tspan></text>
+    <text transform="matrix(1 0 0 1 514 474)" x="0" y="0" xml:space="preserve" font-family="Helvetica, sans-serif" font-size="12" fill="#000000"><tspan x="0" y="0">the peak 2, 4, 2 is 8 faces, removing 39.540969.</tspan></text>
+  </g>
+</svg>
